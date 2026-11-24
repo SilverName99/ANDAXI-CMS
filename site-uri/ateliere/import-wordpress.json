@@ -1,0 +1,26 @@
+{
+    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md, „Adoptarea unui site WordPress”; docs/MAGAZIN-WC.md). Drumul capturat cu dialectul divi4. regiuni: regiunile dinamice ale documentelor capturate (CadruCapturat\\Regiuni), doar cu selectori neutri (clasele modulelor Divi și WooCommerce; la coș și clasa modulelor produselor și totalurilor, care primesc et_pb_wc_cart_empty la coșul gol) și doar pe adresele WooCommerce ale coșului, ale checkout-ului și ale contului, pe paginile de produs și pe documentele-șablon; scheletul pistei A, verificat de fiecare pistă pe captura reală (dovada regiunilor) când își construiește randatorul. Regulile pe paginile al căror nume ține de site (magazinul, calendarul), adresele documentelor-șablon (sabloane), sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json.",
+    "continut": "capturat",
+    "dialect": "divi4",
+    "regiuni": [
+        {"document": "produs:*", "selector": "div.et_pb_wc_add_to_cart > div.et_pb_module_inner", "regiune": "wc:adauga_in_cos"},
+        {"document": "/cos/", "selector": "div.et_pb_wc_cart_notice > div.et_pb_module_inner", "regiune": "wc:cos_notificari"},
+        {"document": "/cos/", "selector": "div.et_pb_wc_cart_products > div.et_pb_module_inner", "regiune": "wc:cos_produse"},
+        {"document": "/cos/", "selector": "div.et_pb_wc_cart_products", "regiune": "wc:cos_produse", "mod": "atribut", "atribut": "class"},
+        {"document": "/cos/", "selector": "div.et_pb_wc_cart_totals > div.et_pb_module_inner", "regiune": "wc:cos_totaluri"},
+        {"document": "/cos/", "selector": "div.et_pb_wc_cart_totals", "regiune": "wc:cos_totaluri", "mod": "atribut", "atribut": "class"},
+        {"document": "/checkout/", "selector": "div.et_pb_wc_cart_notice > div.et_pb_module_inner", "regiune": "wc:checkout_notificari"},
+        {"document": "/checkout/", "selector": "div.et_pb_wc_checkout_billing > div.et_pb_module_inner", "regiune": "wc:checkout_facturare"},
+        {"document": "/checkout/", "selector": "div.et_pb_wc_checkout_shipping > div.et_pb_module_inner", "regiune": "wc:checkout_livrare"},
+        {"document": "/checkout/", "selector": "div.et_pb_wc_checkout_additional_info > div.et_pb_module_inner", "regiune": "wc:checkout_info"},
+        {"document": "/checkout/", "selector": "div.et_pb_wc_checkout_order_details > div.et_pb_module_inner", "regiune": "wc:checkout_detalii"},
+        {"document": "/checkout/", "selector": "div.et_pb_wc_checkout_payment_info > div.et_pb_module_inner", "regiune": "wc:checkout_plata"},
+        {"document": "/my-account/", "selector": "div.et_pb_text_inner > div.woocommerce", "regiune": "wc:cont"},
+        {"document": "/my-account/", "jeton": "clase_body"},
+        {"document": "sablon:articol", "selector": "div.et_pb_post_title > div.et_pb_title_container", "regiune": "articol:titlu"},
+        {"document": "sablon:articol", "selector": "div.et_pb_post_title > div.et_pb_title_featured_container", "regiune": "articol:meta"},
+        {"document": "sablon:articol", "selector": "div.et_pb_post_content", "regiune": "articol:continut"},
+        {"document": "sablon:categorie", "selector": "div.et_pb_blog_grid > div.et_pb_ajax_pagination_container", "regiune": "blog:lista"},
+        {"document": "sablon:cautare", "selector": "div.et_pb_blog_grid > div.et_pb_ajax_pagination_container", "regiune": "blog:lista"}
+    ]
+}

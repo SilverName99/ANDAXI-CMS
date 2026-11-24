@@ -98,6 +98,8 @@ poarta G-formulare "serverul formularelor de contact și căutarea site-ului cap
     "tools/dev/php.sh tools/dev/test-formulare-wp.php" ADOPTA-WP-9b
 poarta G-deploy-wp "repetiția adoptării WordPress cap-coadă pe o găzduire simulată (deploy/adopta-wp.sh --baza-noua, planul, --aplica până la deschidere, fișierele statice cu subsolul Theme Builder unificat după Acasă și stilurile după model, trackerele în privat, reimportul cu legătura pachetului din subsol pe baza deja importată, un formular, căutarea, adresele vechi, 410, apoi revino.sh: WordPress octet cu octet) (tools/dev/test-deploy-wp.php)" \
     "tools/dev/php.sh tools/dev/test-deploy-wp.php" ADOPTA-WP-9b
+poarta G-regiuni "regiunile dinamice ale documentelor capturate și fundația mutării unui site WooCommerce (pista A, docs/MAGAZIN-WC.md și docs/DEPLOY.md, „Regiunile dinamice”): regulile din import-wordpress.json (gramatica închisă a selectorilor, lista închisă a randatorilor: un id necunoscut și orice altă formă de selector refuzate), tăierea în {{ax:regiune:<id>:<n>}} prin Html5\\Editare, octeții capturați în regiuni_capturate, dovada pe octeți (un octet schimbat = NU cu primul octet diferit, nimic scris), randarea pe server (dus-întors = T octet cu octet; un {{ax: din datele cererii rămâne text), cache-ul pagina|sesiune (o regiune „sesiune” = no-store, private și nimic în cache-ul de pagini), {{ax:clase_body}} și {{ax:titlu}}; doar cu wp-compat.json → magazin_wc: rutele noi și cheile de pe / (CompatWp\\Interogari), fiecare 404 cât pista ei nu e construită, sursele Stripe în CSP doar pe checkout și pe metodele de plată; fără magazin_wc ca înainte; înregistrările pistelor (pluginurile, licența „ateliere”, sloturile, schema), pe o captură inventată și randatori de probă (tools/dev/test-regiuni.php)" \
+    "tools/dev/php.sh tools/dev/test-regiuni.php" MAGAZIN-WC-A
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
@@ -244,14 +246,21 @@ declare -A PORTI=(
     # adoptare (public/index.php, CadruCapturat, deploy/lib/adopta-wp.php, importul): porțile cadrului și ale importului (G-capturat,
     # G-wp), cele noi (G-formulare, G-deploy-wp) și cele care arată că fără cadru totul e ca înainte (G-cmp, G-smoke, G-rute).
     [ADOPTA-WP-9b]="G-rute G-cmp G-smoke G-wp G-capturat G-formulare G-deploy-wp G-php"
+    # Mutarea unui site WooCommerce, pista A (fundația, docs/MAGAZIN-WC.md): regiunile dinamice (CadruCapturat, importul capturat,
+    # migrarea nucleu/0072), rutele condiționate (Router), dispecerul cheilor de pe / și CSP-ul pe rută (public/index.php, CspSite),
+    # înregistrările pistelor (config/plugins.php, sloturi.json, SchemaDivi4): G-regiuni (nouă), porțile cadrului și ale importului
+    # pe care se sprijină (G-capturat, G-wp, G-html5, G-html-capturat, G-deploy-wp), runtime-ul ale cărui seturi le declară
+    # (G-compat), testele pluginurilor (rutele noi și proprietarii lor) și cele care arată că fără magazin_wc totul e ca înainte
+    # (G-cmp, G-smoke, G-seo, G-rute).
+    [MAGAZIN-WC-A]="G-rute G-regiuni G-capturat G-compat G-wp G-html5 G-html-capturat G-deploy-wp G-plug G-cmp G-smoke G-seo G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33
-WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy ADOPTA-WP-2 ADOPTA-WP-3 ADOPTA-WP-4a ADOPTA-WP-5a ADOPTA-WP-8a ADOPTA-WP-6 ADOPTA-WP-10 ADOPTA-WP-9b"
+WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy ADOPTA-WP-2 ADOPTA-WP-3 ADOPTA-WP-4a ADOPTA-WP-5a ADOPTA-WP-8a ADOPTA-WP-6 ADOPTA-WP-10 ADOPTA-WP-9b MAGAZIN-WC-A"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy G-wp G-html5 G-html-capturat G-captura G-compat G-capturat G-formulare G-deploy-wp G-paritate; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy G-wp G-html5 G-html-capturat G-captura G-compat G-capturat G-formulare G-deploy-wp G-paritate G-regiuni; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

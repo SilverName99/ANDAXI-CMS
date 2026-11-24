@@ -1211,6 +1211,9 @@ foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de artico
   poate adăuga sau scoate doar clase din lista închisă `SchemaDivi4::CLASE_BODY` (`logged-in`, `woocommerce-account`,
   `woocommerce-<endpoint>`…), puse la sfârșit. `{{ax:titlu}}` dă titlul capturat sau pe cel cerut de o regiune, ca text scăpat.
 
+Poarta: **G-regiuni** (`tools/dev/test-regiuni.php`), pe o captură inventată și randatori de probă (`proba:*`, încărcați doar de
+uneltele de dezvoltare).
+
 **Răspunsurile înghețate** (pasul 9a; `App\Support\RaspunsuriInghetate`): pe cadrul capturat, o cerere GET sau HEAD cu metoda, calea
 și query-ul exacte ale unui răspuns din captură (robots.txt, sitemap-urile și XSL-ul lor, feed-urile, oEmbed, redirecționările
 capturate) îl primește din `raspunsuri_inghetate`, înaintea stratului de adrese WordPress, a ghicirii, a rutelor nucleului și a

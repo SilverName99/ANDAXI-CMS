@@ -3,10 +3,11 @@
 Un site WordPress cu Divi, WooCommerce și MailPoet se mută pe CMS pe drumul capturat ([DEPLOY.md](DEPLOY.md), „Adoptarea unui
 site WordPress”): paginile rămân octet cu octet cele de pe WordPress, iar ce depinde de vizitator (coșul, checkout-ul, contul,
 calendarul, pagina abonamentului) îl randează codul nostru, în markupul site-ului, prin **regiunile dinamice**. Lucrul e împărțit
-pe piste, fiecare cu spațiul ei de nume și migrarea ei; pista A (fundația, mai jos) scrie o singură dată tot ce împart pistele:
-înregistrările (rutele, pluginurile, cheile de pe `/`, modulele runtime-ului, schema dialectului) și cadrul regiunilor. Toate sunt
-inerte până la pista lor și pe orice alt site: fără `wp-compat.json` → `magazin_wc` nicio rută, nicio cheie și nicio sursă CSP nouă
-nu există, iar fără reguli `regiuni` nicio tăiere nu se schimbă (G-cmp, instantaneele rutelor, G-capturat, G-wp).
+pe piste, fiecare cu spațiul ei de nume și migrarea ei; pista A (fundația, mai jos) a scris o singură dată tot ce împart pistele:
+înregistrările (rutele, pluginurile, cheile de pe `/`, modulele runtime-ului, schema dialectului), cadrul regiunilor și pachetul
+`site-uri/ateliere/`. Toate sunt inerte până la pista lor și pe orice alt site: fără `wp-compat.json` → `magazin_wc` nicio rută,
+nicio cheie și nicio sursă CSP nouă nu există, iar fără reguli `regiuni` nicio tăiere nu se schimbă (G-cmp, instantaneele rutelor,
+G-capturat, G-wp).
 
 Planul mutării (pistele, datele reale ale site-ului, capturile) stă în afara repo-ului; aici e doar ce e în cod.
 
@@ -16,7 +17,7 @@ Planul mutării (pistele, datele reale ale site-ului, capturile) stă în afara 
 
 Două chei noi ale stratului de adrese WordPress ([SEO.md](SEO.md), §1b), `true` sau lipsă: `magazin_wc` (magazinul în forma
 WooCommerce: rutele, cheile WooCommerce de pe `/`, sursele Stripe din CSP; `App\Support\MagazinWc\Mod::activ()`) și `mailpoet`
-(cheile MailPoet de pe `/`; `WpCompat::mailpoet()`).
+(cheile MailPoet de pe `/`; `WpCompat::mailpoet()`). Pachetul `site-uri/ateliere/` le are pe amândouă.
 
 ### Regiunile dinamice
 
@@ -109,7 +110,7 @@ emailurile trimise: dezabonarea e mereu posibilă, RFC 8058). Până la pista lo
 `/my-account/payment-methods/…` și `/my-account/add-payment-method/…` (calea comparată cu litere mici) primesc sursele documentate
 ale Stripe.js (`script-src` și `frame-src` `https://js.stripe.com`, `frame-src` `https://hooks.stripe.com`, `connect-src`
 `https://api.stripe.com` și `https://merchant-ui-api.stripe.com`); pista H completează lista după pagina CSP a Stripe. Restul
-politicii e același; pe orice altă cale și pe orice alt site politica e cea de până acum, octet cu octet (G-capturat).
+politicii e același; pe orice altă cale și pe orice alt site politica e cea de până acum, octet cu octet (G-regiuni, G-capturat).
 
 ### Modulele runtime-ului: seturile
 
@@ -154,11 +155,34 @@ pluginurilor existente sunt și ele în catalog (`order_item_meta`, `order_notes
 | 0080 | `cupoane/0080_cupoane_wc` | D |
 | 0081 | `plata_stripe/0081_stripe_oc` (de rezervă: retras în `migrari.lock` dacă pista H nu are nevoie de un tabel) | H |
 
-### Licența de dezvoltare
+### Licența de dezvoltare și pachetul
 
 `config/plugins.php` → `licente_dev` → `ateliere`: `catalog`, `magazin`, `plata_stripe`, `cupoane`, `conturi_clienti`, `blog`,
 `newsletter`, `statistici`, `descarcari`, `automatizari`, `date_evenimente` (fără `livrare_fan`: livrarea e zero, fiecare produs e
 un serviciu; `migrare_wordpress` se adaugă doar pe durata mutării). `tools/dev/php.sh tools/dev/licenta.php ateliere`.
+
+Pachetul `site-uri/ateliere/` (numele e neutru): `tema/tema.json` (cadrul capturat, `divi4@1`, seturile `comportament`,
+`magazin_wc`, `calendar`), `wp-compat.json` (ca la `pensiune`, plus `magazin_wc` și `mailpoet`), `import-wordpress.json` (drumul
+capturat cu dialectul `divi4` și regulile `regiuni` cu selectori neutri: clasele modulelor Divi și WooCommerce, doar pe adresele
+WooCommerce ale coșului, checkout-ului și contului, pe paginile de produs și pe documentele-șablon), `seo.json`, `ce-se-schimba.md`
+și `README.md`. Tot ce ține de site (regulile pe paginile al căror nume e al site-ului, adresele șabloanelor, scripturile scoase,
+trackerele) stă în `privat/` (git-ignorat), al cărui exemplu, cu valori inventate, îl descrie README-ul pachetului.
+
+### Poarta
+
+**G-regiuni** (`tools/dev/test-regiuni.php`, în `tools/dev/porti.sh`; [DEZVOLTARE.md](DEZVOLTARE.md)): pe o captură inventată și
+randatori de probă (`tools/dev/lib/regiuni-proba.php`, încărcați doar de unelte: `tools/dev/lib/router-regiuni.php`), gramatica
+regulilor, tăierea, dovada pe octeți, randarea pe un server cu `magazin_wc` și pe unul fără, cache-ul, CSP-ul, rutele și cheile
+noi, înregistrările de mai sus.
+
+### Cum aterizează o pistă
+
+1. Scrie clasele din spațiul ei de nume: randatorii numiți în catalog, metodele controllerelor de mai sus (în locul răspunsului
+   404), proprietarul cheilor ei, modulele ei din seturi (fișierele există deja).
+2. Adaugă dovada fiecărui randator în poarta ei, pe stări inventate, și o rulează pe capturile reale în afara repo-ului.
+3. Nu schimbă înregistrările de mai sus; dacă îi lipsește ceva (o rută, un atribut, o clasă a corpului), o cere în fundație.
+4. Fișierele generate (`database/migrari/asteptat.json`, `migrari.lock`, `ultima.php`, `tools/dev/instantanee/*`) le reface
+   integratorul după fiecare îmbinare, cu generatoarele lor.
 
 ## G. Magazinul, partea 1: produsul, coșul, panoul plutitor
 

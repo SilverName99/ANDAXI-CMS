@@ -1,0 +1,7 @@
+{
+    "_despre": "Cadrul capturat (pasul 6): paginile ies din documentele capturate, cu runtime-ul compat divi4@1 pe sloturi și CSP-ul site-ului. runtime_seturi: modulele în plus ale magazinului în forma WooCommerce (docs/MAGAZIN-WC.md): comportamentul paginilor (pista C), coșul, checkout-ul, contul și plata (pistele G, H, L), calendarul (pista K); până la pistele lor, locuri rezervate care nu fac nimic. Trackerele (urmarire) le declară pista F; identificatorii stau în privat/urmarire.json.",
+    "cadru": "capturat",
+    "runtime": "divi4@1",
+    "runtime_seturi": ["comportament", "magazin_wc", "calendar"],
+    "previzualizare": [390, 820, 1440]
+}

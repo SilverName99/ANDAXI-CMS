@@ -1,0 +1,16 @@
+{
+    "slash_final": true,
+    "majuscule": "200",
+    "ghicire": false,
+    "harta_id": true,
+    "cautare_wp": true,
+    "magazin_wc": true,
+    "mailpoet": true,
+    "resturi_410": ["/wp-admin/", "/wp-json/", "/wp-login.php", "/xmlrpc.php", "/wp-cron.php", "/wp-signup.php", "/wp-activate.php", "/wp-trackback.php",
+        "/wp-comments-post.php", "/wp-links-opml.php", "/wp-mail.php", "/readme.html", "/license.txt"],
+    "compatibile": [
+        {"metoda": "GET", "cale": "/wp-json/oembed/1.0/embed"},
+        {"metoda": "GET", "cale": "/wp-json/complianz/v1/manage_consent_html"}
+    ],
+    "antete_404": "wordpress"
+}

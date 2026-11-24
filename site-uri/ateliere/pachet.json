@@ -1,0 +1,17 @@
+{
+    "format": 1,
+    "site": "ateliere",
+    "fisiere": {
+        "README.md": "33deb169bc7e66dadb2300b852a7830a50bdc2cc0197c065195f5ddb1bd7de9b",
+        "ce-se-schimba.md": "8f09ec22992b4dbcd8737c7bcb85a9745ad6b6c32594e76d71571e87fcb43252",
+        "import-wordpress.json": "72411cb853c8fe4e14a4b2ac0b5fb0290fe6e1fc7ee3922082e9252dda372366",
+        "seo.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+        "tema/tema.json": "7d4e3cabb981168b3136fd06bfc0feb9e4434263742b88cadc2cbb911d669ba2",
+        "wp-compat.json": "4e56c8899709c546a7380c5b935d424e31f2d4db4c59c3f2b36466616780ddf6"
+    },
+    "obligatorii": [
+        "seo.json",
+        "tema/tema.json",
+        "wp-compat.json"
+    ]
+}
