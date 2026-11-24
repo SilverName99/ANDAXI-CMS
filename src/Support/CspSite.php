@@ -26,9 +26,10 @@ namespace App\Support;
  *  - extensia pe rută (EXTENSII, RUTE_EXTINSE; pista A a mutării unui site WooCommerce, docs/MAGAZIN-WC.md): doar pe un site cu
  *    `wp-compat.json` → `magazin_wc` și doar pe checkout (`/checkout/…`) și pe paginile metodelor de plată din cont
  *    (`/my-account/payment-methods/…`, `/my-account/add-payment-method/…`), politica primește sursele documentate ale Stripe.js
- *    (`script-src` și `frame-src` js.stripe.com, `frame-src` hooks.stripe.com, `connect-src` api.stripe.com și
- *    merchant-ui-api.stripe.com; pista H completează lista din pagina CSP a Stripe). Lista e închisă; pe orice altă cale și pe
- *    orice alt site politica e cea de mai sus, neschimbată;
+ *    (`script-src` și `frame-src` js.stripe.com și *.js.stripe.com, `frame-src` hooks.stripe.com, `connect-src` api.stripe.com și
+ *    merchant-ui-api.stripe.com; pista H completează lista din pagina CSP a Stripe). Lista e închisă (gazdele cu `*` doar aici, în
+ *    cod: tema.json și trackerele nu pot lărgi `script-src`); pe orice altă cale și pe orice alt site politica e cea de mai sus,
+ *    neschimbată;
  *  - `X-Content-Type-Options: nosniff` pe tot.
  *
  * Fără `tema.json` → `cadru` = `capturat` nu trimite nimic: site-urile de azi ies octet cu octet ca înainte (G-cmp).
@@ -43,14 +44,15 @@ final class CspSite
 
     /**
      * Extensiile închise ale politicii, pe directivă (pista A; folosite doar pe RUTE_EXTINSE, pe un site cu magazin_wc): `stripe` =
-     * sursele documentate ale Stripe.js pentru Payment Element și Checkout Sessions (doar gazde exacte, https).
+     * sursele documentate ale Stripe.js pentru Payment Element și Checkout Sessions (https; subdomeniile js.stripe.com, pe care
+     * Stripe.js își încarcă bucățile, prin `*.js.stripe.com`, ca în pagina CSP a Stripe).
      *
      * @var array<string, array<string, list<string>>>
      */
     public const EXTENSII = [
         'stripe' => [
-            'script-src' => ['https://js.stripe.com'],
-            'frame-src' => ['https://js.stripe.com', 'https://hooks.stripe.com'],
+            'script-src' => ['https://js.stripe.com', 'https://*.js.stripe.com'],
+            'frame-src' => ['https://js.stripe.com', 'https://*.js.stripe.com', 'https://hooks.stripe.com'],
             'connect-src' => ['https://api.stripe.com', 'https://merchant-ui-api.stripe.com'],
         ],
     ];

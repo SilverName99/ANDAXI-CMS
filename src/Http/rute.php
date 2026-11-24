@@ -15,7 +15,9 @@ use App\Http\Controllers\AbonamentController;
 use App\Http\Controllers\OferteBbdController;
 use App\Http\Controllers\PacheteProduseController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AbonareCapturataController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BlogCapturatController;
 use App\Http\Controllers\CampaniiController;
 use App\Http\Controllers\StatisticiController;
 use App\Http\Controllers\CereriOfertaController;
@@ -70,20 +72,20 @@ return static function (Router $router): void {
     $router->get('/sitemap-{tip}\.xml', [SiteController::class, 'sitemapTip']);
 
     $router->get('/', [SiteController::class, 'home']);
-    $router->get('/magazin', [SiteController::class, 'shop']);
+    $router->get('/magazin', [SiteController::class, 'shop'], 'fara_magazin_wc');
     // URL-urile de categorie din site-ul vechi (/categorie/probiotice) rămân valide.
-    $router->get('/categorie/{slug}', [SiteController::class, 'shopCategory']);
+    $router->get('/categorie/{slug}', [SiteController::class, 'shopCategory'], 'fara_magazin_wc');
     // Marca și eticheta au pagini proprii, ca pe site-ul vechi: linkuri pe care
     // firma le dă clienților („toate produsele Farabella") și pe care Google le
     // indexează separat.
-    $router->get('/marca/{slug}', [SiteController::class, 'shopBrand']);
-    $router->get('/eticheta/{slug}', [SiteController::class, 'shopTag']);
+    $router->get('/marca/{slug}', [SiteController::class, 'shopBrand'], 'fara_magazin_wc');
+    $router->get('/eticheta/{slug}', [SiteController::class, 'shopTag'], 'fara_magazin_wc');
     $router->get('/blog', [SiteController::class, 'blog']);
     $router->get('/blog/{slug}', [SiteController::class, 'blogPost']);
     $router->get('/api/blog/posts', [SiteController::class, 'blogPostsApi']);
     $router->get('/api/blog/posts/{slug}', [SiteController::class, 'blogPostApi']);
-    $router->get('/produs/{slug}', [SiteController::class, 'product']);
-    $router->post('/produs/{slug}/review', [SiteController::class, 'productReviewSubmit']);
+    $router->get('/produs/{slug}', [SiteController::class, 'product'], 'fara_magazin_wc');
+    $router->post('/produs/{slug}/review', [SiteController::class, 'productReviewSubmit'], 'fara_magazin_wc');
     $router->post('/review-form/submit', [SiteController::class, 'reviewFormSubmit']);
     $router->post('/gdpr-agreements/submit', [SiteController::class, 'gdprAgreementSubmit']);
     $router->get('/gdpr-agreements/success', [SiteController::class, 'gdprAgreementSuccess']);
@@ -91,7 +93,11 @@ return static function (Router $router): void {
     // site mutat, înregistrate o singură dată aici, cu proprietarii lor din config/plugins.php. Toate au condiția „magazin_wc”
     // (Router::CONDITII): pe orice alt site nu se potrivesc deloc și cererea merge mai departe exact ca înainte (/cos și /checkout
     // la coșul și checkout-ul nucleului, restul la /{slug*}). Cu condiția, coșul și checkout-ul WooCommerce stau înaintea celor ale
-    // nucleului, pe aceleași adrese. Metodele răspund 404 până la pista lor (MagazinWcController, ContWcController).
+    // nucleului, pe aceleași adrese. Metodele răspund 404 până la pista lor (MagazinWcController, ContWcController,
+    // BlogCapturatController, AbonareCapturataController). Invers, rutele magazinului și ale conturilor CMS-ului de mai jos au condiția
+    // „fara_magazin_wc”: pe un site cu magazin_wc nu există (decizia D5: magazinul e doar la adresele WooCommerce; cererea lor ajunge
+    // la ruta de după, adică la 404-ul site-ului), pe toate celelalte sunt exact ca înainte. Adresele mereu deschise (întoarcerile
+    // plăților, linkurile din emailurile trimise) și webhook-urile rămân fără condiție.
     $router->get('/product/{slug}', [MagazinWcController::class, 'produs'], 'magazin_wc');
     $router->post('/product/{slug}', [MagazinWcController::class, 'produsAdauga'], 'magazin_wc');
     $router->get('/cos', [MagazinWcController::class, 'cos'], 'magazin_wc');
@@ -108,35 +114,48 @@ return static function (Router $router): void {
     $router->post('/api/wc/cos/{actiune}', [MagazinWcController::class, 'cosApi'], 'magazin_wc');
     $router->post('/api/wc/checkout', [MagazinWcController::class, 'checkoutApi'], 'magazin_wc');
     $router->post('/api/wc/stripe/{actiune}', [MagazinWcController::class, 'stripeApi'], 'magazin_wc');
-    $router->get('/cos', [SiteController::class, 'cart']);
-    $router->post('/cos/adauga/{id}', [SiteController::class, 'cartAdd']);
-    $router->post('/cos/actualizeaza', [SiteController::class, 'cartUpdate']);
-    $router->post('/cos/sterge/{id*}', [SiteController::class, 'cartRemove']);
-    $router->post('/cos/cupon', [SiteController::class, 'cartApplyCoupon']);
-    $router->post('/cos/cupon/sterge', [SiteController::class, 'cartClearCoupon']);
-    $router->post('/cos/puncte', [SiteController::class, 'cartApplyPoints']);
-    $router->post('/cos/puncte/sterge', [SiteController::class, 'cartClearPoints']);
-    $router->post('/cos/judet', [SiteController::class, 'cartSetCounty']);
-    $router->post('/api/cart/heartbeat', [SiteController::class, 'cartHeartbeat']);
-    $router->get('/api/cart/summary', [SiteController::class, 'cartSummaryApi']);
-    $router->get('/api/products/best-sellers', [SiteController::class, 'bestSellersApi']);
-    $router->get('/api/search/products', [SiteController::class, 'productSearchApi']);
-    $router->get('/api/shop/catalog', [SiteController::class, 'shopCatalogApi']);
-    $router->get('/api/fan/localities', [SiteController::class, 'fanLocalitiesApi']);
-    $router->get('/api/fan/lockers', [SiteController::class, 'fanLockersApi']);
-    $router->get('/api/checkout/shipping-quote', [SiteController::class, 'checkoutShippingQuoteApi']);
-    $router->post('/api/checkout/shipping-quote', [SiteController::class, 'checkoutShippingQuoteApi']);
-    $router->post('/api/cart/items/{id}/add', [SiteController::class, 'cartItemAddApi']);
-    $router->post('/api/cart/items/{id*}/set', [SiteController::class, 'cartItemSetApi']);
-    $router->post('/api/cart/items/{id*}/remove', [SiteController::class, 'cartItemRemoveApi']);
-    $router->post('/api/cart/coupon/apply', [SiteController::class, 'cartApplyCouponApi']);
-    $router->post('/api/cart/coupon/clear', [SiteController::class, 'cartClearCouponApi']);
-    $router->get('/checkout', [SiteController::class, 'checkout']);
-    $router->post('/checkout', [SiteController::class, 'checkoutSubmit']);
+    // Metodele de plată salvate (pista H): `sterge`, `implicita`, `adauga`, `adauga/confirma` (de aceea {actiune*}).
+    $router->post('/api/wc/stripe/metode/{actiune*}', [MagazinWcController::class, 'stripeMetode'], 'magazin_wc');
+    // Rambursarea unei plăți Stripe din fișa comenzii (pista H).
+    $router->post('/admin/orders/{id}/rambursare-stripe', [MagazinWcController::class, 'rambursareStripe'], 'magazin_wc');
+    // Stripe.js-ul fals al testelor (pista H, tools/dev/lib/stripe-js-fals.js): doar cu APP_ENV=local; altfel 404.
+    $router->get('/_dev/stripe-js-fals\.js', [MagazinWcController::class, 'stripeJsFals'], 'magazin_wc');
+    // Paginile 2… ale listelor de articole ale blogului capturat (pista B): ale blogului și ale unei categorii WordPress (și ale unei
+    // subcategorii: `/category/<părinte>/<copil>/page/2/`).
+    $router->get('/blog/page/{n}', [BlogCapturatController::class, 'paginaBlog'], 'magazin_wc');
+    $router->get('/category/{slug*}/page/{n}', [BlogCapturatController::class, 'paginaCategorie'], 'magazin_wc');
+    // Abonarea din formularele Divi ale paginilor capturate, la listele newsletterului (wp-compat.json → mailpoet; pista E,
+    // App\Support\AbonareCapturata).
+    $router->post('/_andaxi/abonare/{n}', [AbonareCapturataController::class, 'trimite'], 'mailpoet');
+    $router->get('/cos', [SiteController::class, 'cart'], 'fara_magazin_wc');
+    $router->post('/cos/adauga/{id}', [SiteController::class, 'cartAdd'], 'fara_magazin_wc');
+    $router->post('/cos/actualizeaza', [SiteController::class, 'cartUpdate'], 'fara_magazin_wc');
+    $router->post('/cos/sterge/{id*}', [SiteController::class, 'cartRemove'], 'fara_magazin_wc');
+    $router->post('/cos/cupon', [SiteController::class, 'cartApplyCoupon'], 'fara_magazin_wc');
+    $router->post('/cos/cupon/sterge', [SiteController::class, 'cartClearCoupon'], 'fara_magazin_wc');
+    $router->post('/cos/puncte', [SiteController::class, 'cartApplyPoints'], 'fara_magazin_wc');
+    $router->post('/cos/puncte/sterge', [SiteController::class, 'cartClearPoints'], 'fara_magazin_wc');
+    $router->post('/cos/judet', [SiteController::class, 'cartSetCounty'], 'fara_magazin_wc');
+    $router->post('/api/cart/heartbeat', [SiteController::class, 'cartHeartbeat'], 'fara_magazin_wc');
+    $router->get('/api/cart/summary', [SiteController::class, 'cartSummaryApi'], 'fara_magazin_wc');
+    $router->get('/api/products/best-sellers', [SiteController::class, 'bestSellersApi'], 'fara_magazin_wc');
+    $router->get('/api/search/products', [SiteController::class, 'productSearchApi'], 'fara_magazin_wc');
+    $router->get('/api/shop/catalog', [SiteController::class, 'shopCatalogApi'], 'fara_magazin_wc');
+    $router->get('/api/fan/localities', [SiteController::class, 'fanLocalitiesApi'], 'fara_magazin_wc');
+    $router->get('/api/fan/lockers', [SiteController::class, 'fanLockersApi'], 'fara_magazin_wc');
+    $router->get('/api/checkout/shipping-quote', [SiteController::class, 'checkoutShippingQuoteApi'], 'fara_magazin_wc');
+    $router->post('/api/checkout/shipping-quote', [SiteController::class, 'checkoutShippingQuoteApi'], 'fara_magazin_wc');
+    $router->post('/api/cart/items/{id}/add', [SiteController::class, 'cartItemAddApi'], 'fara_magazin_wc');
+    $router->post('/api/cart/items/{id*}/set', [SiteController::class, 'cartItemSetApi'], 'fara_magazin_wc');
+    $router->post('/api/cart/items/{id*}/remove', [SiteController::class, 'cartItemRemoveApi'], 'fara_magazin_wc');
+    $router->post('/api/cart/coupon/apply', [SiteController::class, 'cartApplyCouponApi'], 'fara_magazin_wc');
+    $router->post('/api/cart/coupon/clear', [SiteController::class, 'cartClearCouponApi'], 'fara_magazin_wc');
+    $router->get('/checkout', [SiteController::class, 'checkout'], 'fara_magazin_wc');
+    $router->post('/checkout', [SiteController::class, 'checkoutSubmit'], 'fara_magazin_wc');
     // Plata diferenței rămase pe o comandă, din linkul trimis clientului pe email.
-    $router->get('/plata/{token}', [SiteController::class, 'paymentLinkPage']);
-    $router->post('/plata/{token}', [SiteController::class, 'paymentLinkStart']);
-    $router->get('/checkout/succes/{orderNumber}', [SiteController::class, 'checkoutSuccess']);
+    $router->get('/plata/{token}', [SiteController::class, 'paymentLinkPage'], 'fara_magazin_wc');
+    $router->post('/plata/{token}', [SiteController::class, 'paymentLinkStart'], 'fara_magazin_wc');
+    $router->get('/checkout/succes/{orderNumber}', [SiteController::class, 'checkoutSuccess'], 'fara_magazin_wc');
     $router->post('/checkout/succes/{orderNumber}', [SiteController::class, 'checkoutSuccess']);
     // Banca Transilvania iPay: întoarcerea clientului și notificarea (JWT) de la bancă.
     $router->get('/checkout/bt/retur', [SiteController::class, 'btIpayReturn']);
@@ -156,24 +175,24 @@ return static function (Router $router): void {
     $router->post('/newsletter/confirmare/{token}', [SiteController::class, 'newsletterConfirmare']);
     $router->get('/newsletter/track/open/{campaignId}/{subscriberId}/{token}', [SiteController::class, 'newsletterTrackOpen']);
     $router->get('/newsletter/track/click/{campaignId}/{subscriberId}/{token}', [SiteController::class, 'newsletterTrackClick']);
-    $router->get('/contul-meu', [SiteController::class, 'account']);
-    $router->get('/login', [SiteController::class, 'loginPage']);
-    $router->get('/register', [SiteController::class, 'registerPage']);
-    $router->get('/auth/google', [SiteController::class, 'googleAuthStart']);
-    $router->get('/auth/google/callback', [SiteController::class, 'googleAuthCallback']);
-    $router->post('/login', [SiteController::class, 'accountLogin']);
-    $router->post('/register', [SiteController::class, 'accountRegister']);
-    $router->post('/contul-meu/inregistrare', [SiteController::class, 'accountRegister']);
-    $router->post('/contul-meu/login', [SiteController::class, 'accountLogin']);
-    $router->post('/contul-meu/logout', [SiteController::class, 'accountLogout']);
-    $router->post('/contul-meu/profil', [SiteController::class, 'accountProfileUpdate']);
-    $router->post('/contul-meu/parola', [SiteController::class, 'accountPasswordUpdate']);
-    $router->post('/contul-meu/adrese', [SiteController::class, 'accountAddressCreate']);
-    $router->post('/contul-meu/sterge', [SiteController::class, 'accountDelete']);
-    $router->get('/contul-meu/resetare-parola', [SiteController::class, 'passwordResetRequestForm']);
-    $router->post('/contul-meu/resetare-parola', [SiteController::class, 'passwordResetRequestSend']);
-    $router->get('/contul-meu/resetare-parola/{token}', [SiteController::class, 'passwordResetTokenForm']);
-    $router->post('/contul-meu/resetare-parola/{token}', [SiteController::class, 'passwordResetTokenSubmit']);
+    $router->get('/contul-meu', [SiteController::class, 'account'], 'fara_magazin_wc');
+    $router->get('/login', [SiteController::class, 'loginPage'], 'fara_magazin_wc');
+    $router->get('/register', [SiteController::class, 'registerPage'], 'fara_magazin_wc');
+    $router->get('/auth/google', [SiteController::class, 'googleAuthStart'], 'fara_magazin_wc');
+    $router->get('/auth/google/callback', [SiteController::class, 'googleAuthCallback'], 'fara_magazin_wc');
+    $router->post('/login', [SiteController::class, 'accountLogin'], 'fara_magazin_wc');
+    $router->post('/register', [SiteController::class, 'accountRegister'], 'fara_magazin_wc');
+    $router->post('/contul-meu/inregistrare', [SiteController::class, 'accountRegister'], 'fara_magazin_wc');
+    $router->post('/contul-meu/login', [SiteController::class, 'accountLogin'], 'fara_magazin_wc');
+    $router->post('/contul-meu/logout', [SiteController::class, 'accountLogout'], 'fara_magazin_wc');
+    $router->post('/contul-meu/profil', [SiteController::class, 'accountProfileUpdate'], 'fara_magazin_wc');
+    $router->post('/contul-meu/parola', [SiteController::class, 'accountPasswordUpdate'], 'fara_magazin_wc');
+    $router->post('/contul-meu/adrese', [SiteController::class, 'accountAddressCreate'], 'fara_magazin_wc');
+    $router->post('/contul-meu/sterge', [SiteController::class, 'accountDelete'], 'fara_magazin_wc');
+    $router->get('/contul-meu/resetare-parola', [SiteController::class, 'passwordResetRequestForm'], 'fara_magazin_wc');
+    $router->post('/contul-meu/resetare-parola', [SiteController::class, 'passwordResetRequestSend'], 'fara_magazin_wc');
+    $router->get('/contul-meu/resetare-parola/{token}', [SiteController::class, 'passwordResetTokenForm'], 'fara_magazin_wc');
+    $router->post('/contul-meu/resetare-parola/{token}', [SiteController::class, 'passwordResetTokenSubmit'], 'fara_magazin_wc');
     $router->get('/contact', [SiteController::class, 'contact']);
     $router->post('/contact/send', [SiteController::class, 'contactSend']);
 
@@ -363,7 +382,7 @@ return static function (Router $router): void {
     $router->get('/feed/google-merchant\.xml', [SiteController::class, 'fluxGoogleMerchant']);
     // Casetele avertismentelor (ex. produs refrigerat) pentru coșul de acum; pagina /checkout le
     // reface după o schimbare a coșului.
-    $router->get('/api/cart/avertismente', [SiteController::class, 'cartAvertismenteApi']);
+    $router->get('/api/cart/avertismente', [SiteController::class, 'cartAvertismenteApi'], 'fara_magazin_wc');
 
     // WP-07 (infra, punctul A): pingul monitorizării (CRM-ul, la 5 minute) și al verificării de după un deploy. JSON cu
     // baza (SELECT 1 în cel mult 2 secunde), versiunea codului și starea schemei; 503 fără bază; Cache-Control: no-store,
@@ -390,7 +409,7 @@ return static function (Router $router): void {
     $router->get('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirma']);
     // Revizuirea WP-25: linkul confirmă doar la apăsarea butonului din pagina lui (POST), nu la deschidere.
     $router->post('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirmaPost']);
-    $router->post('/contul-meu/confirmare-email', [ConfirmareEmailController::class, 'retrimite']);
+    $router->post('/contul-meu/confirmare-email', [ConfirmareEmailController::class, 'retrimite'], 'fara_magazin_wc');
     // Portul Biovitality 0e54737: linkul din emailurile de confirmare trimise de codul Biovitality duce la cel de aici.
     $router->get('/contul-meu/confirmare/{token}', [ConfirmareEmailController::class, 'linkVechi']);
     // WP-26 (GR-15, din grafoanaytis): cererea de ofertă din sertarul de pe produs și lista cererilor în admin (cereri_oferta).
@@ -433,8 +452,8 @@ return static function (Router $router): void {
     $router->post('/admin/seo/404/{id}/sterge', [RedirectionariController::class, 'sterge404']);
     // Pluginul pachete_produse (din Biovitality 7391226; App\Support\PacheteProduse): „Schimbă în pachet” din pagina coșului
     // (formularul coșului) și din coșul flotant (JSON).
-    $router->post('/cos/schimba-pachet', [PacheteProduseController::class, 'schimbaInCos']);
-    $router->post('/api/cart/swap-bundle', [PacheteProduseController::class, 'schimbaInCosApi']);
+    $router->post('/cos/schimba-pachet', [PacheteProduseController::class, 'schimbaInCos'], 'fara_magazin_wc');
+    $router->post('/api/cart/swap-bundle', [PacheteProduseController::class, 'schimbaInCosApi'], 'fara_magazin_wc');
     // Pluginul campanii (5 nov 2026, pentru Biovitality; App\Support\Campanii): pagina de deschidere a campaniei active și
     // Marketing → Campanii pe site (administratorul general).
     $router->get('/campanie/{slug}', [CampaniiController::class, 'pagina']);
@@ -500,7 +519,7 @@ return static function (Router $router): void {
     // Etapa 4: pluginul donatii (din vertij; App\Http\Controllers\DonatiiController), aceleași adrese ca în vertij: plata din
     // sertarul „SUSȚINE”, oprirea donației lunare din cont, Admin → Donații și Setări donații.
     $router->post('/api/donations/intent', [DonatiiController::class, 'intent']);
-    $router->post('/contul-meu/donatii/opreste', [DonatiiController::class, 'opreste']);
+    $router->post('/contul-meu/donatii/opreste', [DonatiiController::class, 'opreste'], 'fara_magazin_wc');
     $router->get('/admin/donations', [DonatiiController::class, 'lista']);
     $router->get('/admin/settings/donations', [DonatiiController::class, 'setari']);
     $router->post('/admin/settings/donations', [DonatiiController::class, 'setariSalveaza']);
@@ -508,11 +527,11 @@ return static function (Router $router): void {
     // confirmare al unei cereri (/cont/confirmare/{token}) e al nucleului, care îl dă pluginului (ConfirmareEmailController).
     $router->get('/cont/verifica-email', [MembriController::class, 'verificaEmail']);
     $router->post('/cont/retrimite-confirmarea', [MembriController::class, 'retrimite']);
-    $router->post('/contul-meu/poza', [MembriController::class, 'poza']);
-    $router->post('/contul-meu/activare', [MembriController::class, 'activare']);
+    $router->post('/contul-meu/poza', [MembriController::class, 'poza'], 'fara_magazin_wc');
+    $router->post('/contul-meu/activare', [MembriController::class, 'activare'], 'fara_magazin_wc');
     $router->get('/contul-meu/activare/retur', [MembriController::class, 'activareRetur']);
-    $router->get('/contul-meu/cerere-noua', [MembriController::class, 'cerereNoua']);
-    $router->post('/contul-meu/cerere-noua', [MembriController::class, 'cerereNouaTrimite']);
+    $router->get('/contul-meu/cerere-noua', [MembriController::class, 'cerereNoua'], 'fara_magazin_wc');
+    $router->post('/contul-meu/cerere-noua', [MembriController::class, 'cerereNouaTrimite'], 'fara_magazin_wc');
     $router->get('/admin/accounts/professions', [MembriController::class, 'profesii']);
     $router->post('/admin/accounts/professions', [MembriController::class, 'profesiiSalveaza']);
     $router->post('/admin/accounts/professions/fields', [MembriController::class, 'campuriSalveaza']);

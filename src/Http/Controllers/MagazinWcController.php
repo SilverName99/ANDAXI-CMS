@@ -23,7 +23,10 @@ final class MagazinWcController
         $this->paginaNeconstruita();
     }
 
-    /** `POST /product/{slug}`: adăugarea în coș fără JavaScript, apoi 303 la `/cos/` (pista G). */
+    /**
+     * `POST /product/{slug}`: adăugarea în coș fără JavaScript (pista G). Ca WooCommerce (docs/MAGAZIN-WC.md, „Cheile”): după o
+     * adăugare reușită, 302 la `/cos/`; refuzată (stoc, dată, variantă), 200 la adresa cerută, cu notificarea pusă în coadă.
+     */
     public function produsAdauga(array $params): void
     {
         $this->paginaNeconstruita();
@@ -89,10 +92,47 @@ final class MagazinWcController
         $this->jsonNeconstruit();
     }
 
-    /** `/?add-to-cart=<id>` (CompatWp\Interogari): adăugarea din adresă, apoi `/cos/` (pista G). */
-    public function adaugaDinAdresa(): void
+    /**
+     * `?add-to-cart=<id>` pe orice adresă (CompatWp\Interogari; WooCommerce o citește pe orice pagină): adăugarea din adresă, pe
+     * calea cerută (pista G). Întoarce true dacă a răspuns (după o adăugare reușită: 302 la `/cos/`, cu antetele nocache ale
+     * WooCommerce) sau false ca cererea să meargă mai departe (adăugarea refuzată: pagina adresei cerute, 200, cu notificarea pusă în
+     * coadă). Până la pista G: false, deci pagina se randează ca înainte, fără nimic adăugat.
+     */
+    public function adaugaDinAdresa(string $cale): bool
     {
-        $this->paginaNeconstruita();
+        return false;
+    }
+
+    /** `POST /api/wc/stripe/metode/{actiune*}`: metodele de plată salvate: `sterge`, `implicita`, `adauga`, `adauga/confirma` (pista H). */
+    public function stripeMetode(array $params): void
+    {
+        $this->jsonNeconstruit();
+    }
+
+    /**
+     * `POST /admin/orders/{id}/rambursare-stripe`: rambursarea unei plăți Stripe din fișa comenzii (pista H: adminul logat, garda
+     * originii, suma cel mult cât s-a plătit minus ce s-a rambursat).
+     */
+    public function rambursareStripe(array $params): void
+    {
+        $this->jsonNeconstruit();
+    }
+
+    /**
+     * `GET /_dev/stripe-js-fals.js`: Stripe.js-ul fals al testelor (tools/dev/lib/stripe-js-fals.js, scris de pista H), doar cu
+     * `APP_ENV=local`. Pe orice alt mediu, sau fără fișier, 404-ul site-ului (un deploy nu are oricum tools/).
+     */
+    public function stripeJsFals(): void
+    {
+        $fisier = dirname(__DIR__, 3) . '/tools/dev/lib/stripe-js-fals.js';
+        if ((string) \App\Support\Env::get('APP_ENV', '') !== 'local' || !is_file($fisier)) {
+            $this->paginaNeconstruita();
+            return;
+        }
+        header('Content-Type: text/javascript; charset=utf-8');
+        header('Cache-Control: no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($fisier);
     }
 
     /** `/?wc-api=wc_stripe` (CompatWp\Interogari): webhook-ul Stripe vechi, în fereastra comutării (pista H). */

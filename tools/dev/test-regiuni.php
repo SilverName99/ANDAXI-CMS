@@ -71,8 +71,11 @@ use App\Support\ImportWordPress\EroareImport;
 use App\Support\ImportWordPress\ImportWordPress;
 use App\Support\ImportWordPress\PlanCapturat;
 use App\Support\ImportWordPress\ScriereCapturata;
+use App\Http\GardaPluginuri;
+use App\Support\MagazinWc\DupaPlata;
 use App\Support\MagazinWc\Mod;
 use App\Support\Plugins;
+use App\Support\StripeEvenimente;
 use App\Support\Tema;
 use App\Support\Urmarire;
 use App\Support\WpCompat;
@@ -705,12 +708,14 @@ foreach (['/checkout/', '/checkout/order-received/5/', '/my-account/payment-meth
         $difS[] = $c . ' (' . $r['cod'] . ': ' . ($r['antete']['content-security-policy'] ?? '-') . ')';
     }
 }
-$verifica('CSP pe checkout și pe metodele de plată: sursele documentate ale Stripe.js (script-src și frame-src js.stripe.com, frame-src hooks.stripe.com, '
+$verifica('CSP pe checkout și pe metodele de plată: sursele documentate ale Stripe.js (script-src și frame-src js.stripe.com și *.js.stripe.com, frame-src hooks.stripe.com, '
     . 'connect-src api.stripe.com și merchant-ui-api.stripe.com), restul politicii la fel', $difS === []
-    && str_contains($politicaStripe, "script-src 'self' 'inline-speculation-rules' https://js.stripe.com;")
+    && str_contains($politicaStripe, "script-src 'self' 'inline-speculation-rules' https://js.stripe.com https://*.js.stripe.com;")
+    && str_contains($politicaStripe, 'frame-src https://www.google.com/maps/embed https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com')
     && str_contains($politicaStripe, 'https://hooks.stripe.com') && str_contains($politicaStripe, "connect-src 'self' https://api.stripe.com https://merchant-ui-api.stripe.com;")
     && !str_contains($politicaStripe, 'unsafe-eval') && !preg_match("/script-src[^;]*'unsafe-inline'/", $politicaStripe)
-    && str_replace([' https://js.stripe.com', ' https://hooks.stripe.com', ' https://api.stripe.com', ' https://merchant-ui-api.stripe.com'], '', $politicaStripe) === $politicaSite,
+    && str_replace([' https://js.stripe.com', ' https://*.js.stripe.com', ' https://hooks.stripe.com', ' https://api.stripe.com', ' https://merchant-ui-api.stripe.com'], '',
+        $politicaStripe) === $politicaSite,
     implode(' | ', $difS));
 
 // Fiecare rută nouă (condiția magazin_wc) răspunde 404 cât pista ei nu e construită; sub /api/ în JSON, fără gardă (proprietarii sunt pe licență).
@@ -722,10 +727,10 @@ $r404 = $cerere($port, '/nu-exista/');
 $ca404 = static fn (array $r404, string $cale): string => str_replace(['/nu-exista/', '\/nu-exista\/'], [$cale, str_replace('/', '\/', $cale)], $r404['corp']);
 $rele = [];
 foreach ($noi as $ruta) {
-    $c = (string) preg_replace('/\{[^}]*\*\}/', 'orders', (string) $ruta['tipar']);
-    $c = (string) preg_replace('/\{[^}]+\}/', 'proba', $c) . '/';
+    $c = (string) preg_replace('/\{[^}]*\*\}/', 'orders', str_replace('\\.', '.', (string) $ruta['tipar']));
+    $c = (string) preg_replace('/\{[^}]+\}/', 'proba', $c) . (str_ends_with($ruta['tipar'], '\\.js') ? '' : '/');
     $r = $cerere($port, $c, $ruta['metoda']);
-    if (str_starts_with($c, '/api/')) {
+    if (str_starts_with($c, '/api/') || str_starts_with($c, '/admin/')) {
         $j = json_decode($r['corp'], true);
         $bun = is_array($j) && ($j['ok'] ?? null) === false && str_starts_with($r['antete']['content-type'] ?? '', 'application/json')
             && str_contains($r['antete']['cache-control'] ?? '', 'no-store');
@@ -736,14 +741,58 @@ foreach ($noi as $ruta) {
         $rele[] = $ruta['metoda'] . ' ' . $c . ' → ' . $r['cod'] . ' ' . ($r['antete']['content-type'] ?? '-') . ' ' . ($r['antete']['cache-control'] ?? '-') . ' ' . substr($r['corp'], 0, 120);
     }
 }
-$verifica(count($noi) . ' rute noi (doar cu magazin_wc): fiecare 404 cât pista ei nu e construită (pagina 404 capturată; sub /api/ JSON-ul scurt), niciuna oprită de gardă',
-    count($noi) === 16 && $rele === [], implode(', ', $rele));
+$verifica(count($noi) . ' rute noi (doar cu magazin_wc): fiecare 404 cât pista ei nu e construită (pagina 404 capturată; sub /api/ și la rambursarea din admin JSON-ul scurt), '
+    . 'niciuna oprită de gardă', count($noi) === 21 && $rele === [], implode(', ', $rele));
+// SPEC-A-04: ruta abonării (condiția mailpoet) și Stripe.js-ul fals al testelor (doar cu APP_ENV=local, doar cu fișierul lui).
+$rAbonare = $cerere($port, '/_andaxi/abonare/1/', 'POST');
+$fisierStripeFals = $radacina . '/tools/dev/lib/stripe-js-fals.js';
+$rStripeFaraFisier = is_file($fisierStripeFals) ? null : $cerere($port, '/_dev/stripe-js-fals.js');
+$stripeFalsDeProba = !is_file($fisierStripeFals) && file_put_contents($fisierStripeFals, "/* proba G-regiuni */\n") !== false;
+$rStripeFals = $cerere($port, '/_dev/stripe-js-fals.js');
+if ($stripeFalsDeProba && is_file($fisierStripeFals)) {
+    unlink($fisierStripeFals);
+}
+$verifica('ruta abonării (doar cu mailpoet): 404 în JSON cât pista E nu e construită; /_dev/stripe-js-fals.js: 404 fără fișier, fișierul (text/javascript, no-store, nosniff) cu el și APP_ENV=local',
+    count(array_filter($ruter->rute(), static fn (array $r): bool => $r['conditie'] === 'mailpoet')) === 1 && $rAbonare['cod'] === 404
+    && str_starts_with($rAbonare['antete']['content-type'] ?? '', 'application/json')
+    && ($rStripeFaraFisier === null || $rStripeFaraFisier['cod'] === 404) && $rStripeFals['cod'] === 200
+    && str_starts_with($rStripeFals['antete']['content-type'] ?? '', 'text/javascript') && ($rStripeFals['antete']['cache-control'] ?? '') === 'no-store'
+    && ($rStripeFals['antete']['x-content-type-options'] ?? '') === 'nosniff' && (!$stripeFalsDeProba || $rStripeFals['corp'] === "/* proba G-regiuni */\n"),
+    json_encode([$rAbonare['cod'], $rStripeFaraFisier['cod'] ?? null, $rStripeFals['cod'], $rStripeFals['antete']['content-type'] ?? null]));
+// SPEC-A-01 (decizia D5): pe un site cu magazin_wc, rutele magazinului și ale conturilor CMS-ului nu există (condiția fara_magazin_wc):
+// GET = 404-ul capturat al adresei (ca o adresă care nu există), POST = 404-ul routerului; niciuna nu ajunge la SiteController.
+$inchise = array_values(array_filter($ruter->rute(), static fn (array $r): bool => $r['conditie'] === 'fara_magazin_wc'));
+$releInchise = [];
+foreach ($inchise as $ruta) {
+    $c = (string) preg_replace('/\{[^}]*\*\}/', 'proba/7', (string) $ruta['tipar']);
+    $c = (string) preg_replace('/\{[^}]+\}/', '7', $c) . '/';
+    $r = $cerere($port, $c, $ruta['metoda']);
+    $bun = $ruta['metoda'] === 'GET' ? $egale($r['corp'], $ca404($r404, $c)) === null : !str_contains($r['corp'], '<html') && !isset($r['antete']['location']);
+    // Garda poate răspunde ea (adresa ajunsă la pagina generală e a unui plugin pe care licența „ateliere” nu-l are: /api/fan/…, /plata/…,
+    // /contul-meu/cerere-noua), tot cu 404-ul capturat: ca o adresă oarecare a acelui plugin, ca înainte.
+    if ($r['cod'] !== 404 || isset($r['antete']['location']) || !$bun) {
+        $dI = $ruta['metoda'] === 'GET' ? (int) $egale($r['corp'], $ca404($r404, $c)) : 0;
+        $releInchise[] = $ruta['metoda'] . ' ' . $c . ' → ' . $r['cod'] . ' ' . ($r['antete']['location'] ?? '') . ' la ' . $dI . ': „'
+            . substr($norm->document($r['corp']), max(0, $dI - 60), 140) . '” față de „' . substr($norm->document($ca404($r404, $c)), max(0, $dI - 60), 140) . '”';
+    }
+}
+$gasitaCu = [];
+foreach ($inchise as $ruta) {
+    $c = (string) preg_replace('/\{[^}]*\*\}/', 'proba/7', (string) $ruta['tipar']);
+    $g = $ruter->gaseste($ruta['metoda'], (string) preg_replace('/\{[^}]+\}/', '7', $c));
+    if ($g !== null && $g['handler'] === $ruta['handler']) {
+        $gasitaCu[] = $ruta['metoda'] . ' ' . $ruta['tipar'];
+    }
+}
+$verifica(count($inchise) . ' rute ale magazinului și conturilor CMS-ului (D5): cu magazin_wc niciuna nu se potrivește (GET = 404-ul capturat, POST = 404), '
+    . 'fără redirecționare (POST /checkout, /login, /register, /cos/adauga, /api/cart/…, /contul-meu/…)', count($inchise) === 61 && $releInchise === []
+    && $gasitaCu === [], implode(', ', array_merge($releInchise, $gasitaCu)));
 $rProd = $cerere($port, '/product/ceai/');
 $dProd = $egale($rProd['corp'], $ca404($r404, '/product/ceai/'));
 $verifica('pagina unei rute noi = 404-ul capturat al site-ului (același document ca o adresă care nu există)', $rProd['cod'] === 404 && $dProd === null,
     $rProd['cod'] . ' diferența la ' . ($dProd ?? '-') . ': „' . substr($norm->document($rProd['corp']), max(0, (int) $dProd - 80), 200) . '”');
 $chei = [
-    '/?add-to-cart=7' => [404, 'html'], '/?download_file=3&order=wc_order_proba&uid=abc&key=1' => [404, 'html'], '/?wc-api=wc_stripe' => [404, 'json'],
+    '/?download_file=3&order=wc_order_proba&uid=abc&key=1' => [404, 'html'], '/?wc-api=wc_stripe' => [404, 'json'],
     '/?wc-ajax=get_refreshed_fragments' => [404, 'json'], '/?mailpoet_router&endpoint=subscription&action=unsubscribe&data=proba' => [404, 'html'],
     '/?mailpoet_page=subscriptions' => [404, 'html'],
 ];
@@ -760,11 +809,20 @@ $verifica('cheile WordPress de pe / (CompatWp\\Interogari): fiecare 404 cât pis
 $rAcasa = $cerere($port, '/');
 $rAltceva = $cerere($port, '/?altceva=1');
 $rPeAltaCale = $cerere($port, '/lista/?add-to-cart=7');
-$verifica('o cheie necunoscută trece mai departe (prima pagină); o cheie cunoscută pe altă cale decât / nu e a dispecerului',
+$rAdaugaAcasa = $cerere($port, '/?add-to-cart=7');
+$rAltaCheiePeCale = $cerere($port, '/lista/?wc-api=wc_stripe');
+$verifica('o cheie necunoscută trece mai departe (prima pagină); add-to-cart pe orice cale ajunge la proprietar, care, până la pista G, lasă pagina cerută '
+    . '(200, ca o adăugare refuzată pe live); celelalte chei, pe altă cale decât /, nu sunt ale dispecerului',
     $rAltceva['cod'] === 200 && $egale($rAltceva['corp'], $rAcasa['corp']) === null && $rPeAltaCale['cod'] === 200
-    && str_contains($rPeAltaCale['corp'], 'proba-regiune-lista'));
-$verifica('dispecerul, fără server: cheia după ordinea fixă, doar pe /, doar cu grupul ei pornit', Interogari::cheie('/?a=1', ['add-to-cart' => '7', 'wc-api' => 'x']) === 'wc-api'
-    && Interogari::cheie('/x/', ['add-to-cart' => '7']) === null && Interogari::cheie('/', ['necunoscut' => '1']) === null && Mod::activ() && WpCompat::mailpoet());
+    && str_contains($rPeAltaCale['corp'], 'proba-regiune-lista') && $rAdaugaAcasa['cod'] === 200 && $egale($rAdaugaAcasa['corp'], $rAcasa['corp']) === null
+    && $rAltaCheiePeCale['cod'] === 200 && str_contains($rAltaCheiePeCale['corp'], 'proba-regiune-lista'),
+    json_encode([$rAltceva['cod'], $rPeAltaCale['cod'], $rAdaugaAcasa['cod'], $rAltaCheiePeCale['cod']]));
+$verifica('dispecerul, fără server: cheia după ordinea fixă, pe / (add-to-cart pe orice cale, doar cu un id numeric), doar cu grupul ei pornit',
+    Interogari::cheie('/?a=1', ['add-to-cart' => '7', 'wc-api' => 'x']) === 'wc-api' && Interogari::cheie('/contact/', ['add-to-cart' => '7', 'wc-api' => 'x']) === 'add-to-cart'
+    && Interogari::cheie('/x/', ['add-to-cart' => '7']) === 'add-to-cart' && Interogari::cheie('/x/', ['add-to-cart' => 'abc']) === null
+    && Interogari::cheie('/', ['add-to-cart' => '0']) === null && Interogari::cheie('/x/', ['add-to-cart' => ['7']]) === null
+    && Interogari::cheie('/x/', ['wc-api' => 'wc_stripe']) === null && Interogari::cheie('/x:1/', ['add-to-cart' => '7']) === null
+    && Interogari::cheie('/', ['necunoscut' => '1']) === null && Mod::activ() && WpCompat::mailpoet());
 
 // ---------------------------------------------------------------------------------------------------------------------
 $scrie('');
@@ -795,6 +853,16 @@ WpCompat::reseteaza();
 $verifica('fără magazin_wc nicio extensie CSP (nici pe /checkout/), iar fără runtime_seturi nicio pagină nu primește modulele seturilor',
     !str_contains((string) ($rCo['antete']['content-security-policy'] ?? ''), 'stripe') && CspSite::extensie('/checkout/') === null && !Mod::activ()
     && !str_contains($fAcasa['corp'], 'comutatoare.js') && CadruCapturat::runtimeSite() === CadruCapturat::scripturiRuntime('divi4@1'));
+$schimbateFara = [];
+foreach ($inchise as $ruta) {
+    $c = (string) preg_replace('/\{[^}]*\*\}/', 'proba/7', (string) $ruta['tipar']);
+    $g = $ruter->gaseste($ruta['metoda'], (string) preg_replace('/\{[^}]+\}/', '7', $c));
+    if ($g === null || $g['handler'] !== $ruta['handler'] || $g['tipar'] !== $ruta['tipar']) {
+        $schimbateFara[] = $ruta['metoda'] . ' ' . $ruta['tipar'];
+    }
+}
+$verifica('fără magazin_wc, fiecare dintre cele ' . count($inchise) . ' rute ale magazinului și conturilor CMS-ului se potrivește ca înainte (aceeași rută, același controller)',
+    $schimbateFara === [], implode(', ', $schimbateFara));
 DateSite::reseteaza(null);
 Tema::reseteaza();
 WpCompat::reseteaza();
@@ -814,14 +882,69 @@ $verifica('licența de dezvoltare „ateliere”: lista din plan (§4), fără l
     ($catalog['licente_dev']['ateliere'] ?? null) === ['catalog', 'magazin', 'plata_stripe', 'cupoane', 'conturi_clienti', 'blog', 'newsletter', 'statistici', 'descarcari',
         'automatizari', 'date_evenimente']);
 $proprietari = [];
-foreach ($noi as $ruta) {
-    $proprietari[$ruta['metoda'] . ' ' . $ruta['tipar']] = implode('|', Plugins::proprietarRuta($ruta['metoda'], $ruta['tipar'])['chei']);
+foreach (array_merge($noi, array_values(array_filter($ruter->rute(), static fn (array $r): bool => $r['conditie'] === 'mailpoet'))) as $ruta) {
+    // Pe un site cu condiția rutei (declarațiile din rute_conditionate), ca la o cerere.
+    $proprietari[$ruta['metoda'] . ' ' . $ruta['tipar']] = implode('|', Plugins::proprietarRuta($ruta['metoda'], $ruta['tipar'], [], [], [], [$ruta['conditie']])['chei']);
 }
-$verifica('proprietarii rutelor noi: produsul al catalogului (POST al magazinului), contul al conturilor, Stripe al plății Stripe, restul al magazinului',
+$verifica('proprietarii rutelor noi, pe un site cu condiția lor: produsul al catalogului (POST al magazinului), contul al conturilor, Stripe al plății Stripe, '
+    . 'rambursarea al magazinului (comenzile), paginile blogului ale blogului, abonarea a newsletterului, restul al magazinului',
     ($proprietari['GET /product/{slug}'] ?? '') === 'catalog' && ($proprietari['POST /product/{slug}'] ?? '') === 'magazin'
     && ($proprietari['GET /my-account/{endpoint*}'] ?? '') === 'conturi_clienti' && ($proprietari['POST /api/wc/stripe/{actiune}'] ?? '') === 'plata_stripe'
-    && ($proprietari['GET /checkout/order-received/{comanda}'] ?? '') === 'magazin' && ($proprietari['GET /api/wc/jeton'] ?? '') === 'magazin',
+    && ($proprietari['GET /checkout/order-received/{comanda}'] ?? '') === 'magazin' && ($proprietari['GET /api/wc/jeton'] ?? '') === 'magazin'
+    && ($proprietari['POST /api/wc/stripe/metode/{actiune*}'] ?? '') === 'plata_stripe' && ($proprietari['POST /admin/orders/{id}/rambursare-stripe'] ?? '') === 'magazin'
+    && ($proprietari['GET /_dev/stripe-js-fals\\.js'] ?? '') === 'plata_stripe' && ($proprietari['GET /blog/page/{n}'] ?? '') === 'blog'
+    && ($proprietari['GET /category/{slug*}/page/{n}'] ?? '') === 'blog' && ($proprietari['POST /_andaxi/abonare/{n}'] ?? '') === 'newsletter',
     json_encode($proprietari));
+// INERT-1: pe un site fără magazin_wc, declarațiile rutelor condiționate nu contează: adresele lor ajung la pagina generală și rămân ale
+// nucleului, ca la de5c3c9 (dinaintea pistei A): același proprietar, același link (filtreazaLinkuri nu scoate nimic), aceeași gardă
+// (controllerul, nu redirecționarea din licență), pe licențele vertij, grafoanaytis, prezentare (a pensiunii) și toate.
+// (`/blog/page/2/` nu e aici: e sub `/blog/*` al blogului, fără condiție, deci a blogului și înainte, și acum.)
+$adreseInert = ['/product/x/', '/my-account/', '/my-account/orders/', '/checkout/order-received/5/', '/checkout/order-pay/5/', '/api/wc/x', '/category/x/page/2/',
+    '/_dev/stripe-js-fals.js'];
+$licenteInert = ['vertij' => (array) $catalog['licente_dev']['vertij'], 'grafoanaytis' => (array) $catalog['licente_dev']['grafoanaytis'],
+    'prezentare' => (array) $catalog['pachete']['prezentare']['pluginuri'], 'toate' => Plugins::chei()];
+$redirectInert = array_fill_keys(['catalog', 'magazin', 'conturi_clienti', 'plata_stripe', 'blog', 'newsletter'], '/');
+$htmlInert = '<ul class="meniu"><li><a href="/product/x/">P</a></li><li><a href="/my-account/">C</a></li><li><a href="/checkout/order-received/5/">R</a></li>'
+    . '<li><a href="/category/x/page/2/">B</a></li></ul>';
+$releInert = [];
+foreach ($licenteInert as $numeL => $listaL) {
+    Plugins::folosesteStari(array_fill_keys(array_map('strval', $listaL), Plugins::PORNIT), $redirectInert);
+    foreach ($adreseInert as $a) {
+        $g = $ruter->gaseste('GET', $a);
+        $prop = $g === null ? null : Plugins::proprietarRuta('GET', $g['tipar'], $g['parametri']);
+        ob_start();
+        $garda = $g === null ? null : GardaPluginuri::permite('GET', $g['tipar'], $g['parametri']);
+        ob_end_clean();
+        if ($g === null || $g['tipar'] !== '/{slug*}' || ($prop['chei'] ?? null) !== ['nucleu'] || !Plugins::adresaVizibila($a) || $garda !== true) {
+            $releInert[] = $numeL . ' ' . $a . ' → ' . ($g['tipar'] ?? '-') . ' ' . implode('|', $prop['chei'] ?? []) . ' garda=' . var_export($garda, true);
+        }
+    }
+    if (Plugins::filtreazaLinkuri($htmlInert) !== $htmlInert) {
+        $releInert[] = $numeL . ': filtreazaLinkuri a schimbat linkurile';
+    }
+}
+Plugins::reseteaza();
+$verifica('INERT-1: fără magazin_wc, ' . count($adreseInert) . ' adrese ale rutelor condiționate, pe 4 licențe (cu redirecționări): pagina generală, a nucleului, '
+    . 'linkurile neatinse, garda lasă controllerul, ca la de5c3c9', $releInert === [], implode('; ', $releInert));
+// Evenimentele Stripe ale magazinului WooCommerce (§5.9.2): doar pe un site cu magazin_wc; altfel lista de dinainte.
+$evenimenteNoi = ['charge.dispute.closed', 'charge.dispute.created', 'charge.refund.updated', 'charge.refunded', 'payment_intent.processing'];
+Plugins::folosesteStari(array_fill_keys((array) $catalog['licente_dev']['ateliere'], Plugins::PORNIT));
+$evenimenteFara = StripeEvenimente::ceruteDePluginuri();
+DateSite::reseteaza($lucru . '/pachet');
+Tema::reseteaza();
+WpCompat::reseteaza();
+$evenimenteCu = StripeEvenimente::ceruteDePluginuri();
+DateSite::reseteaza(null);
+Tema::reseteaza();
+WpCompat::reseteaza();
+Plugins::reseteaza();
+$verifica('evenimentele Stripe: cu magazin_wc, cele 5 ale magazinului WooCommerce în plus (plata în curs, rambursările, disputele); fără el, lista de dinainte',
+    array_values(array_diff($evenimenteCu, $evenimenteFara)) === $evenimenteNoi && array_intersect($evenimenteNoi, $evenimenteFara) === []
+    && in_array('payment_intent.succeeded', $evenimenteFara, true), json_encode([$evenimenteFara, $evenimenteCu]));
+DupaPlata::ruleaza($db, 1, 'webhook');
+$aspect = json_decode((string) @file_get_contents($radacina . '/site-uri/ateliere/stripe-aspect.json'), true);
+$verifica('locurile scrise o dată pentru plata Stripe: MagazinWc\\DupaPlata::ruleaza (nu face nimic până la pistele L și I), stripe-aspect.json în pachet (scheletul, '
+    . 'cunoscut de verifica-pachet)', method_exists(DupaPlata::class, 'ruleaza') && $aspect === ['format' => 1, 'appearance' => [], 'fonts' => []]);
 $manifest = json_decode((string) file_get_contents($radacina . '/public/assets/compat/divi4/v1/sloturi.json'), true);
 $verifica('sloturi.json: seturile comportament, magazin_wc și calendar, cu modulele rezervate (fișiere care nu fac nimic), niciunul în cap sau final',
     array_keys((array) ($manifest['seturi'] ?? [])) === ['comportament', 'magazin_wc', 'calendar']

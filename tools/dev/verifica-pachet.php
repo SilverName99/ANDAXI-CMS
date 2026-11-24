@@ -67,6 +67,7 @@ const FISIERE_RADACINA = [
     'poze-optimizate.json' => 'pozele mari afișate din fișiere noi (PozeOptimizate; fișierele în public/)',
     'import-wordpress.json' => 'regulile importului WordPress (App\\Support\\ImportWordPress, ImportWordPress::valideazaReguli)',
     'wp-compat.json' => 'stratul de adrese al unui site mutat de pe WordPress (App\\Support\\WpCompat, WpCompat::valideaza)',
+    'stripe-aspect.json' => 'opțiunile Stripe.js ale checkout-ului unui site WooCommerce mutat: appearance și fonts (pista H, docs/MAGAZIN-WC.md)',
 ];
 
 $argumente = array_slice($argv, 1);
@@ -488,6 +489,31 @@ $verificaPachet = static function (string $dosar, ?string $site, bool $alUnuiCli
         }
     }
 
+    // Opțiunile Stripe.js ale checkout-ului (mutarea unui site WooCommerce; locul l-a pus pista A, valorile le scrie pista H): un obiect
+    // cu `format` 1, `appearance` (obiect) și `fonts` (o listă de {cssSrc: https://…}); altceva nu.
+    if (in_array('stripe-aspect.json', $fisiere, true)) {
+        $aspect = json_decode((string) @file_get_contents($dosar . '/stripe-aspect.json'), true);
+        if (!is_array($aspect) || array_is_list($aspect) && $aspect !== []) {
+            $probleme[] = 'stripe-aspect.json: trebuie să fie un obiect JSON';
+        } else {
+            foreach (array_diff(array_keys($aspect), ['format', 'appearance', 'fonts']) as $cheie) {
+                $probleme[] = 'stripe-aspect.json: cheie necunoscută „' . $cheie . '” (doar format, appearance, fonts)';
+            }
+            if (($aspect['format'] ?? null) !== 1) {
+                $probleme[] = 'stripe-aspect.json: „format” trebuie să fie 1';
+            }
+            if (isset($aspect['appearance']) && (!is_array($aspect['appearance']) || array_is_list($aspect['appearance']) && $aspect['appearance'] !== [])) {
+                $probleme[] = 'stripe-aspect.json: „appearance” trebuie să fie un obiect';
+            }
+            foreach (isset($aspect['fonts']) ? (is_array($aspect['fonts']) && array_is_list($aspect['fonts']) ? $aspect['fonts'] : [null]) : [] as $i => $font) {
+                if (!is_array($font) || array_keys($font) !== ['cssSrc'] || !is_string($font['cssSrc'])
+                    || preg_match('#^https://[a-z0-9.-]+/[^\s"\'<>]*$#D', $font['cssSrc']) !== 1) {
+                    $probleme[] = 'stripe-aspect.json: fonts[' . $i . '] trebuie să fie {"cssSrc": "https://…"}';
+                }
+            }
+        }
+    }
+
     // Înghețarea setărilor (și corecturile ei, setari-inghetate-<N>.json): se citește exact ca la runner-ul migrărilor și e
     // a site-ului pachetului. Conținutul (completitudinea, datele private) îl verifică tools/inghetare/verifica-inghetare.php.
     foreach ($fisiere as $relativ) {
@@ -736,6 +762,13 @@ if ($autotest) {
     $caz('wp-compat.json cu „slash_final” scris ca text', $wpCompat(['slash_final' => 'da']), 'true sau false');
     $caz('wp-compat.json cu o cale cu „..” în resturi_410', $wpCompat(['resturi_410' => ['/wp-admin/../admin/']]), 'cale nevalidă');
     $caz('wp-compat.json cu un endpoint compatibil fără metodă', $wpCompat(['compatibile' => [['cale' => '/wp-json/proba/']]]), 'metoda GET, POST sau HEAD');
+    // Opțiunile Stripe.js ale checkout-ului (stripe-aspect.json): scheletul trece; o cheie necunoscută sau un font fără https pică.
+    $aspectStripe = static fn (string $text): callable => static fn (string $d) => file_put_contents($d . '/stripe-aspect.json', $text);
+    $caz('stripe-aspect.json, scheletul: trece', $aspectStripe('{"format": 1, "appearance": {}, "fonts": []}'), null);
+    $caz('stripe-aspect.json cu un font: trece', $aspectStripe('{"format": 1, "appearance": {"theme": "stripe"}, "fonts": [{"cssSrc": "https://fonturi.example.test/css?f=Proba"}]}'), null);
+    $caz('stripe-aspect.json cu o cheie necunoscută', $aspectStripe('{"format": 1, "cheie": "x"}'), 'cheie necunoscută');
+    $caz('stripe-aspect.json cu un font pe http', $aspectStripe('{"format": 1, "fonts": [{"cssSrc": "http://fonturi.example.test/x.css"}]}'), 'fonts[0]');
+    $caz('stripe-aspect.json care nu e un obiect', $aspectStripe('[1, 2]'), 'un obiect JSON');
     $caz('poze-optimizate.json cu o poză și fișierul ei WebP: trece', $pozeOptimizate(), null);
     $caz('poze-optimizate.json fără „marimi_de_pe”: „disc” (mărimi luate prin CDN?)', $pozeOptimizate(['marimi_de_pe' => 'cdn']), 'stat -c %s');
     $caz('poze-optimizate.json fără fișierul nou în public/', $pozeOptimizate([], false), 'fișierul nou lipsește');

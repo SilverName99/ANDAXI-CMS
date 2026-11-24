@@ -66,10 +66,19 @@ importă pistele G și B.
 
 Înregistrate o singură dată în `src/Http/rute.php`, toate cu condiția `magazin_wc` (`Router::CONDITII`: o rută condiționată nu se
 potrivește deloc fără condiție, deci pe celelalte site-uri cererea merge mai departe exact ca înainte, `/cos` și `/checkout` la
-coșul și checkout-ul nucleului, restul la `/{slug*}`). Cu condiția, ele stau înaintea rutelor nucleului cu aceleași adrese.
-Instantaneele rutelor (`tools/dev/instantanee/`) le arată cu „(doar cu magazin_wc)”, iar testul B al pluginurilor le cere doar pe
-un site cu condiția. Până la pista lor, fiecare metodă răspunde 404 (`PistaNeconstruita`): pe o pagină, 404-ul site-ului (cel
-capturat, pe cadrul capturat); sub `/api/wc/` JSON-ul scurt al gărzii, `{"ok":false,…}`, cu `Cache-Control: no-store, private`.
+coșul și checkout-ul nucleului, restul la `/{slug*}`), în afara abonării, cu condiția `mailpoet`. Cu condiția, ele stau înaintea
+rutelor nucleului cu aceleași adrese. Instantaneele rutelor (`tools/dev/instantanee/`) le arată cu „(doar cu magazin_wc)”, iar
+testul B al pluginurilor le cere doar pe un site cu condiția. Până la pista lor, fiecare metodă răspunde 404 (`PistaNeconstruita`):
+pe o pagină, 404-ul site-ului (cel capturat, pe cadrul capturat); sub `/api/wc/`, la rambursarea din admin și la abonare JSON-ul
+scurt al gărzii, `{"ok":false,…}`, cu `Cache-Control: no-store, private` (pe un site cu `antete_404` = `wordpress`, ca ateliere,
+și cu antetele nocache ale WordPress: `no-cache, must-revalidate, max-age=0, no-store, private`).
+
+Proprietarii lor stau în `config/plugins.php` → `rute_conditionate` (`['magazin_wc' => […]]`, pe plugin): o declarație de acolo
+contează doar pe un site cu condiția ei (`Plugins::declaratiiPentru`, `conditiiSite()`). Pe celelalte site-uri adresele rutelor
+condiționate ajung la pagina generală și rămân ale nucleului, ca înainte: aceleași linkuri în pagini (`filtreazaLinkuri`), aceeași
+gardă, aceleași pagini din bază (INERT-1, verificat în G-regiuni pe licențele vertij, grafoanaytis, prezentare și toate).
+`verifica-rute.php` cere ca o declarație condiționată să câștige doar pe rute cu aceeași condiție, iar uneltele (instantaneele,
+raportul rutelor) întreabă o rută condiționată „pe un site cu condiția ei”.
 
 | Metoda și adresa | Controllerul și metoda | Proprietarul (config/plugins.php) | Pista |
 |---|---|---|---|
@@ -84,18 +93,47 @@ capturat, pe cadrul capturat); sub `/api/wc/` JSON-ul scurt al gărzii, `{"ok":f
 | `GET /api/wc/cos-plutitor` | `MagazinWcController::cosPlutitor` | `magazin` | G |
 | `POST /api/wc/cos/{actiune}` | `MagazinWcController::cosApi` | `magazin` | G |
 | `POST /api/wc/checkout` | `MagazinWcController::checkoutApi` | `magazin` | L |
-| `POST /api/wc/stripe/{actiune}` | `MagazinWcController::stripeApi` | `plata_stripe` | H |
+| `POST /api/wc/stripe/{actiune}` (`sesiune`, `verifica-plata`) | `MagazinWcController::stripeApi` | `plata_stripe` | H |
+| `POST /api/wc/stripe/metode/{actiune*}` (`sterge`, `implicita`, `adauga`, `adauga/confirma`) | `MagazinWcController::stripeMetode` | `plata_stripe` | H |
+| `POST /admin/orders/{id}/rambursare-stripe` | `MagazinWcController::rambursareStripe` | `magazin` (comenzile, `/admin/orders/*`) | H |
+| `GET /_dev/stripe-js-fals.js` (Stripe.js-ul fals al testelor, `tools/dev/lib/stripe-js-fals.js`; doar cu `APP_ENV=local`, altfel 404) | `MagazinWcController::stripeJsFals` | `plata_stripe` | H |
+| `GET /blog/page/{n}`, `GET /category/{slug*}/page/{n}` (paginile 2… ale listelor de articole) | `BlogCapturatController::paginaBlog`, `paginaCategorie` | `blog` | B |
+| `POST /_andaxi/abonare/{n}` (condiția `mailpoet`: formularele de abonare Divi) | `AbonareCapturataController::trimite` | `newsletter` | E |
 
-Rutele magazinului propriu al CMS-ului (`/magazin`, `/produs/…`, `/cos/…` cu API-ul lui) rămân cum sunt; dacă și cum se închid pe
-un site `magazin_wc` hotărăsc pistele G și L.
+Rutele magazinului și ale conturilor CMS-ului au condiția inversă, `fara_magazin_wc` (decizia D5: pe acest fel de site magazinul e
+doar la adresele WooCommerce): `/magazin`, `/categorie/…`, `/marca/…`, `/eticheta/…`, `/produs/…` (și recenzia), `GET /cos` și
+POST-urile `/cos/…`, `/api/cart/…`, `/api/checkout/…`, `/api/products/…`, `/api/search/products`, `/api/shop/catalog`,
+`/api/fan/…`, `GET` și `POST /checkout`, `GET /checkout/succes/…`, `/plata/…`, `/contul-meu` și `/contul-meu/…`, `/login`,
+`/register`, `/auth/google…` (61 de rute). Pe un site `magazin_wc` ele nu se potrivesc: un GET ajunge la pagina generală (404-ul
+capturat), un POST la 404-ul routerului, deci niciun al doilea drum de comandă și nicio a doua logare, pe lângă regulile
+WooCommerce (data din viitor, validarea câmpurilor checkout-ului, Stripe, apărările formularelor). Pe toate celelalte site-uri
+sunt exact ca înainte. Rămân fără condiție adresele mereu deschise (`POST /checkout/succes/…`, `GET /checkout/bt/retur`,
+`GET /contul-meu/confirmare/…`, `GET /contul-meu/activare/retur`) și webhook-urile.
 
-### Cheile de pe `/` (`App\Support\CompatWp\Interogari`)
+După plată, pista H cheamă `App\Support\MagazinWc\DupaPlata::ruleaza($db, $comanda, $sursa)` (locul l-a pus pista A, gol; îl umplu
+pistele L și I: emailurile stărilor, permisiunile de descărcare, lista 2 a newsletterului, evenimentul comenzii, stocul). Contractul:
+poate fi chemată de mai multe ori pentru aceeași comandă, și în paralel; fiecare efect se întâmplă o singură dată, păzit de propria
+lui revendicare. Opțiunile Stripe.js ale checkout-ului (`appearance`, `fonts`) stau în pachet, în `stripe-aspect.json` (scheletul îl
+scrie pista A, valorile pista H; `verifica-pachet.php` îi cere forma). Evenimentele Stripe în plus ale magazinului WooCommerce
+(`payment_intent.processing`, `charge.refunded`, `charge.refund.updated`, `charge.dispute.created`, `charge.dispute.closed`) stau în
+`config/plugins.php` → `magazin` → `stripe_evenimente_conditionate`, deci doar pe un site `magazin_wc` le cer Setări plăți și
+verificarea webhook-ului; pe celelalte site-uri lista e cea de dinainte.
+
+### Cheile WordPress din adresă: pe `/` și `?add-to-cart=` (`App\Support\CompatWp\Interogari`)
 
 Un singur dispecer, chemat o dată din `public/index.php`, după mentenanță și politica CSP, înaintea formularelor capturate și a
-cache-ului de pagini. Doar pe calea `/`, doar cu grupul cheii pornit în `wp-compat.json`; o cheie care nu e în listă trece mai
-departe neatinsă, iar mai multe chei în aceeași cerere: câștigă prima din ordinea de mai jos. Cu pluginul proprietar oprit, 404-ul
-site-ului, în afara cheilor mereu deschise, care ajung la proprietar în orice stare (notificarea Stripe veche, adresele MailPoet din
-emailurile trimise: dezabonarea e mereu posibilă, RFC 8058). Până la pista lor, proprietarii răspund 404.
+cache-ului de pagini. Doar pe calea `/` (`add-to-cart`: pe orice cale, ca WooCommerce, doar cu un id numeric), doar cu grupul cheii
+pornit în `wp-compat.json`; o cheie care nu e în listă trece mai departe neatinsă, iar mai multe chei în aceeași cerere: câștigă prima
+din ordinea de mai jos. O adresă din care parse_url nu scoate o cale (N6, [SECURITATE.md](SECURITATE.md)) nu are nicio cheie. Cu
+pluginul proprietar oprit, 404-ul site-ului, în afara cheilor mereu deschise, care ajung la proprietar în orice stare (notificarea
+Stripe veche, adresele MailPoet din emailurile trimise: dezabonarea e mereu posibilă, RFC 8058). Până la pista lor, proprietarii
+răspund 404 (`add-to-cart`: pagina cerută, fără nimic adăugat).
+
+`add-to-cart` ca pe live (WooCommerce citește `?add-to-cart=<id>` pe orice pagină): proprietarul primește calea cererii
+(`adaugaDinAdresa(string $cale): bool`) și trimite antetele nocache ale WooCommerce; după o adăugare reușită răspunde el, 302 la
+`/cos/` (true); refuzată (stoc, dată, variantă), pune notificarea în coadă și întoarce false, iar cererea merge mai departe: pagina
+adresei cerute, 200, cu notificarea (o regiune `sesiune`, deci fără cache). Un id care nu e numeric nu e o cheie: WooCommerce nu
+adaugă nimic, deci nici dispecerul nu se amestecă.
 
 | Cheia | Grupul | Pluginul | Mereu deschisă | Proprietarul | Pista |
 |---|---|---|---|---|---|
@@ -103,14 +141,15 @@ emailurile trimise: dezabonarea e mereu posibilă, RFC 8058). Până la pista lo
 | `wc-ajax` | `magazin_wc` | — | — | 404 în JSON (endpointurile AJAX ale WooCommerce nu se portează; scripturile noastre au `/api/wc/*`) | — |
 | `download_file` | `magazin_wc` | `descarcari` | nu | `DescarcariController::descarca` | I |
 | `mailpoet_router`, `mailpoet_page` | `mailpoet` | `newsletter` | da | `MailPoetCompat\Router::raspunde($cheie)` (statică) | E |
-| `add-to-cart` | `magazin_wc` | `magazin` | nu | `MagazinWcController::adaugaDinAdresa` (ajunge mereu la `/cos/`) | G |
+| `add-to-cart` (pe orice cale, cu un id numeric) | `magazin_wc` | `magazin` | nu | `MagazinWcController::adaugaDinAdresa($cale)`: 302 la `/cos/` după o adăugare reușită, altfel pagina cerută | G |
 
 ### CSP pe rută
 
 `App\Support\CspSite` are o extensie închisă pe rută (`EXTENSII`, `RUTE_EXTINSE`), doar pe un site `magazin_wc`: `/checkout/…`,
 `/my-account/payment-methods/…` și `/my-account/add-payment-method/…` (calea comparată cu litere mici) primesc sursele documentate
-ale Stripe.js (`script-src` și `frame-src` `https://js.stripe.com`, `frame-src` `https://hooks.stripe.com`, `connect-src`
-`https://api.stripe.com` și `https://merchant-ui-api.stripe.com`); pista H completează lista după pagina CSP a Stripe. Restul
+ale Stripe.js (`script-src` și `frame-src` `https://js.stripe.com` și `https://*.js.stripe.com`, `frame-src`
+`https://hooks.stripe.com`, `connect-src` `https://api.stripe.com` și `https://merchant-ui-api.stripe.com`); gazdele cu `*` doar aici,
+în constanta din cod (`tema.json` și trackerele nu pot lărgi `script-src`). Pista H completează lista după pagina CSP a Stripe. Restul
 politicii e același; pe orice altă cale și pe orice alt site politica e cea de până acum, octet cu octet (G-regiuni, G-capturat).
 
 ### Modulele runtime-ului: seturile

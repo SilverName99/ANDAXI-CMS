@@ -71,6 +71,8 @@ final class Plugins
     /** @var array<string, array> */
     private static array $declaratiiRute = [];
     private static ?array $listaDeclaratii = null;
+    /** @var list<string>|null condițiile folosite de `rute_conditionate` (din catalog) */
+    private static ?array $conditiiFolosite = null;
     private static ?array $impartite = null;
     private static ?bool $nimicAscuns = null;
     /** @var array<string, bool> */
@@ -488,11 +490,14 @@ final class Plugins
      * înseamnă „se vede dacă oricare e vizibil”.
      *
      * @param array<string, string> $parametri parametrii rutei (ex. slug, section)
+     * @param list<string>|null $conditii condițiile rutelor (Router::CONDITII) considerate îndeplinite, pentru declarațiile din
+     *   `rute_conditionate`; null = cele ale site-ului acestuia (la o cerere). Uneltele dau condiția rutei pe care o întreabă.
      * @return array{chei: list<string>, mereu_deschis: bool, explicita: bool, declaratie: string}
      *   explicita = false: nicio declarație nu acoperă ruta (verifica-rute.php o raportează;
      *   la rulare e tratată ca nucleu, ca să nu dispară nimic din greșeală)
      */
-    public static function proprietarRuta(string $metoda, string $tipar, array $parametri = [], array $get = [], array $post = []): array
+    public static function proprietarRuta(string $metoda, string $tipar, array $parametri = [], array $get = [], array $post = [],
+        ?array $conditii = null): array
     {
         $metoda = strtoupper($metoda);
         $impartita = self::impartitaNormalizata($metoda, $tipar);
@@ -509,7 +514,7 @@ final class Plugins
             }
         }
 
-        $castigatoare = self::declaratiiPentru($metoda, $tipar)[0] ?? null;
+        $castigatoare = self::declaratiiPentru($metoda, $tipar, $conditii)[0] ?? null;
         if ($castigatoare === null) {
             return ['chei' => [self::NUCLEU], 'mereu_deschis' => false, 'explicita' => false, 'declaratie' => ''];
         }
@@ -517,7 +522,7 @@ final class Plugins
 
         // Paginile din baza de date care sunt ale unui plugin (ex. „acorduri-gdpr”).
         if (self::normalizeazaTipar($tipar) === '/{*}' && isset($parametri['slug'])) {
-            $pagina = self::proprietarPagina((string) $parametri['slug']);
+            $pagina = self::proprietarPagina((string) $parametri['slug'], $conditii);
             if ($pagina !== null) {
                 return ['chei' => [$pagina], 'mereu_deschis' => false, 'explicita' => true, 'declaratie' => 'pagini: ' . $parametri['slug']];
             }
@@ -537,8 +542,12 @@ final class Plugins
      * unei rute de plugin („magazin”, „cos”, „checkout”, „contul-meu”, „blog”…).
      * Contează la adrese scrise altfel decât ruta (/MAGAZIN, /Cos), pe care
      * routerul le trimite la pagina generală, iar baza le găsește oricum.
+     * O declarație din `rute_conditionate` contează doar cu condiția ei îndeplinită (`$conditii`, ca la proprietarRuta): pe un site
+     * fără `magazin_wc`, o pagină „my-account” e a nucleului, ca înainte.
+     *
+     * @param list<string>|null $conditii
      */
-    public static function proprietarPagina(string $slug): ?string
+    public static function proprietarPagina(string $slug, ?array $conditii = null): ?string
     {
         $slug = strtolower(trim($slug, "/ \t\n"));
         if ($slug === '') {
@@ -551,7 +560,7 @@ final class Plugins
                 }
             }
         }
-        $ruta = self::declaratiiPentru('GET', '/' . $slug)[0] ?? null;
+        $ruta = self::declaratiiPentru('GET', '/' . $slug, $conditii)[0] ?? null;
         return $ruta !== null && $ruta['proprietar'] !== self::NUCLEU ? $ruta['proprietar'] : null;
     }
 
@@ -559,20 +568,28 @@ final class Plugins
      * Toate declarațiile din catalog care acoperă ruta, de la cea mai precisă.
      * Prima e cea care contează; dacă a doua are aceeași precizie și alt
      * proprietar, declarația e ambiguă (verifica-rute.php o raportează).
+     * Declarațiile din `rute_conditionate` (rutele cu o condiție, Router::CONDITII) intră doar cu condiția lor între `$conditii`
+     * (null = condițiile îndeplinite pe site-ul acesta, conditiiSite()): pe un site fără ele, proprietarii sunt cei de dinainte.
      *
-     * @return list<array{proprietar:string, mereu_deschis:bool, scor:int, sursa:string}>
+     * @param list<string>|null $conditii
+     * @return list<array{proprietar:string, mereu_deschis:bool, scor:int, sursa:string, conditie:?string}>
      */
-    public static function declaratiiPentru(string $metoda, string $tipar): array
+    public static function declaratiiPentru(string $metoda, string $tipar, ?array $conditii = null): array
     {
         $metoda = strtoupper($metoda);
         $normalizat = self::normalizeazaTipar($tipar);
-        $cheieMemo = $metoda . ' ' . $normalizat;
+        $conditii ??= self::conditiiSite();
+        sort($conditii);
+        $cheieMemo = implode(',', $conditii) . '|' . $metoda . ' ' . $normalizat;
         if (isset(self::$declaratiiRute[$cheieMemo])) {
             return self::$declaratiiRute[$cheieMemo];
         }
         $potriviri = [];
         foreach (self::listaDeclaratii() as $declaratie) {
             if ($declaratie['metoda'] !== null && $declaratie['metoda'] !== $metoda) {
+                continue;
+            }
+            if ($declaratie['conditie'] !== null && !in_array($declaratie['conditie'], $conditii, true)) {
                 continue;
             }
             $baza = $declaratie['baza'];
@@ -587,6 +604,7 @@ final class Plugins
                 'mereu_deschis' => $declaratie['mereu_deschis'],
                 'scor' => ($declaratie['prefix'] ? 0 : 2000000) + ($declaratie['metoda'] !== null ? 1000000 : 0) + strlen($baza),
                 'sursa' => $declaratie['sursa'],
+                'conditie' => $declaratie['conditie'],
             ];
         }
         usort($potriviri, static fn (array $a, array $b): int => $b['scor'] <=> $a['scor']);
@@ -594,9 +612,10 @@ final class Plugins
     }
 
     /**
-     * Toate declarațiile de rute din catalog, desfăcute.
+     * Toate declarațiile de rute din catalog, desfăcute, și cele din `rute_conditionate` (cu `conditie`, cheia din Router::CONDITII;
+     * celelalte au `conditie` = null). Lista nu depinde de site; declaratiiPentru() alege ce intră.
      *
-     * @return list<array{proprietar:string, metoda:?string, baza:string, prefix:bool, mereu_deschis:bool, sursa:string}>
+     * @return list<array{proprietar:string, metoda:?string, baza:string, prefix:bool, mereu_deschis:bool, sursa:string, conditie:?string}>
      */
     public static function listaDeclaratii(): array
     {
@@ -607,8 +626,15 @@ final class Plugins
         $surse = [self::NUCLEU => $catalog['nucleu']] + $catalog['pluginuri'];
         $lista = [];
         foreach ($surse as $proprietar => $definitie) {
+            $grupuri = [];
             foreach (['rute_admin', 'rute_publice', 'rute_mereu_deschise'] as $camp) {
-                foreach ((array) ($definitie[$camp] ?? []) as $text) {
+                $grupuri[] = [$camp, null, (array) ($definitie[$camp] ?? [])];
+            }
+            foreach ((array) ($definitie['rute_conditionate'] ?? []) as $conditie => $texte) {
+                $grupuri[] = ['rute_conditionate.' . $conditie, (string) $conditie, (array) $texte];
+            }
+            foreach ($grupuri as [$camp, $conditie, $texte]) {
+                foreach ($texte as $text) {
                     $text = trim((string) $text);
                     $metoda = null;
                     if (preg_match('#^(GET|POST)\s+(/.*)$#', $text, $m) === 1) {
@@ -624,11 +650,37 @@ final class Plugins
                         'prefix' => $prefix,
                         'mereu_deschis' => $camp === 'rute_mereu_deschise',
                         'sursa' => $proprietar . '.' . $camp . ': ' . ($metoda !== null ? $metoda . ' ' : '') . $text . ($prefix ? '/*' : ''),
+                        'conditie' => $conditie,
                     ];
                 }
             }
         }
         return self::$listaDeclaratii = $lista;
+    }
+
+    /**
+     * Condițiile rutelor (Router::CONDITII) folosite de `rute_conditionate` și îndeplinite pe site-ul acesta, acum (fără memorie: un
+     * test sau o unealtă care schimbă pachetul le vede la zi; WpCompat își ține singur configurarea citită).
+     *
+     * @return list<string>
+     */
+    public static function conditiiSite(): array
+    {
+        if (self::$conditiiFolosite === null) {
+            self::$conditiiFolosite = [];
+            foreach (self::listaDeclaratii() as $declaratie) {
+                if ($declaratie['conditie'] !== null && !in_array($declaratie['conditie'], self::$conditiiFolosite, true)) {
+                    self::$conditiiFolosite[] = $declaratie['conditie'];
+                }
+            }
+        }
+        $rez = [];
+        foreach (self::$conditiiFolosite as $conditie) {
+            if (\App\Http\Router::conditieIndeplinita($conditie)) {
+                $rez[] = $conditie;
+            }
+        }
+        return $rez;
     }
 
     /** `/admin/orders/{id}/bt/{actiune}` → `/admin/orders/{}/bt/{}`; `{slug*}` → `{*}`. */
@@ -699,7 +751,7 @@ final class Plugins
         if (isset($bucati['query'])) {
             parse_str((string) $bucati['query'], $get);
         }
-        $cheieMemo = strtoupper($metoda) . ' ' . $cale . '?' . http_build_query($get);
+        $cheieMemo = implode(',', self::conditiiSite()) . '|' . strtoupper($metoda) . ' ' . $cale . '?' . http_build_query($get);
         if (isset(self::$adreseVizibile[$cheieMemo])) {
             return self::$adreseVizibile[$cheieMemo];
         }
@@ -944,17 +996,20 @@ final class Plugins
      * `reseteaza()` întoarce la licența de pe disc. Site-ul nu o cheamă niciodată.
      *
      * @param array<string, string> $stari pluginul => starea din licență (lipsă = oprit)
+     * @param array<string, string> $redirectionari pluginul => adresa la care duc adresele lui publice când e oprit (ca
+     *   `redirectionari` din licență; gol = pagina 404)
      */
-    public static function folosesteStari(array $stari): void
+    public static function folosesteStari(array $stari, array $redirectionari = []): void
     {
         self::reseteaza();
         $calcul = self::calculeazaStari($stari);
         $pluginuri = array_filter($stari, static fn ($stare): bool => $stare !== self::OPRIT);
         self::$stari = $calcul['stari'];
         self::$mesaje = $calcul['mesaje'];
-        self::$licenta = ['site' => 'test', 'emisa_la' => '1970-01-01T00:00:00Z', 'versiune' => 0, 'pluginuri' => $pluginuri];
+        self::$licenta = ['site' => 'test', 'emisa_la' => '1970-01-01T00:00:00Z', 'versiune' => 0, 'pluginuri' => $pluginuri]
+            + ($redirectionari !== [] ? ['redirectionari' => $redirectionari] : []);
         self::$sursa = self::DIN_LICENTA;
-        self::$amprenta = sha1((string) json_encode([self::$stari, [], $pluginuri]));
+        self::$amprenta = sha1((string) json_encode([self::$stari, [], $pluginuri] + ($redirectionari !== [] ? [3 => $redirectionari] : [])));
     }
 
     /** Uită tot ce s-a calculat (teste, unelte care schimbă licența în același proces). */

@@ -10,11 +10,18 @@ final class Router
      * Condițiile unei rute (lista închisă): o rută cu o condiție se potrivește doar când condiția e îndeplinită pe site-ul acesta;
      * altfel routerul o sare ca și cum n-ar fi înregistrată (cererea ajunge la ruta de după, de obicei `/{slug*}`), deci un site
      * fără condiție răspunde exact ca înainte. Uneltele care listează rutele (verifica-rute.php, instantaneu-rute.php) le văd pe
-     * toate, cu condiția lor.
-     *  - `magazin_wc`: magazinul în forma WooCommerce (`wp-compat.json` → `magazin_wc`; App\Support\MagazinWc\Mod, pista A).
+     * toate, cu condiția lor. Declarațiile de proprietar ale unei rute condiționate stau, cu aceeași condiție, în
+     * `config/plugins.php` → `rute_conditionate` (Plugins::declaratiiPentru le ia doar cu condiția îndeplinită).
+     *  - `magazin_wc`: magazinul în forma WooCommerce (`wp-compat.json` → `magazin_wc`; App\Support\MagazinWc\Mod, pista A);
+     *  - `fara_magazin_wc`: opusul ei, pe rutele magazinului și ale conturilor CMS-ului (`/magazin`, `/produs/…`, `/cos/…`,
+     *    `/api/cart/…`, `/checkout`, `/plata/…`, `/contul-meu/…`, `/login`, `/register`, `/auth/google…`): pe un site cu
+     *    `magazin_wc` ele nu există (decizia D5: magazinul e doar la adresele WooCommerce), pe toate celelalte sunt ca înainte;
+     *  - `mailpoet`: adresele MailPoet ale unui site mutat (`wp-compat.json` → `mailpoet`; abonarea din formularele capturate).
      */
     public const CONDITII = [
         'magazin_wc' => [\App\Support\MagazinWc\Mod::class, 'activ'],
+        'fara_magazin_wc' => [\App\Support\MagazinWc\Mod::class, 'inactiv'],
+        'mailpoet' => [\App\Support\WpCompat::class, 'mailpoet'],
     ];
 
     private array $routes = [];

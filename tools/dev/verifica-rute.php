@@ -8,7 +8,10 @@ declare(strict_types=1);
  *  1. fiecare rută din router (src/Http/rute.php) are un proprietar explicit:
  *     nucleul sau un plugin, fără ambiguitate (două declarații la fel de precise,
  *     cu proprietari diferiți);
- *  2. fiecare declarație de rută din catalog acoperă cel puțin o rută reală;
+ *  2. fiecare declarație de rută din catalog acoperă cel puțin o rută reală; o declarație din `rute_conditionate` (Router::CONDITII)
+ *     e câștigătoare doar pentru rute cu aceeași condiție (altfel ar schimba, pe un site cu condiția, proprietarul unei rute care
+ *     există peste tot), iar condițiile ei (și ale lui `stripe_evenimente_conditionate`) sunt chei din Router::CONDITII; o rută
+ *     condiționată se verifică pe un site cu condiția ei (declarațiile condiției intră), una fără condiție pe un site fără niciuna;
  *  3. rutele împărțite există și trimit spre chei cunoscute;
  *  4. fiecare intrare din meniu duce la o rută a aceluiași plugin;
  *  5. cronurile din catalog există și au garda; orice script cu gardă e în catalog;
@@ -100,8 +103,15 @@ foreach ($pluginuri as $cheie => $definitie) {
             }
         }
     }
+    foreach (['rute_conditionate', 'stripe_evenimente_conditionate'] as $camp) {
+        foreach (array_keys((array) ($definitie[$camp] ?? [])) as $conditie) {
+            if (!isset(Router::CONDITII[$conditie])) {
+                $problema('Pluginul „' . $cheie . '” are în „' . $camp . '” condiția necunoscută „' . $conditie . '” (Router::CONDITII).');
+            }
+        }
+    }
     if (($definitie['portat'] ?? true) === false) {
-        foreach (['rute_admin', 'rute_publice', 'rute_mereu_deschise', 'meniu', 'cron', 'pagini'] as $camp) {
+        foreach (['rute_admin', 'rute_publice', 'rute_mereu_deschise', 'rute_conditionate', 'meniu', 'cron', 'pagini'] as $camp) {
             if (($definitie[$camp] ?? []) !== []) {
                 $problema('Pluginul neportat „' . $cheie . '” are deja „' . $camp . '”.');
             }
@@ -186,7 +196,15 @@ foreach ($rute as $ruta) {
         continue;
     }
 
-    $potriviri = Plugins::declaratiiPentru($metoda, $tipar);
+    // Pe un site cu condiția rutei (o rută fără condiție: pe un site fără niciuna), ca la o cerere.
+    $conditiiRuta = $ruta['conditie'] !== null ? [$ruta['conditie']] : [];
+    $potriviri = Plugins::declaratiiPentru($metoda, $tipar, $conditiiRuta);
+    // Cu toate condițiile îndeplinite, câștigătoarea nu poate fi o declarație condiționată de altă condiție decât a rutei.
+    $castigaToate = Plugins::declaratiiPentru($metoda, $tipar, array_keys(Router::CONDITII))[0] ?? null;
+    if ($castigaToate !== null && $castigaToate['conditie'] !== null && $castigaToate['conditie'] !== $ruta['conditie']) {
+        $problema($eticheta . ': declarația condiționată „' . $castigaToate['sursa'] . '” ar fi a ei pe un site cu „' . $castigaToate['conditie']
+            . '”, dar ruta ' . ($ruta['conditie'] === null ? 'nu are condiție' : 'are condiția „' . $ruta['conditie'] . '”') . '.');
+    }
     if ($potriviri === []) {
         $problema($eticheta . ': nicio declarație în config/plugins.php (nici nucleu, nici plugin).');
         $linii[] = sprintf('  %-62s %s', $eticheta, '??? FĂRĂ PROPRIETAR');
@@ -210,7 +228,7 @@ foreach ($rute as $ruta) {
         }
         $extra .= '  (pagini din bază ale pluginurilor: ' . implode(', ', $pagini) . ')';
     }
-    $linii[] = sprintf('  %-62s %s', $eticheta, $proprietar . $extra);
+    $linii[] = sprintf('  %-62s %s', $eticheta, $proprietar . $extra . ($ruta['conditie'] !== null ? '  (doar cu ' . $ruta['conditie'] . ')' : ''));
 }
 
 foreach (Plugins::listaDeclaratii() as $declaratie) {
@@ -539,7 +557,7 @@ if (!$scurt) {
 }
 $numarate = [];
 foreach ($rute as $ruta) {
-    $p = Plugins::proprietarRuta($ruta['metoda'], $ruta['tipar']);
+    $p = Plugins::proprietarRuta($ruta['metoda'], $ruta['tipar'], [], [], [], $ruta['conditie'] !== null ? [$ruta['conditie']] : []);
     $numarate[implode('|', $p['chei'])] = ($numarate[implode('|', $p['chei'])] ?? 0) + 1;
 }
 arsort($numarate);

@@ -227,7 +227,8 @@ final class StripeEvenimente
     }
 
     /**
-     * Evenimentele cerute de pluginurile vizibile (câmpul `stripe_evenimente` din catalog), fără dubluri, sortate.
+     * Evenimentele cerute de pluginurile vizibile (câmpul `stripe_evenimente` din catalog și, cu condiția lor îndeplinită,
+     * `stripe_evenimente_conditionate`), fără dubluri, sortate.
      *
      * @return list<string>
      */
@@ -238,6 +239,14 @@ final class StripeEvenimente
             if (Plugins::vizibil((string) $cheie)) {
                 foreach ((array) ($definitie['stripe_evenimente'] ?? []) as $tip) {
                     $tipuri[(string) $tip] = true;
+                }
+                // Cele cu o condiție (Router::CONDITII, de exemplu magazin_wc): doar pe un site cu ea.
+                foreach ((array) ($definitie['stripe_evenimente_conditionate'] ?? []) as $conditie => $lista) {
+                    if (\App\Http\Router::conditieIndeplinita((string) $conditie)) {
+                        foreach ((array) $lista as $tip) {
+                            $tipuri[(string) $tip] = true;
+                        }
+                    }
                 }
             }
         }

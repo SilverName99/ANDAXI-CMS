@@ -10,6 +10,7 @@ doar configurația generică, fără nicio dată a site-ului real.
 | `wp-compat.json` | adresele ca WordPress, plus `magazin_wc` (rutele, cheile și CSP-ul magazinului în forma WooCommerce) și `mailpoet` (adresele vechi ale MailPoet de pe `/`) |
 | `import-wordpress.json` | drumul capturat, dialectul și regulile publice ale regiunilor dinamice (selectori neutri, doar pe coș, checkout, cont, produse și șabloane) |
 | `seo.json` | regulile SEO (goale deocamdată) |
+| `stripe-aspect.json` | opțiunile Stripe.js ale checkout-ului (`appearance`, `fonts`): locul l-a pus pista A, gol; valorile le scrie pista H (docs/MAGAZIN-WC.md) |
 | `ce-se-schimba.md` | ce se schimbă pentru client (se completează de fiecare pistă, în commit-ul care schimbă) |
 
 Licența de dezvoltare a site-ului e `ateliere` (config/plugins.php → `licente_dev`): `tools/dev/php.sh tools/dev/licenta.php ateliere`.

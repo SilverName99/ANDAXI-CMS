@@ -213,6 +213,15 @@ Fiecare rută din `src/Http/rute.php` are un proprietar în catalog:
   notificările ERP, întoarcerea de la bancă, dezabonarea din newsletter). Ajung
   la controller oricare ar fi starea pluginului, ca nicio plată sau notificare
   pornită să nu se piardă (Stripe oprește un webhook după zile de erori);
+- `rute_conditionate`: proprietarii rutelor cu o condiție (`Router::CONDITII`, de
+  exemplu `['magazin_wc' => ['/product/*', '/my-account/*']]`, rutele magazinului
+  WooCommerce, [MAGAZIN-WC.md](MAGAZIN-WC.md)). Contează doar pe un site cu
+  condiția lor; pe celelalte, adresele lor ajung la pagina generală și rămân ale
+  nucleului (aceleași linkuri, aceeași gardă, aceleași pagini din bază).
+  `verifica-rute.php` cere ca o astfel de declarație să câștige doar pe rute cu
+  aceeași condiție. Rutele magazinului și ale conturilor CMS-ului au condiția
+  inversă, `fara_magazin_wc` (pe un site cu magazinul WooCommerce nu există), dar
+  proprietarii lor rămân cei din `rute_publice`;
 - `pagini`: pagini din baza de date ale unui plugin (`acorduri-gdpr`), servite de
   ruta generală `/{slug*}`;
 - `rute_impartite`: rutele folosite de mai multe pluginuri, al căror proprietar
@@ -707,7 +716,8 @@ dispar, iar linkurile spre el se scot din pagini.
   handler-ul lui, **în orice stare a pluginului** (banii se înregistrează mereu; emailurile către clienți ale pluginurilor
   noi doar cu pluginul vizibil; cu proprietarul oprit, un rând pe zi în `pluginuri.log`). Handler-ele magazinului și ale
   linkului de plată sunt ramurile de dinainte, neschimbate. Fiecare plugin își declară evenimentele (`stripe_evenimente`
-  în catalog); Setări plăți le arată, cu ultimul eveniment primit pe tipuri și butonul „Verifică webhook-ul”
+  în catalog; cele care țin de o condiție a rutelor, în `stripe_evenimente_conditionate`, de exemplu evenimentele în plus ale
+  magazinului WooCommerce, doar cu `magazin_wc`); Setări plăți le arată, cu ultimul eveniment primit pe tipuri și butonul „Verifică webhook-ul”
   (`POST /admin/settings/payments/verifica-webhook`, cu jetonul CSRF: endpoint-ul contului pentru adresa site-ului, pornit
   sau nu, versiunea lui API, evenimentele care îi lipsesc). Fără magazin, secțiunea Stripe nu mai vorbește de checkout și
   bifa „plata prin Stripe în checkout” nu se arată (nici nu se schimbă la salvare).

@@ -118,7 +118,9 @@ $afisat = static function (array $c): string {
 
 /** Ce face garda cu cererea (ca GardaPluginuri::permite), după stările de acum. */
 $raspuns = static function (array $c): array {
-    $proprietar = Plugins::proprietarRuta($c['metoda'], $c['tipar'], $c['parametri'], $c['get'], $c['post']);
+    // O rută condiționată, pe un site cu condiția ei (cu declarațiile din rute_conditionate); restul, pe un site fără nicio condiție.
+    $proprietar = Plugins::proprietarRuta($c['metoda'], $c['tipar'], $c['parametri'], $c['get'], $c['post'],
+        ($c['conditie'] ?? null) !== null ? [$c['conditie']] : []);
     $admin = $c['tipar'] === '/admin' || str_starts_with($c['tipar'], '/admin/');
     $rezultat = match (true) {
         $proprietar['mereu_deschis'] => 'MEREU',

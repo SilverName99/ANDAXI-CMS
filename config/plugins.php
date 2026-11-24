@@ -25,6 +25,12 @@ declare(strict_types=1);
  *    în față („POST /cale”). Parametrii se scriu ca în router („{id}”), numele lor
  *    nu contează. Câștigă declarația cea mai precisă (ex. `/admin/products/reviews/*`
  *    a recenziilor bate `/admin/products/*` a catalogului);
+ *  - rute_conditionate: rutele cu o condiție (Router::CONDITII), pe condiții: `['magazin_wc' => ['/product/*']]`. O declarație
+ *    de aici contează doar pe un site cu condiția ei (Plugins::declaratiiPentru): pe celelalte site-uri rutele ei nu există, iar
+ *    adresele lor (ajunse la pagina generală) rămân ale cui erau, deci linkurile, paginile din bază și garda nu se schimbă.
+ *    verifica-rute.php cere ca o declarație condiționată să fie cea câștigătoare doar pentru rute cu aceeași condiție;
+ *  - stripe_evenimente, stripe_evenimente_conditionate: evenimentele Stripe pe care le cere pluginul (Setări plăți, verificarea
+ *    webhook-ului; StripeEvenimente::ceruteDePluginuri); cele condiționate, doar pe un site cu condiția lor;
  *  - rute_mereu_deschise: adrese la care răspund procesatorii de plăți, ERP-ul sau
  *    linkurile din emailurile deja trimise. Răspund ORICE stare ar avea pluginul
  *    (cu pluginul oprit, cererea se notează în jurnal), altfel o plată sau o
@@ -168,10 +174,10 @@ return [
             'necesita' => [],
             'rute_admin' => ['/admin/products/*', '/admin/categories/*'],
             'rute_publice' => ['/magazin', '/categorie/*', '/marca/*', '/eticheta/*', '/produs/*',
-                '/api/products/*', '/api/search/*', '/api/shop/*',
-                // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc, docs/MAGAZIN-WC.md): pagina produsului la adresa
-                // WooCommerce; ruta are condiția magazin_wc (Router::CONDITII), deci pe celelalte site-uri nu există.
-                '/product/*'],
+                '/api/products/*', '/api/search/*', '/api/shop/*'],
+            // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc, docs/MAGAZIN-WC.md): pagina produsului la adresa
+            // WooCommerce; ruta are condiția magazin_wc (Router::CONDITII), deci pe celelalte site-uri nu există.
+            'rute_conditionate' => ['magazin_wc' => ['/product/*']],
             // WP-19: produsele unui șablon de produs (C14e) și produsele unei pagini de serviciu (GR-17).
             'tokenuri' => ['shop_catalog', 'shop_category', 'shop_title', 'featured_products', 'product_categories',
                 'products_by_template', 'produse_serviciu'],
@@ -202,10 +208,14 @@ return [
                 'checkout.session.async_payment_failed', 'checkout.session.expired', 'payment_intent.succeeded', 'payment_intent.payment_failed'],
             'rute_admin' => ['/admin/orders/*', '/admin/settings/floating-cart'],
             // Fluxul Merchant Center are prețuri și disponibilitate: e al magazinului, nu al catalogului (WP-R).
-            'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*', '/feed/google-merchant\.xml',
-                // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc, docs/MAGAZIN-WC.md; rutele au condiția magazin_wc):
-                // adăugarea în coș fără JavaScript de pe pagina produsului, comanda primită, plata unei comenzi, cererile scripturilor.
-                'POST /product/*', '/checkout/order-received/*', '/checkout/order-pay/*', '/api/wc/*'],
+            'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*', '/feed/google-merchant\.xml'],
+            // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc, docs/MAGAZIN-WC.md; rutele au condiția magazin_wc):
+            // adăugarea în coș fără JavaScript de pe pagina produsului, comanda primită, plata unei comenzi, cererile scripturilor.
+            'rute_conditionate' => ['magazin_wc' => ['POST /product/*', '/checkout/order-received/*', '/checkout/order-pay/*', '/api/wc/*']],
+            // Evenimentele în plus ale magazinului WooCommerce (specificația plății, §5.9.2): plata în curs, rambursările și disputele,
+            // doar pe un site cu magazin_wc, ca verificarea webhook-ului pe celelalte site-uri să rămână aceeași.
+            'stripe_evenimente_conditionate' => ['magazin_wc' => ['payment_intent.processing', 'charge.refunded', 'charge.refund.updated',
+                'charge.dispute.created', 'charge.dispute.closed']],
             // EuPlătesc trimite clientul înapoi prin POST, cu rezultatul semnat al plății.
             'rute_mereu_deschise' => ['POST /checkout/succes/{orderNumber}'],
             'pagini' => ['checkout/succes'],
@@ -269,9 +279,11 @@ return [
             'rute_mereu_deschise' => ['POST /webhook/stripe'],
             // WP-25 (VT-X1): „Verifică webhook-ul” din Setări plăți (endpoint-ul contului, versiunea, evenimentele lipsă).
             'rute_admin' => ['/admin/settings/payments/verifica-webhook'],
-            // Magazinul în forma WooCommerce (docs/MAGAZIN-WC.md, ruta cu condiția magazin_wc): sesiunea Stripe Checkout și metodele
-            // de plată salvate, cerute de scripturile paginilor capturate.
-            'rute_publice' => ['/api/wc/stripe/*'],
+            // Magazinul în forma WooCommerce (docs/MAGAZIN-WC.md, rutele cu condiția magazin_wc): sesiunea Stripe Checkout și metodele
+            // de plată salvate, cerute de scripturile paginilor capturate; Stripe.js-ul fals al testelor (doar cu APP_ENV=local).
+            // Rambursarea din fișa comenzii (`POST /admin/orders/{id}/rambursare-stripe`) e a comenzilor, deci a magazinului
+            // (`/admin/orders/*`): fără magazin, nicio rută a comenzilor nu ajunge la controller.
+            'rute_conditionate' => ['magazin_wc' => ['/api/wc/stripe/*', 'GET /_dev/stripe-js-fals\.js']],
             'tabele' => ['orders.stripe_*', 'stripe_events'],
         ],
 
@@ -424,9 +436,9 @@ return [
             'descriere' => 'Înregistrare, autentificare (și cu Google), adrese, resetarea parolei, lista clienților în admin.',
             'necesita' => [],
             'rute_admin' => ['/admin/users/*'],
-            'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*',
-                // Magazinul în forma WooCommerce (docs/MAGAZIN-WC.md, rutele cu condiția magazin_wc): contul la adresele WooCommerce.
-                '/my-account/*'],
+            'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*'],
+            // Magazinul în forma WooCommerce (docs/MAGAZIN-WC.md, rutele cu condiția magazin_wc): contul la adresele WooCommerce.
+            'rute_conditionate' => ['magazin_wc' => ['/my-account/*']],
             // WP-25 (VT-C9): linkul de confirmare a adresei din emailurile trimise merge în orice stare a pluginului.
             // Revizuirea WP-25: pagina cu butonul (GET) și confirmarea (POST). Portul Biovitality 0e54737: adresa linkului din
             // emailurile trimise de codul Biovitality (GET, duce la prima).
@@ -457,6 +469,9 @@ return [
             'necesita' => [],
             'rute_admin' => ['/admin/blog/*'],
             'rute_publice' => ['/blog/*', '/api/blog/*'],
+            // Blogul capturat al unui site WooCommerce mutat (docs/MAGAZIN-WC.md, ruta cu condiția magazin_wc): paginile 2… ale unei
+            // categorii WordPress (`/category/<slug>/page/<n>/`; ale blogului, `/blog/page/<n>/`, sunt sub `/blog/*`).
+            'rute_conditionate' => ['magazin_wc' => ['/category/*']],
             'tokenuri' => ['blog_posts', 'latest_posts', 'category_posts', 'category_grid', 'category_events', 'next_event_image',
                 'next_event_url', 'next_event_title', 'next_event_excerpt', 'next_event_period', 'next_event_video',
                 // WP-24 (VT-C4, din vertij): rândurile de evenimente și grila paginată din mai multe categorii.
@@ -483,6 +498,8 @@ return [
             // Lista de verificare dinaintea trimiterii (pasul 3 din builderul unui newsletter).
             'rute_admin' => ['/admin/emails/builder/verificare'],
             'rute_publice' => ['/newsletter/*'],
+            // Abonarea din formularele Divi ale paginilor capturate (docs/MAGAZIN-WC.md, ruta cu condiția mailpoet; pista E).
+            'rute_conditionate' => ['mailpoet' => ['POST /_andaxi/abonare/{n}']],
             // Linkurile din newsletterele deja trimise (dezabonare, urmărire) trebuie să meargă mereu; la fel dezabonarea
             // „cu un clic” a clientului de email (List-Unsubscribe-Post) și butonul „Confirm dezabonarea” al paginii, care
             // trimit un POST la același link. Dubla confirmare a abonării nu: fără newsletter nu mai abonează nimeni.
