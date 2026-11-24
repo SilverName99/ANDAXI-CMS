@@ -102,16 +102,26 @@ final class Media
         return $rez;
     }
 
+    /** Calea (relativă la uploads/) e într-un dosar privat al unui plugin (PRIVATE: la început, sau oriunde pentru cele fără „/”)? */
+    public static function dosarPrivat(string $rel): bool
+    {
+        $rel = strtolower($rel);
+        foreach (self::PRIVATE as $p) {
+            if (str_starts_with($rel, $p) || (!str_ends_with($p, '/') && str_contains($rel, $p))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** De ce nu se copiază un fișier (extensia, un dosar privat, o cale ciudată), sau null dacă se copiază. */
     public static function motivRefuz(string $rel): ?string
     {
         if ($rel === '' || str_contains($rel, '..') || str_contains($rel, "\0") || str_starts_with($rel, '/') || preg_match('#(^|/)\.#', $rel) === 1) {
             return 'cale nepermisă';
         }
-        foreach (self::PRIVATE as $p) {
-            if (str_starts_with(strtolower($rel), $p) || (!str_ends_with($p, '/') && str_contains(strtolower($rel), $p))) {
-                return 'dosar privat al unui plugin';
-            }
+        if (self::dosarPrivat($rel)) {
+            return 'dosar privat al unui plugin';
         }
         $ext = strtolower(pathinfo($rel, PATHINFO_EXTENSION));
         if (!in_array($ext, self::EXTENSII, true)) {

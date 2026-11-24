@@ -1166,7 +1166,8 @@ function verificaStaticeWp(AdoptareWp $a, array $antete): array
     $manifest = json_decode((string) @file_get_contents($a->captura() . '/manifest.json'), true);
     foreach (is_array($manifest) ? (array) ($manifest['fisiere'] ?? []) : [] as $f) {
         if (is_array($f) && str_starts_with(strtolower((string) ($f['cale'] ?? '')), '/wp-content/uploads/') && is_string($f['sha256'] ?? null)) {
-            $deCerut[(string) $f['cale']] = (string) ($f['sha256_sursa'] ?? $f['sha256']);
+            // Cele publicate de fișierele statice (foile din uploads/, cu adresele proprii relative) au sha256-ul copiei, de mai sus.
+            $deCerut[(string) $f['cale']] ??= (string) ($f['sha256_sursa'] ?? $f['sha256']);
         }
     }
     $rele = [];

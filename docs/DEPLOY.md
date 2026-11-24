@@ -869,7 +869,7 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
 - **Fișierele statice** (drumul capturat; `scripts/publica-statice.php`, `App\Support\ImportWordPress\Statice`, rulat de adoptare în
   `pregatire`, prin `bin/platforma --public=public_html.nou`): tot ce cer paginile din manifestul capturii verificate (foile temei și
   ale pluginurilor, `et-cache/`, `wp-includes/`, fonturile și pozele temei, fișierele de la rădăcină sub `capturat/radacina/`), în
-  afară de `wp-content/uploads/` (mediile, ale importului) și de scripturi (aruncate: comportamentul îl dă runtime-ul compat), se
+  afară de mediile din `wp-content/uploads/` (ale importului) și de scripturi (aruncate: comportamentul îl dă runtime-ul compat), se
   copiază de pe discul WordPress, doar citit, cu aceleași verificări ca la captură (`Captura\CopiereStatica`: fără legături
   simbolice sau tari, `realpath` în rădăcina WordPress, fără fișiere ascunse, doar tipurile de fonturi, foi, poze și video, nicio
   bucată executabilă în nume, fără cod PHP înăuntru, SVG-urile prin `SvgSigur`, cel mult 200 MB pe fișier), dintr-o singură
@@ -879,6 +879,11 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
   verificări rămâne necopiat, cu motivul (ATENȚIE, și la `verificare`); plafoanele: 20 000 de fișiere și 2 GB (NU). Manifestul, cu
   sha256-ul sursei și al copiei: `site/storage/import-wordpress/statice.json` (îl citesc `diagnostic.php --capturat` și
   `verificare`). Pasul de mână de dinainte (o a doua captură cu `--din-dosar … --public=public_html.nou`) nu mai trebuie.
+  Din `wp-content/uploads/` se publică ce cer paginile și nu copiază importul (`Statice::alImportului`): foile CSS ale pluginurilor
+  (de exemplu `uploads/complianz/css/banner-1-optin.css`, a bannerului de cookie-uri), fonturile (`et-fonts/` și ale pluginurilor:
+  nu sunt atașamente), ce au încărcat paginile publice din dosarele private ale pluginurilor (doar tipurile de mai sus, niciun
+  document); pozele, video-urile și documentele rămân ale importului. Până la `35a66d5` inclusiv, aceste fișiere nu se copiau
+  (pe `pensiune` foaia bannerului s-a copiat de mână).
   **Stilurile comune** (`import-wordpress.json` → `stiluri_comune`, `App\Support\ImportWordPress\StiluriComune`): Divi scrie regulile
   antetului și subsolului Theme Builder (selectorii cu `_tb_header`, `_tb_footer`) în foaia `et-cache` a fiecărei pagini și o
   reface doar când pagina e salvată, deci după o reproiectare a subsolului unele pagini rămân cu regulile vechi (pe `pensiune`,

@@ -249,6 +249,17 @@ try {
         $cere($late, 'foaie');
     }
     $cere('/wp-content/uploads/2024/05/camera-dubla-300x200.jpg', 'imagine');
+    // O foaie a unui plugin în dosarul lui din uploads/ (ca banner-1-optin.css al pluginului de cookie-uri, cu o adresă proprie
+    // absolută) și un font din uploads/ (ca et-fonts/ al temei): nu sunt medii, deci nu le copiază importul; le publică fișierele
+    // statice (foaia cu adresa relativă, deci cu alt sha256 decât sursa).
+    $foaieUploads = '/wp-content/uploads/complianz/css/banner-1-optin.css';
+    $fontUploads = '/wp-content/uploads/et-fonts/proba-titlu.woff2';
+    @mkdir(dirname($public . $foaieUploads), 0775, true);
+    @mkdir(dirname($public . $fontUploads), 0775, true);
+    file_put_contents($public . $foaieUploads, '.cmplz-cookiebanner{border:1px solid #ccc;background:url(' . $url . "/wp-content/themes/Divi/images/sigla.png)}\n");
+    file_put_contents($public . $fontUploads, "wOF2\x00\x01\x00\x00proba-titlu-inventat");
+    $cere($foaieUploads, 'foaie');
+    $cere($fontUploads, 'font');
     $urlFont = 'https://fonts.googleapis.com/css?family=Proba+Sans:400,700&display=swap';
     $cheieFont = FonturiGoogle::cheie($urlFont);
     @mkdir($captura . '/fonturi', 0770, true);
@@ -486,6 +497,15 @@ PHP);
     $verifica('adoptarea cu pachetul de dinainte (fără legaturi): subsolul cu legătura Divi prin script, ca pe live; trackerele din privat/urmarire.json '
         . 'în ax-date doar la răspuns (P1 la import a trecut cu ele)', array_map(static fn (array $x): array => [$x['legatura'], $x['divi'], $x['subsol'], $x['trackere']], $inainte)
         === array_fill_keys(['/', '/camere/', '/x1-inexistent/'], [false, true, true, true]), json_encode($inainte));
+    $fu = $cerere($foaieUploads);
+    $fnu = $cerere($fontUploads);
+    $staticeFu = array_filter((array) (json_decode((string) file_get_contents($site . '/storage/import-wordpress/statice.json'), true)['fisiere'] ?? []),
+        static fn (array $f): bool => in_array($f['cale'] ?? '', [$foaieUploads, $fontUploads], true) && isset($f['publicat'], $f['sha256_publicat']));
+    $verifica('foaia unui plugin din dosarul lui din uploads/ și un font din uploads/ (nu sunt atașamente, nu le copiază importul): publicate de '
+        . 'fișierele statice, 200, foaia cu adresa proprie relativă, fontul cu aceiași octeți, amândouă în manifest',
+        $fu['cod'] === 200 && $fu['corp'] === ".cmplz-cookiebanner{border:1px solid #ccc;background:url(/wp-content/themes/Divi/images/sigla.png)}\n"
+        && $fnu['cod'] === 200 && $fnu['corp'] === "wOF2\x00\x01\x00\x00proba-titlu-inventat" && count($staticeFu) === 2,
+        $fu['cod'] . ' ' . substr($fu['corp'], 0, 120) . ' | ' . $fnu['cod'] . ' | ' . count($staticeFu));
     $foaie = $cerere('/wp-content/themes/Divi/style.css');
     $font = $cerere('/capturat/fonturi/' . $cheieFont . '.css');
     $verifica('fișierele statice: foaia temei cu adresa proprie relativă, fontul temei, foaia fontului Google, scriptul temei nepublicat',

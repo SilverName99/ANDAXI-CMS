@@ -14,10 +14,12 @@ use App\Support\ImportWordPress\Captura\Normalizare;
  * Fișierele statice ale paginilor capturate, publicate în docroot-ul nou la adoptare (deploy/adopta-wp.sh, faza `pregatire`;
  * scripts/publica-statice.php; docs/DEPLOY.md, „Fișierele statice”): foile temei și ale pluginurilor, `et-cache/`, fișierele din
  * `wp-includes/`, fonturile și pozele temei, adică tot ce cer paginile din manifestul capturii verificate (`fisiere`), în afară de
- * `wp-content/uploads/` (mediile, copiate de import: Media) și de scripturi (aruncate: comportamentul îl dă runtime-ul compat),
+ * mediile din `wp-content/uploads/` (copiate de import: Media) și de scripturi (aruncate: comportamentul îl dă runtime-ul compat),
  * plus fonturile Google aduse de captură (`fonturi`, în `capturat/fonturi/`).
  *
- * Fiecare fișier se copiază de pe discul WordPress (doar citit) cu CopiereStatica::copiaza: aceleași verificări ca mediile (fără
+ * Din `wp-content/uploads/` doar ce nu copiază importul (alImportului(): foile CSS ale pluginurilor, fonturile, ce cer paginile din
+ * dosarele private ale pluginurilor; documentele niciodată, TIPURI). Fiecare fișier
+ * se copiază de pe discul WordPress (doar citit) cu CopiereStatica::copiaza: aceleași verificări ca mediile (fără
  * legături simbolice sau tari, `realpath` în rădăcina WordPress, fără fișiere ascunse, fără `.php`/`.js` sau o bucată executabilă
  * în nume, fără cod PHP înăuntru, SVG-urile prin SvgSigur, cel mult 200 MB pe fișier), dintr-o singură deschidere, scris atomic,
  * cu adresele proprii din foi relative. Apoi:
@@ -69,7 +71,7 @@ final class Statice
         $total = 0;
         foreach (is_array($m['fisiere'] ?? null) ? $m['fisiere'] : [] as $f) {
             $cale = is_array($f) ? (string) ($f['cale'] ?? '') : '';
-            if ($cale === '' || !str_starts_with($cale, '/') || str_starts_with(strtolower($cale), self::UPLOADS)) {
+            if ($cale === '' || !str_starts_with($cale, '/') || self::alImportului($cale)) {
                 continue;
             }
             $intrare = ['url' => (string) ($f['url'] ?? ''), 'cale' => $cale];
@@ -238,6 +240,26 @@ final class Statice
             $fisiere[$k]['marime'] = strlen($scrise[$cale]);
         }
         return $fisiere;
+    }
+
+    /** Fonturile din uploads/ (`et-fonts/`, `omgf/`, ale temelor și pluginurilor) nu sunt atașamente: le publică publicarea. */
+    public const FONTURI = ['woff', 'woff2', 'ttf', 'otf', 'eot'];
+
+    /**
+     * Un fișier din `wp-content/uploads/` cerut de pagini pe care îl copiază importul (Media: pozele, video-urile și documentele
+     * din afara dosarelor private ale pluginurilor)? Restul — foile CSS ale pluginurilor (de exemplu
+     * `uploads/complianz/css/banner-1-optin.css`), fonturile (FONTURI), fișierele din dosarele private ale pluginurilor pe care
+     * le-au încărcat paginile publice — le copiază publicarea, doar cele cerute de pagini și doar tipurile CopiereStatica::TIPURI
+     * (niciun document), cu aceleași verificări; un font copiat și de import are aceiași octeți (amândouă copiază fără să schimbe
+     * nimic).
+     */
+    public static function alImportului(string $cale): bool
+    {
+        $c = strtolower($cale);
+        if (!str_starts_with($c, self::UPLOADS) || in_array(pathinfo($c, PATHINFO_EXTENSION), self::FONTURI, true)) {
+            return false;
+        }
+        return Media::motivRefuz(substr($cale, strlen(self::UPLOADS))) === null;
     }
 
     /** sha256-ul unui fișier de pe discul WordPress (doar pentru plan; copierea îl citește din nou, verificat), sau null. */
