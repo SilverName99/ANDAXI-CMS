@@ -177,6 +177,14 @@ nicio cerere, niciun antet și nicio adresă nu se schimbă (toate site-urile de
   WpCompat îi dă query-ul ales (gol când a scos toți parametrii, `WpCompat::raspunde` → `SeoRedirects::fixeazaQueryCanonic`),
   deci `www/?page_id=14` → `/camere/`, nu `/camere/?page_id=14`, într-un singur salt, ca `redirect_canonical`.
 - `cautare_wp` (căutarea în forma WordPress) se validează aici; o servește pasul ei (căutarea compatibilă).
+- **`magazin_wc`: true** (mutarea unui site WooCommerce, [MAGAZIN-WC.md](MAGAZIN-WC.md)): magazinul la adresele WooCommerce
+  (`/product/<slug>/`, `/cos/`, `/checkout/…`, `/my-account/…`, `/api/wc/…`; rute cu condiția `magazin_wc`, deci fără cheie nu
+  există deloc), cheile WooCommerce de pe `/` (`?add-to-cart=`, `?download_file=`, `?wc-api=`, `?wc-ajax=`) și sursele Stripe în
+  CSP doar pe checkout și pe metodele de plată. **`mailpoet`: true**: cheile MailPoet de pe `/` (`?mailpoet_router…`,
+  `?mailpoet_page=…`). Cheile le dă proprietarilor lor un singur dispecer (`App\Support\CompatWp\Interogari`, în
+  `public/index.php` după mentenanță și înaintea cache-ului de pagini), doar pe calea `/` și doar cu grupul lor pornit; o cheie
+  necunoscută trece mai departe, ca până acum. Cât pistele lor nu sunt construite, rutele și cheile răspund 404 (pagina 404 a
+  site-ului; sub `/api/wc/`, `wc-api` și `wc-ajax`, JSON-ul scurt al gărzii).
 - **HEAD** (fără cheie, oricare ar fi cheile de mai sus): o cerere HEAD primește răspunsul unui GET (codul, `Location`,
   antetele; corpul îl taie serverul web), ca la WordPress, în locul 404-ului nucleului din §11 (routerul n-are rute HEAD);
   un endpoint compatibil cu metoda GET primește și HEAD-ul lui. Fără `wp-compat.json`, HEAD rămâne ca până acum.

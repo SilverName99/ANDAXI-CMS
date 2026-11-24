@@ -9,7 +9,7 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 
 | Fișier | Ce e |
 |---|---|
-| `config/plugins.php` | **Catalogul**: pentru fiecare plugin numele, descrierea, de ce are nevoie, rutele, paginile, intrările din meniu, cronurile, tabelele. Plus ordinea meniului adminului, rutele împărțite între pluginuri, pachetele de abonament și licențele de dezvoltare ale celor patru site-uri existente (`licente_dev`, doar pentru teste). |
+| `config/plugins.php` | **Catalogul**: pentru fiecare plugin numele, descrierea, de ce are nevoie, rutele, paginile, intrările din meniu, cronurile, tabelele. Plus ordinea meniului adminului, rutele împărțite între pluginuri, pachetele de abonament și licențele de dezvoltare ale celor patru site-uri existente și a site-ului WooCommerce mutat, `ateliere` (`licente_dev`, doar pentru teste). |
 | `src/Support/Licenta.php` | Citirea și verificarea licenței (`storage/licenta/licenta.json`) și memoria „ultima bună”. |
 | `src/Support/LicentaSincronizare.php`, `scripts/licenta-sincronizare.php` | Preluarea automată a licenței de la CRM (cronul la 5 minute și „Verifică acum” din Admin → Abonamentul tău); mai jos, „Preluarea automată”. |
 | `src/Support/Plugins.php` | Întrebările pentru tot codul: `activ`, `permiteInceput`, `vizibil`, `stare`; regula dependențelor; proprietarul unei rute; meniul. |
@@ -532,6 +532,9 @@ dispar, iar linkurile spre el se scot din pagini.
     preț, stele și coș; titlul și subtitlul din `catalog_similare_titlu`/`_subtitlu`; legătura „Cere ofertă” doar cu
     `cereri_oferta` portat și pe site, WP-26, altfel „Vezi produsul”). Fără magazin, cardul catalogului nu mai are
     rândul de jos gol.
+- **Pe un site WooCommerce mutat** (`wp-compat.json` → `magazin_wc`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista A): pagina
+  produsului la adresa WooCommerce, `GET /product/{slug}` (ruta cu condiția `magazin_wc`, pe celelalte site-uri nu există;
+  404 până la pista G).
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (nu începe nimic cu bani; produsele rămân vizibile cât
   magazinul își termină comenzile).
@@ -574,6 +577,11 @@ dispar, iar linkurile spre el se scot din pagini.
   din fluxul Merchant e 0 lei la produsul bifat. Fără produs bifat (implicit), totul e ca înainte.
   Tabele: `orders`, `order_items`, `email_logs`, `cart_abandonments`, `product_warnings`,
   `order_product_warnings` (migrarea `magazin/0032`) și coloana `products.free_shipping`.
+- **Pe un site WooCommerce mutat** (`wp-compat.json` → `magazin_wc`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista A): rutele
+  WooCommerce `POST /product/{slug}`, `/cos`, `/checkout`, `/checkout/order-received/{comanda}`, `/checkout/order-pay/{comanda}`,
+  `/api/wc/jeton`, `/api/wc/cos-plutitor`, `/api/wc/cos/{actiune}`, `/api/wc/checkout` (cu condiția `magazin_wc`: pe celelalte
+  site-uri nu există, iar `/cos` și `/checkout` rămân ale coșului de aici) și cheia `/?add-to-cart=`; 404 până la pistele G și L.
+  Tabelele migrării rezervate `magazin/0074`: `order_item_meta`, `order_notes`.
 - **Are nevoie de**: catalog.
 - **Se oprește**: checkout-ul și coșul arată „Momentan nu se mai pot plasa comenzi
   online.”; „Adaugă în coș” dispare de pe produse (cu același mesaj) și e refuzat
@@ -671,6 +679,9 @@ dispar, iar linkurile spre el se scot din pagini.
   (nume, email, telefon, oraș, adresă; trimise în `orderBundle`, ca la o comandă reală; ținute în sesiune pentru testul
   următor) și suma, 1–99 lei (implicit 1); textul spre bancă „Plata de test <magazin>”; lista testelor arată `mdOrder` (și
   pe cel al părții cu puncte STAR), iar la o plată refuzată codul brut al băncii (`actionCode`, descrierea, statusul).
+- **Pe un site WooCommerce mutat** (`wp-compat.json` → `magazin_wc`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista A): `plata_stripe`
+  are `POST /api/wc/stripe/{actiune}` (cu condiția `magazin_wc`) și cheia mereu deschisă `/?wc-api=` (notificarea Stripe a
+  comenzilor importate); checkout-ul și metodele de plată ale contului primesc sursele Stripe.js în CSP. 404 până la pista H.
 - **Are nevoie de**: EuPlătesc și BT de magazin; Stripe de nimic (îl folosesc și
   donațiile, și membrii).
 - **Se oprește**: procesatorul nu mai apare în checkout și nu se mai trimit linkuri
@@ -940,6 +951,9 @@ dispar, iar linkurile spre el se scot din pagini.
   (302) la `/cont/confirmare/{token}`; migrarea adoptivă `conturi_clienti/0053` aduce schema confirmării făcută de codul
   Biovitality la regula de aici (implicitul NULL al lui `users.email_confirmed_at`, linkurile BV legate de adresa lor), iar
   pasul `site/biovitality/0001_confirmare_email` păstrează bifa BV oprită (`customer_email_confirmation_enabled` = 0).
+- **Pe un site WooCommerce mutat** (`wp-compat.json` → `magazin_wc`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista A): contul la
+  adresele WooCommerce, `GET`/`POST /my-account` și `/my-account/{endpoint*}` (cu condiția `magazin_wc`; 404 până la pista L).
+  Tabelele migrării rezervate `conturi_clienti/0076`: `metode_plata_salvate`, `parole_setare`.
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (clienții își văd contul și comenzile).
 - **Oprit**: fără conturi pe site (linkurile „Contul meu”/„Autentificare” se scot);
@@ -1031,6 +1045,10 @@ dispar, iar linkurile spre el se scot din pagini.
   logo și paleta neutră; fără catalogul pe site, fără carduri de produs; fără magazin, fără prețuri). Componentele adminului
   folosite de pași (`views/admin/componente/`) sunt ale nucleului ([ui/README.md](ui/README.md)). Tabelele și coloanele noi:
   migrarea `newsletter/0040`. Testele: `tools/dev/test-newsletter.php`.
+- **Pe un site mutat de pe MailPoet** (`wp-compat.json` → `mailpoet`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista A): cheile
+  mereu deschise `/?mailpoet_router…` și `/?mailpoet_page=…` (adresele din emailurile trimise de MailPoet; proprietarul,
+  `MailPoetCompat\Router`, îl scrie pista E; până atunci 404) și regiunea `mailpoet:pagina`. Tabelele migrării rezervate
+  `newsletter/0077`: `newsletter_mailpoet_cozi`, `newsletter_mailpoet_linkuri`, `buget_trimitere`.
 - **Are nevoie de**: nimic.
 - **Se oprește**: campaniile pornite se termină (cronul le duce la capăt); „Trimite
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile
@@ -1777,6 +1795,35 @@ pluginurile oprite și reparațiile revizuirii de securitate din 9 noiembrie (un
 lor): înscrierea peste un cont existent, resetarea parolei ca dovadă, expirarea linkului, decizia, bugetul și limitele donației, mai multe
 donații lunare, evenimentele Stripe noi, rambursările, ștergerea contului, membrii vechi la adoptare.
 
+### Descărcări (`descarcari`)
+
+- **Conține** (mutarea unui site WooCommerce, [MAGAZIN-WC.md](MAGAZIN-WC.md)): fișierele produselor descărcabile, păstrate în afara
+  docroot-ului și date după plată, cu limite și expirare, în contul clientului și în emailuri; cheia `/?download_file=` a
+  adreselor WooCommerce vechi (`DescarcariController::descarca`, pe un site cu `wp-compat.json` → `magazin_wc`). Tabelele
+  migrării rezervate `descarcari/0075`: `produse_fisiere`, `permisiuni_descarcare`, `jurnal_descarcari`. Deocamdată doar
+  înregistrarea (pista A): nicio rută, niciun meniu, niciun cron; cheia răspunde 404 până la pista I, care scrie aici restul.
+- **Are nevoie de**: `magazin`.
+- **Oprit pe orice site** până îl pune CRM-ul în licență; în licența de dezvoltare `ateliere`.
+
+### Automatizări newsletter (`automatizari`)
+
+- **Conține** (mutarea unui site WooCommerce, [MAGAZIN-WC.md](MAGAZIN-WC.md); o funcție generală a CMS-ului, pe orice site cu
+  newsletter): emailuri trimise singure după un declanșator (abonarea confirmată la o listă, un cont nou, o comandă ajunsă într-un
+  status, cu un produs anume), cu pași de așteptare. Tabelele migrării rezervate `automatizari/0078`: `automatizari`,
+  `automatizari_pasi`, `automatizari_emailuri`, `automatizari_rulari`, `automatizari_jurnal`. Deocamdată doar înregistrarea
+  (pista A): nicio rută, niciun meniu, niciun cron; pista J scrie aici restul.
+- **Are nevoie de**: `newsletter`.
+- **Oprit pe orice site** până îl pune CRM-ul în licență; în licența de dezvoltare `ateliere`.
+
+### Date pentru evenimente (`date_evenimente`)
+
+- **Conține** (mutarea unui site WooCommerce, [MAGAZIN-WC.md](MAGAZIN-WC.md)): datele unui produs-eveniment (zilele, orele, nota),
+  alegerea datei la cumpărare și calendarul evenimentelor (regiunile `wcpc:evenimente`, `wcpc:categorii`, modulul
+  `wcpc/v1/calendar.js`). Tabelul migrării rezervate `date_evenimente/0079`: `produse_date`. Deocamdată doar înregistrarea
+  (pista A): nicio rută, niciun meniu, niciun cron; pista K scrie aici restul.
+- **Are nevoie de**: `catalog`.
+- **Oprit pe orice site** până îl pune CRM-ul în licență; în licența de dezvoltare `ateliere`.
+
 ### Unealta internă `migrare_wordpress`
 
 Nu se vinde și nu apare în pachete; o pune doar ANDAXI în licență, pe durata unei
@@ -1894,7 +1941,8 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
 internă). Licențele de dezvoltare ale celor patru site-uri existente sunt scrise
 explicit în `config/plugins.php` → `licente_dev`: `bioscem` (ce avea codul Bioscem la
 `4915478`, fără unealta internă), `biovitality`, `vertij`, `grafoanaytis` (catalog și
-cereri de ofertă). Sunt liste pentru teste, după codul vechi al fiecărui site, nu
+cereri de ofertă); plus `ateliere`, a unui site WooCommerce mutat pe drumul capturat ([MAGAZIN-WC.md](MAGAZIN-WC.md)).
+Sunt liste pentru teste, după codul vechi al fiecărui site, nu
 contractul clientului (acela e în CRM). Un plugin portat mai târziu nu intră singur
 în ele: intră doar scris explicit, cu motivul lui (`instantaneu-rute.php` pică dacă
 lista Bioscem se schimbă). Altă licență:

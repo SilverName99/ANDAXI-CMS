@@ -1,7 +1,7 @@
 {
     "format": 1,
     "runtime": "divi4@1",
-    "descriere": "Scripturile runtime-ului pe sloturile paginii capturate: fiecare cale (față de /assets/compat/) devine <script src=\"/assets/compat/<cale>\"></script>, sincron (fără async și defer), în ordinea listei, la poziția slotului. cap = {{ax:runtime:cap}} (în head, înaintea lui ax-date); final = {{ax:runtime:final}} (în corp, unde stătea ultimul script scos). incarcare.js e primul în cap. pluginuri = scriptul unui plugin al nucleului pe paginile capturate, adăugat la sfârșitul slotului final doar pe răspunsul web cu pluginul pornit (statistici: Statistici::dateCapturat), deci fără el paginile, P1 și amprentele rămân aceleași.",
+    "descriere": "Scripturile runtime-ului pe sloturile paginii capturate: fiecare cale (față de /assets/compat/) devine <script src=\"/assets/compat/<cale>\"></script>, sincron (fără async și defer), în ordinea listei, la poziția slotului. cap = {{ax:runtime:cap}} (în head, înaintea lui ax-date); final = {{ax:runtime:final}} (în corp, unde stătea ultimul script scos). incarcare.js e primul în cap. pluginuri = scriptul unui plugin al nucleului pe paginile capturate, adăugat la sfârșitul slotului final doar pe răspunsul web cu pluginul pornit (statistici: Statistici::dateCapturat), deci fără el paginile, P1 și amprentele rămân aceleași. seturi = module în plus, pe grupuri, adăugate la sfârșitul slotului final (înaintea scriptului unui plugin) doar pe site-urile a căror temă cere grupul (tema.json → runtime_seturi); fără el, paginile, P1 și amprentele rămân aceleași. Grupurile le-a rezervat pista A a mutării unui site WooCommerce (docs/MAGAZIN-WC.md): comportament (pista C), magazin_wc (pistele G, H, L), calendar (pista K); până la pista lor modulele sunt locuri rezervate care nu fac nimic.",
     "cap": [
         "comun/v1/incarcare.js",
         "comun/v1/tarziu.js"
@@ -30,5 +30,25 @@
     ],
     "pluginuri": {
         "statistici": "comun/v1/statistici.js"
+    },
+    "seturi": {
+        "comportament": [
+            "comun/v1/comutatoare.js",
+            "divi4/v1/salvattore.js",
+            "divi4/v1/video-fundal.js",
+            "divi4/v1/audio.js",
+            "divi4/v1/abonare.js"
+        ],
+        "magazin_wc": [
+            "wc/v1/cos-plutitor.js",
+            "wc/v1/cos.js",
+            "wc/v1/checkout.js",
+            "wc/v1/selectie.js",
+            "wc/v1/cont.js",
+            "wc/v1/stripe-oc.js"
+        ],
+        "calendar": [
+            "wcpc/v1/calendar.js"
+        ]
     }
 }

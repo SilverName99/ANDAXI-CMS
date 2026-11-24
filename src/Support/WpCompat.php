@@ -40,7 +40,11 @@ use Throwable;
  *    le servește în forma WordPress (cu `actiune`: doar cererile cu acel `action`); stratul SEO nu le atinge;
  *  - `antete_404` ("wordpress"): orice 404 pleacă cu antetele `nocache_headers()` ale WordPress;
  *  - `baze_fara_ghicire` (segmente): primele segmente pe care WordPress le dă arhivelor (implicit `BAZE_IMPLICITE`); sub
- *    ele nu se ghicește. Lista din pachet o înlocuiește pe cea implicită (baza categoriilor se poate schimba în WordPress).
+ *    ele nu se ghicește. Lista din pachet o înlocuiește pe cea implicită (baza categoriilor se poate schimba în WordPress);
+ *  - `magazin_wc` (bool): magazinul în forma WooCommerce (pista A a mutării unui site WooCommerce, docs/MAGAZIN-WC.md): rutele
+ *    WooCommerce din router (Router::CONDITII), cheile WooCommerce de pe `/` (`add-to-cart`, `download_file`, `wc-api`,
+ *    `wc-ajax`; CompatWp\Interogari) și sursele Stripe din CSP pe checkout și metodele de plată (CspSite::extensie);
+ *  - `mailpoet` (bool): adresele vechi ale MailPoet de pe `/` (`mailpoet_router`, `mailpoet_page`; CompatWp\Interogari).
  *
  * Slug-urile Unicode (`Slug::unicode`) pornesc tot de aici (`slugUnicode()`). Tot de aici, o cerere HEAD primește
  * răspunsul unui GET, ca la WordPress (`intercepteaza()`; fără fișier, HEAD rămâne ca până acum).
@@ -54,7 +58,7 @@ final class WpCompat
 
     /** Cheile știute; altă cheie face fișierul invalid (o greșeală de scriere nu trece în tăcere). */
     public const CHEI = ['slash_final', 'majuscule', 'ghicire', 'harta_id', 'atasamente_la_fisier', 'cautare_wp', 'sitemap_302',
-        'resturi_410', 'compatibile', 'antete_404', 'baze_fara_ghicire'];
+        'resturi_410', 'compatibile', 'antete_404', 'baze_fara_ghicire', 'magazin_wc', 'mailpoet'];
 
     /** Antetele unui 404 WordPress (nocache_headers()). */
     public const CACHE_CONTROL_404 = 'no-cache, must-revalidate, max-age=0, no-store, private';
@@ -130,6 +134,18 @@ final class WpCompat
         return (self::config()['cautare_wp'] ?? false) === true;
     }
 
+    /** Magazinul în forma WooCommerce (pista A; App\Support\MagazinWc\Mod). */
+    public static function magazinWc(): bool
+    {
+        return (self::config()['magazin_wc'] ?? false) === true;
+    }
+
+    /** Adresele vechi ale MailPoet de pe `/` (CompatWp\Interogari). */
+    public static function mailpoet(): bool
+    {
+        return (self::config()['mailpoet'] ?? false) === true;
+    }
+
     public static function antete404(): bool
     {
         return (string) (self::config()['antete_404'] ?? '') === 'wordpress';
@@ -196,7 +212,7 @@ final class WpCompat
                 $probleme[] = 'cheie necunoscută: ' . $cheie . ' (știute: ' . implode(', ', self::CHEI) . ')';
             }
         }
-        foreach (['slash_final', 'ghicire', 'harta_id', 'atasamente_la_fisier', 'cautare_wp'] as $cheie) {
+        foreach (['slash_final', 'ghicire', 'harta_id', 'atasamente_la_fisier', 'cautare_wp', 'magazin_wc', 'mailpoet'] as $cheie) {
             if (array_key_exists($cheie, $date) && !is_bool($date[$cheie])) {
                 $probleme[] = $cheie . ': true sau false';
             }

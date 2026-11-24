@@ -23,10 +23,12 @@ use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
 use App\Http\Controllers\ConcurentaController;
 use App\Http\Controllers\ConfirmareEmailController;
+use App\Http\Controllers\ContWcController;
 use App\Http\Controllers\DesktopApiController;
 use App\Http\Controllers\DonatiiController;
 use App\Http\Controllers\FisiereCloudController;
 use App\Http\Controllers\IstoricEmailController;
+use App\Http\Controllers\MagazinWcController;
 use App\Http\Controllers\MembriController;
 use App\Http\Controllers\RedirectionariController;
 use App\Http\Controllers\SeoAdminController;
@@ -85,6 +87,27 @@ return static function (Router $router): void {
     $router->post('/review-form/submit', [SiteController::class, 'reviewFormSubmit']);
     $router->post('/gdpr-agreements/submit', [SiteController::class, 'gdprAgreementSubmit']);
     $router->get('/gdpr-agreements/success', [SiteController::class, 'gdprAgreementSuccess']);
+    // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc; docs/MAGAZIN-WC.md, pista A): adresele WooCommerce ale unui
+    // site mutat, înregistrate o singură dată aici, cu proprietarii lor din config/plugins.php. Toate au condiția „magazin_wc”
+    // (Router::CONDITII): pe orice alt site nu se potrivesc deloc și cererea merge mai departe exact ca înainte (/cos și /checkout
+    // la coșul și checkout-ul nucleului, restul la /{slug*}). Cu condiția, coșul și checkout-ul WooCommerce stau înaintea celor ale
+    // nucleului, pe aceleași adrese. Metodele răspund 404 până la pista lor (MagazinWcController, ContWcController).
+    $router->get('/product/{slug}', [MagazinWcController::class, 'produs'], 'magazin_wc');
+    $router->post('/product/{slug}', [MagazinWcController::class, 'produsAdauga'], 'magazin_wc');
+    $router->get('/cos', [MagazinWcController::class, 'cos'], 'magazin_wc');
+    $router->post('/cos', [MagazinWcController::class, 'cosTrimis'], 'magazin_wc');
+    $router->get('/checkout', [MagazinWcController::class, 'checkout'], 'magazin_wc');
+    $router->get('/checkout/order-received/{comanda}', [MagazinWcController::class, 'comandaPrimita'], 'magazin_wc');
+    $router->get('/checkout/order-pay/{comanda}', [MagazinWcController::class, 'comandaPlata'], 'magazin_wc');
+    $router->get('/my-account', [ContWcController::class, 'cont'], 'magazin_wc');
+    $router->post('/my-account', [ContWcController::class, 'contTrimis'], 'magazin_wc');
+    $router->get('/my-account/{endpoint*}', [ContWcController::class, 'cont'], 'magazin_wc');
+    $router->post('/my-account/{endpoint*}', [ContWcController::class, 'contTrimis'], 'magazin_wc');
+    $router->get('/api/wc/jeton', [MagazinWcController::class, 'jeton'], 'magazin_wc');
+    $router->get('/api/wc/cos-plutitor', [MagazinWcController::class, 'cosPlutitor'], 'magazin_wc');
+    $router->post('/api/wc/cos/{actiune}', [MagazinWcController::class, 'cosApi'], 'magazin_wc');
+    $router->post('/api/wc/checkout', [MagazinWcController::class, 'checkoutApi'], 'magazin_wc');
+    $router->post('/api/wc/stripe/{actiune}', [MagazinWcController::class, 'stripeApi'], 'magazin_wc');
     $router->get('/cos', [SiteController::class, 'cart']);
     $router->post('/cos/adauga/{id}', [SiteController::class, 'cartAdd']);
     $router->post('/cos/actualizeaza', [SiteController::class, 'cartUpdate']);

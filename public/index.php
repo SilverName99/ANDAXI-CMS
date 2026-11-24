@@ -210,6 +210,12 @@ if (Plugins::hartaSiteDeRefacut()) {
 // redirecționările stratului WordPress), înaintea cache-ului de pagini, deci aceeași la MISS, la HIT și la 304
 // (App\Support\CspSite). Fără tema.json → cadru = capturat nu trimite nimic.
 \App\Support\CspSite::trimite((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+// Mutarea unui site WooCommerce (docs/MAGAZIN-WC.md, pista A): cheile WordPress de pe prima pagină (?add-to-cart=, ?download_file=,
+// ?wc-api=, ?wc-ajax=, ?mailpoet_router, ?mailpoet_page=) la proprietarii lor, după starea pluginurilor; o cheie necunoscută trece
+// mai departe (App\Support\CompatWp\Interogari). Fără wp-compat.json → magazin_wc sau mailpoet nu face nimic.
+if (\App\Support\CompatWp\Interogari::intercepteaza((string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
+}
 // Pasul 9b: formularele de contact Divi ale paginilor capturate (POST la adresa paginii, cu et_pb_contactform_submit_N): nonce-ul
 // legat de formular, capcana, bugetul vizitatorului, mesajul scris în baza site-ului înaintea emailului, apoi pagina cu mesajul în
 // locul formularului (App\Support\FormularCapturat). Înaintea cache-ului de pagini. Fără cadrul capturat nu face nimic.

@@ -875,13 +875,23 @@ function primaDiferenta(a, b) {
 function verificaManifestul() {
   scrie('== Manifestul sloturilor (divi4/v1/sloturi.json) și fișierele runtime-ului');
   const pluginuri = manifest.pluginuri && typeof manifest.pluginuri === 'object' ? manifest.pluginuri : {};
-  const cai = [].concat(manifest.cap || [], manifest.final || [], Object.values(pluginuri));
+  const seturi = manifest.seturi && typeof manifest.seturi === 'object' && !Array.isArray(manifest.seturi) ? manifest.seturi : {};
+  const caiSeturi = [].concat(...Object.values(seturi).map((l) => (Array.isArray(l) ? l : [l])));
+  const cai = [].concat(manifest.cap || [], manifest.final || [], Object.values(pluginuri), caiSeturi);
   verifica('pluginuri: scriptul pluginului statistici (comun/v1/statistici.js), nu și în sloturi (îl adaugă cadrul doar cu pluginul pornit)',
     egal(pluginuri, { statistici: 'comun/v1/statistici.js' }) && !(manifest.final || []).includes('comun/v1/statistici.js'), manifest.pluginuri);
   verifica('sloturi.json: format 1, runtime divi4@1, cap și final liste nevide de căi', manifest.format === 1 && manifest.runtime === 'divi4@1'
     && Array.isArray(manifest.cap) && Array.isArray(manifest.final) && manifest.cap.length > 0 && cai.every((c) => typeof c === 'string'), manifest);
-  const rele = cai.filter((c) => !/^(comun|divi4)\/v[0-9]+\/[a-z0-9-]+\.js$/.test(c) || !fisierSub(COMPAT, c));
-  verifica('fiecare cale e un fișier .js existent din public/assets/compat/<comun|divi4>/vN/ (fără „..”)', rele.length === 0, rele);
+  // Seturile (pista A a mutării unui site WooCommerce, docs/MAGAZIN-WC.md): grupurile de module în plus, puse de cadru la sfârșitul
+  // slotului final doar pe site-urile a căror temă le cere (tema.json → runtime_seturi); niciunul în cap sau în final.
+  verifica('seturi: comportament (pista C), magazin_wc (G, H, L), calendar (K), cu modulele lor; niciunul în cap, în final sau la pluginuri',
+    egal(Object.keys(seturi), ['comportament', 'magazin_wc', 'calendar'])
+    && egal(seturi.comportament, ['comun/v1/comutatoare.js', 'divi4/v1/salvattore.js', 'divi4/v1/video-fundal.js', 'divi4/v1/audio.js', 'divi4/v1/abonare.js'])
+    && egal(seturi.magazin_wc, ['wc/v1/cos-plutitor.js', 'wc/v1/cos.js', 'wc/v1/checkout.js', 'wc/v1/selectie.js', 'wc/v1/cont.js', 'wc/v1/stripe-oc.js'])
+    && egal(seturi.calendar, ['wcpc/v1/calendar.js'])
+    && caiSeturi.every((c) => !(manifest.cap || []).includes(c) && !(manifest.final || []).includes(c) && !Object.values(pluginuri).includes(c)), seturi);
+  const rele = cai.filter((c) => !/^(comun|divi4|wc|wcpc)\/v[0-9]+\/[a-z0-9-]+\.js$/.test(c) || !fisierSub(COMPAT, c));
+  verifica('fiecare cale e un fișier .js existent din public/assets/compat/<comun|divi4|wc|wcpc>/vN/ (fără „..”)', rele.length === 0, rele);
   verifica('nicio cale de două ori', new Set(cai).size === cai.length, cai);
   verifica('cap începe cu comun/v1/incarcare.js, urmat de comun/v1/tarziu.js; în final: clase-ua, apoi fit-vids, structura, dg-lightbox (ordinea OBS-01)',
     manifest.cap[0] === 'comun/v1/incarcare.js' && manifest.cap[1] === 'comun/v1/tarziu.js'

@@ -13,7 +13,8 @@ declare(strict_types=1);
  *  4. fiecare intrare din meniu duce la o rută a aceluiași plugin;
  *  5. cronurile din catalog există și au garda; orice script cu gardă e în catalog;
  *  6. dependențele și pachetele folosesc chei cunoscute, fără cerc;
- *  7. cheile pluginurilor sunt exact cele 26 hotărâte + unealta internă + campaniile (5 nov 2026) + statisticile (8 nov 2026);
+ *  7. cheile pluginurilor sunt exact cele 26 hotărâte + unealta internă + campaniile (5 nov 2026) + statisticile (8 nov 2026)
+ *     + descărcările, automatizările și datele evenimentelor (mutarea unui site WooCommerce, 24 nov 2026);
  *  8. codul întreabă doar de chei care există (Plugins::activ('…') etc.);
  *  9. în șabloane (views/), fiecare bloc `<?php if (…): ?>` … `<?php endif; ?>`
  *     scris pe coloana 0 (așa se ascunde bucata unui plugin) închide tot ce
@@ -74,7 +75,10 @@ $cheiHotarate = ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_eup
     // Pluginul nou cerut de proprietar pe 5 nov 2026 (campaniile de pe site, pentru Biovitality; docs/PLUGINURI.md).
     'campanii',
     // Pluginul nou cerut de proprietar pe 8 nov 2026 (statisticile site-ului, fără cookie-uri; docs/PLUGINURI.md).
-    'statistici'];
+    'statistici',
+    // Mutarea unui site WooCommerce pe drumul capturat (planul din 24 nov 2026, §4; docs/MAGAZIN-WC.md): fișierele descărcabile,
+    // automatizările email și datele produselor-eveniment, scrise în catalog de pista A (fundația).
+    'descarcari', 'automatizari', 'date_evenimente'];
 $lipsa = array_diff($cheiHotarate, array_keys($pluginuri));
 $inPlus = array_diff(array_keys($pluginuri), $cheiHotarate);
 if ($lipsa !== []) {

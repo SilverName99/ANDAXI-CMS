@@ -1134,7 +1134,9 @@ cerere: nici gazda): `default-src 'self'`, `script-src 'self' 'inline-speculatio
 `upgrade-insecure-requests`, `report-uri /_andaxi/raport`, plus sursele https exacte din `csp`; `csp.mod` = `raport` o trimite ca
 Report-Only (copia de verificare, înainte de comutare). Trackerele active ale site-ului (`tema.json` → `urmarire`, cu id-urile în
 `privat/urmarire.json`; `App\Support\Urmarire`) adaugă doar sursele lor exacte, și numai ele pot lărgi `script-src`; fără id-uri în
-privat, politica rămâne cea strictă. Încălcările de după acord (o gazdă de colectare nedeclarată) se văd în rapoartele CSP. `X-Content-Type-Options: nosniff` pe orice răspuns. Fără `cadru`, nimic din
+privat, politica rămâne cea strictă. Încălcările de după acord (o gazdă de colectare nedeclarată) se văd în rapoartele CSP. Pe un site
+cu `wp-compat.json` → `magazin_wc`, checkout-ul și paginile metodelor de plată ale contului primesc în plus sursele Stripe.js
+(extensia închisă pe rută a `CspSite`, [MAGAZIN-WC.md](MAGAZIN-WC.md)); orice altă cale, politica de mai sus. `X-Content-Type-Options: nosniff` pe orice răspuns. Fără `cadru`, nimic din
 toate acestea: site-urile de azi ies octet cu octet ca înainte (G-cmp). Politica pleacă pe rutele cadrului după metoda cererii: un
 POST spre o rută a CMS-ului (`/admin/pages/save`, care poate răspunde cu formularul și refuzul) e al adminului, deci fără ea.
 Poarta: **G-capturat** (`tools/dev/test-capturat.php`).
@@ -1303,7 +1305,9 @@ furnizor) reface pe același DOM ce făceau scripturile scoase. Site-ul își fi
 fiecare cale din `cap` și din `final` devine `<script src="/assets/compat/<cale>?v=<12 hex din sha256>"></script>`, sincron (fără
 `async`/`defer`), în ordine, la poziția slotului — `cap` în head, înaintea lui `ax-date`; `final` unde stătea ultimul script scos din
 corp. Fără slot `cap` (niciun script scos din head), scripturile lui stau înaintea lui `ax-date` sau a lui `</head>`; fără `final`,
-înaintea lui `</body>`. Niciun script inline: `script-src 'self'`, fără hash-uri, plus `'inline-speculation-rules'`, fiindcă blocul
+înaintea lui `</body>`. Grupurile din `seturi` (pista A a mutării unui site WooCommerce, [MAGAZIN-WC.md](MAGAZIN-WC.md): `comportament`,
+`magazin_wc`, `calendar`) se adaugă la sfârșitul slotului `final`, în ordinea manifestului, doar pe site-urile a căror temă le cere
+(`tema.json` → `runtime_seturi`); fără cheie, paginile, P1 și amprentele rămân aceleași. Niciun script inline: `script-src 'self'`, fără hash-uri, plus `'inline-speculation-rules'`, fiindcă blocul
 `speculationrules` rămâne în pagini (date inerte), iar Chromium îi aplică `script-src` (fără cuvânt: o încălcare pe fiecare pagină și
 nicio preîncărcare). Piesele de bază (pasul 8a, în `comun/v1/`): `incarcare.js` (clasa `js` pe `<html>` din head; `window.axCompat`:
 modulele pornite la `imediat`, într-o sarcină după DOMContentLoaded (`dom`) sau la `load`, în ordinea manifestului, doar cu un

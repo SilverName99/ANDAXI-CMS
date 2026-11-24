@@ -23,6 +23,12 @@ namespace App\Support;
  *  - trackerele active ale site-ului (Urmarire: declarate în pachet, cu identificatorul în privat) adaugă sursele lor exacte în
  *    `script-src`, `connect-src`, `img-src` și `frame-src` (singura cale prin care `script-src` primește o gazdă străină); fără
  *    trackere active politica e cea strictă de mai sus, neschimbată;
+ *  - extensia pe rută (EXTENSII, RUTE_EXTINSE; pista A a mutării unui site WooCommerce, docs/MAGAZIN-WC.md): doar pe un site cu
+ *    `wp-compat.json` → `magazin_wc` și doar pe checkout (`/checkout/…`) și pe paginile metodelor de plată din cont
+ *    (`/my-account/payment-methods/…`, `/my-account/add-payment-method/…`), politica primește sursele documentate ale Stripe.js
+ *    (`script-src` și `frame-src` js.stripe.com, `frame-src` hooks.stripe.com, `connect-src` api.stripe.com și
+ *    merchant-ui-api.stripe.com; pista H completează lista din pagina CSP a Stripe). Lista e închisă; pe orice altă cale și pe
+ *    orice alt site politica e cea de mai sus, neschimbată;
  *  - `X-Content-Type-Options: nosniff` pe tot.
  *
  * Fără `tema.json` → `cadru` = `capturat` nu trimite nimic: site-urile de azi ies octet cu octet ca înainte (G-cmp).
@@ -36,12 +42,39 @@ final class CspSite
     public const RAPORT = '/_andaxi/raport';
 
     /**
+     * Extensiile închise ale politicii, pe directivă (pista A; folosite doar pe RUTE_EXTINSE, pe un site cu magazin_wc): `stripe` =
+     * sursele documentate ale Stripe.js pentru Payment Element și Checkout Sessions (doar gazde exacte, https).
+     *
+     * @var array<string, array<string, list<string>>>
+     */
+    public const EXTENSII = [
+        'stripe' => [
+            'script-src' => ['https://js.stripe.com'],
+            'frame-src' => ['https://js.stripe.com', 'https://hooks.stripe.com'],
+            'connect-src' => ['https://api.stripe.com', 'https://merchant-ui-api.stripe.com'],
+        ],
+    ];
+
+    /**
+     * Căile cu o extensie (pista A): prefixul căii (cu litere mici; se potrivește calea însăși, fără „/” final, și tot ce e sub ea) →
+     * extensia din EXTENSII. Doar checkout-ul și paginile metodelor de plată ale contului.
+     *
+     * @var array<string, string>
+     */
+    public const RUTE_EXTINSE = [
+        '/checkout/' => 'stripe',
+        '/my-account/payment-methods/' => 'stripe',
+        '/my-account/add-payment-method/' => 'stripe',
+    ];
+
+    /**
      * Politica, ca text de antet. `$embed`: varianta cardurilor embed (fără `frame-ancestors`).
      *
      * @param array<string, mixed> $extra sursele în plus, pe directivă (Tema::csp())
      * @param array<string, mixed> $urmarire sursele trackerelor active, pe directivă (Urmarire::csp())
+     * @param string|null $extensie o cheie din EXTENSII (extensie()), sau null: politica fără extensie
      */
-    public static function politica(bool $embed = false, array $extra = [], array $urmarire = []): string
+    public static function politica(bool $embed = false, array $extra = [], array $urmarire = [], ?string $extensie = null): string
     {
         $d = [
             'default-src' => ["'self'"],
@@ -77,6 +110,13 @@ final class CspSite
                 }
             }
         }
+        foreach (self::EXTENSII[$extensie ?? ''] ?? [] as $dir => $surse) {
+            foreach ($surse as $sursa) {
+                if (isset($d[$dir]) && !in_array($sursa, $d[$dir], true)) {
+                    $d[$dir][] = $sursa;
+                }
+            }
+        }
         $parti = [];
         foreach ($d as $dir => $surse) {
             $parti[] = $dir . ' ' . implode(' ', $surse);
@@ -94,6 +134,24 @@ final class CspSite
     public static function politicaPrevizualizare(): string
     {
         return (string) preg_replace('/; report-uri [^;]*$/', '', self::politica(false, Tema::csp(), []));
+    }
+
+    /**
+     * Extensia politicii pentru o adresă (pista A): cheia din EXTENSII, doar pe un site cu `wp-compat.json` → `magazin_wc`
+     * (MagazinWc\Mod) și doar pe o cale din RUTE_EXTINSE; altfel null (politica fără extensie).
+     */
+    public static function extensie(string $uri): ?string
+    {
+        if (!MagazinWc\Mod::activ()) {
+            return null;
+        }
+        $cale = strtolower((string) (parse_url($uri, PHP_URL_PATH) ?? ''));
+        foreach (self::RUTE_EXTINSE as $prefix => $extensie) {
+            if ($cale === rtrim($prefix, '/') || str_starts_with($cale, $prefix)) {
+                return $extensie;
+            }
+        }
+        return null;
     }
 
     /** O cale de card embed (`/<pagină>/embed/`, cu sau fără query). */
@@ -120,7 +178,7 @@ final class CspSite
         }
         $csp = Tema::csp();
         $antet = ($csp['mod'] ?? 'aplica') === 'raport' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
-        header($antet . ': ' . self::politica(self::caleEmbed($uri), $csp, Urmarire::csp()));
+        header($antet . ': ' . self::politica(self::caleEmbed($uri), $csp, Urmarire::csp(), self::extensie($uri)));
         return true;
     }
 

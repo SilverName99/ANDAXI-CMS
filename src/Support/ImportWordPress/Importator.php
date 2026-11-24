@@ -113,7 +113,7 @@ final class Importator
                 // Pasul 5a: documentele tăiate, fragmentele, răspunsurile înghețate, formularele, galeriile; apoi P1 la import (o
                 // randare diferită de T anulează tot), cu scripturile runtime-ului pe care le pune cadrul (pasul 6: tema.json → runtime).
                 $rez['capturat'] = ScriereCapturata::scrie($db, $plan->capturata, $paginiId,
-                    \App\Support\CadruCapturat::scripturiRuntime(\App\Support\Tema::runtime()));
+                    \App\Support\CadruCapturat::runtimeSite());
             }
             $setari = $plan->setari;
             // Corectura 1.6: pe drumul capturat antetul, meniul și subsolul sunt fragmente capturate (nu setările design_*).

@@ -260,7 +260,7 @@ final class CadruCapturat
     public static function previzualizare(\PDO $db, array $doc, string $ciorna, string $cale, array $seo = []): string
     {
         $html = self::randeazaRand($db, $doc, ['cale' => $cale, 'nonce' => self::nonceZi(), 'an' => date('Y'), 'seo' => $seo, 'urmarire' => []],
-            self::scripturiRuntime(Tema::runtime()), $ciorna);
+            self::runtimeSite(), $ciorna);
         return self::foiTarziiCaFoi(self::legaNonceFormulare($html, $cale));
     }
 
@@ -365,18 +365,22 @@ final class CadruCapturat
      * `<script src="/assets/compat/<cale>?v=<12 hex din sha256-ul fișierului>"></script>`, sincron, în ordinea listei. Fără runtime
      * (`""`), nimic. Un manifest sau un fișier lipsă (o versiune copiată pe jumătate) e o eroare: pagina nu iese fără runtime.
      * `pluginuri` (opțional): scriptul unui plugin al nucleului pe paginile capturate (`statistici`), pus la sfârșitul slotului
-     * final doar de răspunsul web (raspunde), cu pluginul pornit.
+     * final doar de răspunsul web (raspunde), cu pluginul pornit. `seturi` (opțional, pista A a mutării unui site WooCommerce):
+     * grupuri de module în plus; cele din `$seturi` (tema.json → runtime_seturi, Tema::runtimeSeturi) se adaugă la sfârșitul
+     * slotului final, în ordinea manifestului. Fără `$seturi` (toate site-urile de azi) rezultatul e cel dinainte.
      *
+     * @param list<string> $seturi
      * @return array{cap: string, final: string, pluginuri?: array<string, string>}
      * @throws \RuntimeException
      */
-    public static function scripturiRuntime(string $runtime): array
+    public static function scripturiRuntime(string $runtime, array $seturi = []): array
     {
         if ($runtime === '') {
             return ['cap' => '', 'final' => ''];
         }
-        if (isset(self::$runtime[$runtime])) {
-            return self::$runtime[$runtime];
+        $cheieMemo = $runtime . ($seturi === [] ? '' : '+' . implode(',', $seturi));
+        if (isset(self::$runtime[$cheieMemo])) {
+            return self::$runtime[$cheieMemo];
         }
         if (preg_match('/^([a-z0-9]{2,20})@([1-9][0-9]{0,2})$/D', $runtime, $m) !== 1) {
             throw new \RuntimeException('runtime necunoscut: ' . $runtime);
@@ -410,7 +414,34 @@ final class CadruCapturat
             }
             $rez['pluginuri'][$plugin] = '<script src="/assets/compat/' . $cale . '?v=' . substr((string) hash_file('sha256', $fisier), 0, 12) . '"></script>';
         }
-        return self::$runtime[$runtime] = $rez;
+        $seturiManifest = is_array($date['seturi'] ?? null) ? $date['seturi'] : [];
+        foreach ($seturiManifest as $set => $cai) {
+            if (!is_string($set) || preg_match('/^[a-z_]{2,40}$/D', $set) !== 1 || !is_array($cai) || !array_is_list($cai)) {
+                throw new \RuntimeException('manifestul runtime-ului: un set de module nepermis');
+            }
+        }
+        foreach ($seturi as $set) {
+            if (!isset($seturiManifest[$set])) {
+                throw new \RuntimeException('runtime-ul compat: setul de module „' . $set . '” nu e în manifest');
+            }
+            foreach ($seturiManifest[$set] as $cale) {
+                if (!is_string($cale) || preg_match('#^[a-z0-9]{2,20}/v[1-9][0-9]{0,2}/[a-z0-9-]{1,60}\.js$#D', $cale) !== 1) {
+                    throw new \RuntimeException('manifestul runtime-ului: cale nepermisă');
+                }
+                $fisier = Paths::public('assets/compat/' . $cale);
+                if (!is_file($fisier)) {
+                    throw new \RuntimeException('runtime-ul compat: lipsește ' . $cale);
+                }
+                $rez['final'] .= '<script src="/assets/compat/' . $cale . '?v=' . substr((string) hash_file('sha256', $fisier), 0, 12) . '"></script>';
+            }
+        }
+        return self::$runtime[$cheieMemo] = $rez;
+    }
+
+    /** Scripturile runtime-ului site-ului: versiunea din tema.json (`runtime`) cu seturile ei (`runtime_seturi`). @return array{cap: string, final: string, pluginuri?: array<string, string>} */
+    public static function runtimeSite(): array
+    {
+        return self::scripturiRuntime(Tema::runtime(), Tema::runtimeSeturi());
     }
 
     /**
@@ -549,7 +580,7 @@ final class CadruCapturat
     public static function raspunde(\PDO $db, array $doc, array $cerere, int $status, ?callable $dupa = null, bool $faraCache = false): int
     {
         try {
-            $runtime = self::scripturiRuntime(Tema::runtime());
+            $runtime = self::runtimeSite();
             // Pluginul statistici (Statistici::dateCapturat): pagina văzută, ca scriptul nucleului, doar pe un răspuns web reușit;
             // P1, previzualizarea și verificarea la salvare nu trec pe aici, deci nici amprentele nu se schimbă.
             if (!array_key_exists('statistici', $cerere)) {

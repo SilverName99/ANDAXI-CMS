@@ -55,7 +55,7 @@ try {
         exit(1);
     }
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $runtime = CadruCapturat::scripturiRuntime(Tema::runtime());
+    $runtime = CadruCapturat::runtimeSite();
     $politica = CspSite::politica(false, Tema::csp());
     $probleme = [];
     if (preg_match("/script-src[^;]*'unsafe-(?:inline|eval)'/", $politica) === 1) {

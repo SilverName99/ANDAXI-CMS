@@ -168,7 +168,10 @@ return [
             'necesita' => [],
             'rute_admin' => ['/admin/products/*', '/admin/categories/*'],
             'rute_publice' => ['/magazin', '/categorie/*', '/marca/*', '/eticheta/*', '/produs/*',
-                '/api/products/*', '/api/search/*', '/api/shop/*'],
+                '/api/products/*', '/api/search/*', '/api/shop/*',
+                // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc, docs/MAGAZIN-WC.md): pagina produsului la adresa
+                // WooCommerce; ruta are condiția magazin_wc (Router::CONDITII), deci pe celelalte site-uri nu există.
+                '/product/*'],
             // WP-19: produsele unui șablon de produs (C14e) și produsele unei pagini de serviciu (GR-17).
             'tokenuri' => ['shop_catalog', 'shop_category', 'shop_title', 'featured_products', 'product_categories',
                 'products_by_template', 'produse_serviciu'],
@@ -199,7 +202,10 @@ return [
                 'checkout.session.async_payment_failed', 'checkout.session.expired', 'payment_intent.succeeded', 'payment_intent.payment_failed'],
             'rute_admin' => ['/admin/orders/*', '/admin/settings/floating-cart'],
             // Fluxul Merchant Center are prețuri și disponibilitate: e al magazinului, nu al catalogului (WP-R).
-            'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*', '/feed/google-merchant\.xml'],
+            'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*', '/feed/google-merchant\.xml',
+                // Magazinul în forma WooCommerce (wp-compat.json → magazin_wc, docs/MAGAZIN-WC.md; rutele au condiția magazin_wc):
+                // adăugarea în coș fără JavaScript de pe pagina produsului, comanda primită, plata unei comenzi, cererile scripturilor.
+                'POST /product/*', '/checkout/order-received/*', '/checkout/order-pay/*', '/api/wc/*'],
             // EuPlătesc trimite clientul înapoi prin POST, cu rezultatul semnat al plății.
             'rute_mereu_deschise' => ['POST /checkout/succes/{orderNumber}'],
             'pagini' => ['checkout/succes'],
@@ -226,7 +232,10 @@ return [
             // Avertismentul pe produs (WP-R, din Bioscem 0582ce9): textele pe produs și ce a confirmat clientul pe comandă.
             // Transportul gratuit pe produs (WP-20, C14a, din Biovitality): coloana magazinului în tabelul catalogului.
             'tabele' => ['orders', 'order_items', 'email_logs', 'cart_abandonments', 'product_warnings', 'order_product_warnings',
-                'products.free_shipping'],
+                'products.free_shipping',
+                // Magazinul în forma WooCommerce (migrarea rezervată magazin/0074, docs/MAGAZIN-WC.md): metadatele rândurilor comenzii
+                // și istoricul comenzii.
+                'order_item_meta', 'order_notes'],
         ],
 
         'livrare_fan' => [
@@ -260,6 +269,9 @@ return [
             'rute_mereu_deschise' => ['POST /webhook/stripe'],
             // WP-25 (VT-X1): „Verifică webhook-ul” din Setări plăți (endpoint-ul contului, versiunea, evenimentele lipsă).
             'rute_admin' => ['/admin/settings/payments/verifica-webhook'],
+            // Magazinul în forma WooCommerce (docs/MAGAZIN-WC.md, ruta cu condiția magazin_wc): sesiunea Stripe Checkout și metodele
+            // de plată salvate, cerute de scripturile paginilor capturate.
+            'rute_publice' => ['/api/wc/stripe/*'],
             'tabele' => ['orders.stripe_*', 'stripe_events'],
         ],
 
@@ -412,7 +424,9 @@ return [
             'descriere' => 'Înregistrare, autentificare (și cu Google), adrese, resetarea parolei, lista clienților în admin.',
             'necesita' => [],
             'rute_admin' => ['/admin/users/*'],
-            'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*'],
+            'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*',
+                // Magazinul în forma WooCommerce (docs/MAGAZIN-WC.md, rutele cu condiția magazin_wc): contul la adresele WooCommerce.
+                '/my-account/*'],
             // WP-25 (VT-C9): linkul de confirmare a adresei din emailurile trimise merge în orice stare a pluginului.
             // Revizuirea WP-25: pagina cu butonul (GET) și confirmarea (POST). Portul Biovitality 0e54737: adresa linkului din
             // emailurile trimise de codul Biovitality (GET, duce la prima).
@@ -429,7 +443,10 @@ return [
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users/settings'])
                         && ($tab ?? 'settings') !== 'points'],
             ],
-            'tabele' => ['users', 'user_addresses', 'customer_password_resets', 'customer_email_confirmations'],
+            'tabele' => ['users', 'user_addresses', 'customer_password_resets', 'customer_email_confirmations',
+                // Conturile importate din WordPress (migrarea rezervată conturi_clienti/0076, docs/MAGAZIN-WC.md): metodele de plată
+                // salvate și linkurile de setare a parolei.
+                'metode_plata_salvate', 'parole_setare'],
         ],
 
         'blog' => [
@@ -495,7 +512,10 @@ return [
                 // Codul vechi e2e2d77…739f58c (migrarea newsletter/0040): lista „nu trimite” și jurnalul cererilor de
                 // confirmare; coloanele noi ale abonaților, campaniilor și trimiterilor.
                 'newsletter_suprimate', 'newsletter_cereri_confirmare', 'newsletter_subscribers.pending_at',
-                'newsletter_subscribers.confirmed_at', 'newsletter_campaigns.last_error', 'newsletter_campaign_sends.attempts'],
+                'newsletter_subscribers.confirmed_at', 'newsletter_campaigns.last_error', 'newsletter_campaign_sends.attempts',
+                // Abonații și arhiva MailPoet ale unui site mutat (migrarea rezervată newsletter/0077, docs/MAGAZIN-WC.md): cozile
+                // trimise, linkurile din emailurile vechi, bugetul comun al trimiterilor.
+                'newsletter_mailpoet_cozi', 'newsletter_mailpoet_linkuri', 'buget_trimitere'],
         ],
 
         'chat_live' => [
@@ -694,6 +714,32 @@ return [
             'tabele' => ['statistici_*', 'orders.statistici_*'],
         ],
 
+        // Mutarea unui site WooCommerce (docs/MAGAZIN-WC.md): trei pluginuri noi, scrise o singură dată de pista A, cu dependențele și
+        // tabelele lor (migrările rezervate 0075, 0078, 0079). Nu au încă nicio rută, niciun meniu și niciun cron: le aduc pistele
+        // lor (I, J, K), odată cu codul. Oprite pe orice site până le pune CRM-ul în licență; în licența de dezvoltare „ateliere”.
+        'descarcari' => [
+            'nume' => 'Descărcări',
+            'descriere' => 'Fișierele produselor descărcabile: păstrate în afara site-ului, date după plată, cu limite și expirare, '
+                . 'lista lor în contul clientului și în emailuri.',
+            'necesita' => ['magazin'],
+            'tabele' => ['produse_fisiere', 'permisiuni_descarcare', 'jurnal_descarcari'],
+        ],
+
+        'automatizari' => [
+            'nume' => 'Automatizări newsletter',
+            'descriere' => 'Emailuri trimise singure, după un declanșator (abonarea la o listă, un cont nou, o comandă finalizată cu un '
+                . 'produs), cu o întârziere.',
+            'necesita' => ['newsletter'],
+            'tabele' => ['automatizari', 'automatizari_pasi', 'automatizari_emailuri', 'automatizari_rulari', 'automatizari_jurnal'],
+        ],
+
+        'date_evenimente' => [
+            'nume' => 'Date pentru evenimente',
+            'descriere' => 'Datele unui produs-eveniment (zilele, orele, nota), alegerea datei la cumpărare și calendarul evenimentelor.',
+            'necesita' => ['catalog'],
+            'tabele' => ['produse_date'],
+        ],
+
         'migrare_wordpress' => [
             'nume' => 'Migrare din WordPress',
             'descriere' => 'Unealtă internă ANDAXI: importul clienților și al listelor de email dintr-o copie WordPress.',
@@ -814,5 +860,10 @@ return [
         'vertij' => ['conturi_clienti', 'plata_stripe', 'donatii', 'membri', 'blog', 'newsletter'],
         // grafoanaytis: catalog fără prețuri și cereri de ofertă în locul coșului (pachetul „Catalog”).
         'grafoanaytis' => ['catalog', 'cereri_oferta'],
+        // ateliere (pachetul site-uri/ateliere/, un site WooCommerce mutat pe drumul capturat; docs/MAGAZIN-WC.md): magazinul cu plata
+        // Stripe, cupoanele, conturile, blogul, newsletterul, statisticile și cele trei pluginuri noi; fără livrarea FAN (livrarea e
+        // zero, fiecare produs e un serviciu). migrare_wordpress se adaugă doar pe durata mutării.
+        'ateliere' => ['catalog', 'magazin', 'plata_stripe', 'cupoane', 'conturi_clienti', 'blog', 'newsletter', 'statistici', 'descarcari',
+            'automatizari', 'date_evenimente'],
     ],
 ];

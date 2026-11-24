@@ -3,12 +3,20 @@
 Un site WordPress cu Divi, WooCommerce și MailPoet se mută pe CMS pe drumul capturat ([DEPLOY.md](DEPLOY.md), „Adoptarea unui
 site WordPress”): paginile rămân octet cu octet cele de pe WordPress, iar ce depinde de vizitator (coșul, checkout-ul, contul,
 calendarul, pagina abonamentului) îl randează codul nostru, în markupul site-ului, prin **regiunile dinamice**. Lucrul e împărțit
-pe piste, fiecare cu spațiul ei de nume și migrarea ei; pista A (fundația, mai jos) scrie o singură dată tot ce împart pistele,
-începând cu cadrul regiunilor. Fără reguli `regiuni` nicio tăiere nu se schimbă (G-capturat, G-wp).
+pe piste, fiecare cu spațiul ei de nume și migrarea ei; pista A (fundația, mai jos) scrie o singură dată tot ce împart pistele:
+înregistrările (rutele, pluginurile, cheile de pe `/`, modulele runtime-ului, schema dialectului) și cadrul regiunilor. Toate sunt
+inerte până la pista lor și pe orice alt site: fără `wp-compat.json` → `magazin_wc` nicio rută, nicio cheie și nicio sursă CSP nouă
+nu există, iar fără reguli `regiuni` nicio tăiere nu se schimbă (G-cmp, instantaneele rutelor, G-capturat, G-wp).
 
 Planul mutării (pistele, datele reale ale site-ului, capturile) stă în afara repo-ului; aici e doar ce e în cod.
 
 ## A. Fundația (pista A)
+
+### Pornirea: `wp-compat.json` → `magazin_wc`, `mailpoet`
+
+Două chei noi ale stratului de adrese WordPress ([SEO.md](SEO.md), §1b), `true` sau lipsă: `magazin_wc` (magazinul în forma
+WooCommerce: rutele, cheile WooCommerce de pe `/`, sursele Stripe din CSP; `App\Support\MagazinWc\Mod::activ()`) și `mailpoet`
+(cheile MailPoet de pe `/`; `WpCompat::mailpoet()`).
 
 ### Regiunile dinamice
 
@@ -52,6 +60,71 @@ Documentele noi ale capturii (coloana `pagini_capturate.tip`, `VARCHAR`, fără 
 articol, o categorie și o căutare capturate, ale căror adrese stau în `privat/import-wordpress.json` → `sabloane`), pe care le
 importă pistele G și B.
 
+### Rutele
+
+Înregistrate o singură dată în `src/Http/rute.php`, toate cu condiția `magazin_wc` (`Router::CONDITII`: o rută condiționată nu se
+potrivește deloc fără condiție, deci pe celelalte site-uri cererea merge mai departe exact ca înainte, `/cos` și `/checkout` la
+coșul și checkout-ul nucleului, restul la `/{slug*}`). Cu condiția, ele stau înaintea rutelor nucleului cu aceleași adrese.
+Instantaneele rutelor (`tools/dev/instantanee/`) le arată cu „(doar cu magazin_wc)”, iar testul B al pluginurilor le cere doar pe
+un site cu condiția. Până la pista lor, fiecare metodă răspunde 404 (`PistaNeconstruita`): pe o pagină, 404-ul site-ului (cel
+capturat, pe cadrul capturat); sub `/api/wc/` JSON-ul scurt al gărzii, `{"ok":false,…}`, cu `Cache-Control: no-store, private`.
+
+| Metoda și adresa | Controllerul și metoda | Proprietarul (config/plugins.php) | Pista |
+|---|---|---|---|
+| `GET /product/{slug}` | `MagazinWcController::produs` | `catalog` | G |
+| `POST /product/{slug}` (adăugarea în coș fără JavaScript) | `MagazinWcController::produsAdauga` | `magazin` | G |
+| `GET /cos`, `POST /cos` | `MagazinWcController::cos`, `cosTrimis` | `magazin` | G |
+| `GET /checkout` | `MagazinWcController::checkout` | `magazin` | L |
+| `GET /checkout/order-received/{comanda}` | `MagazinWcController::comandaPrimita` | `magazin` | L |
+| `GET /checkout/order-pay/{comanda}` | `MagazinWcController::comandaPlata` | `magazin` | L |
+| `GET`, `POST /my-account` și `/my-account/{endpoint*}` | `ContWcController::cont`, `contTrimis` | `conturi_clienti` | L |
+| `GET /api/wc/jeton` | `MagazinWcController::jeton` | `magazin` | G |
+| `GET /api/wc/cos-plutitor` | `MagazinWcController::cosPlutitor` | `magazin` | G |
+| `POST /api/wc/cos/{actiune}` | `MagazinWcController::cosApi` | `magazin` | G |
+| `POST /api/wc/checkout` | `MagazinWcController::checkoutApi` | `magazin` | L |
+| `POST /api/wc/stripe/{actiune}` | `MagazinWcController::stripeApi` | `plata_stripe` | H |
+
+Rutele magazinului propriu al CMS-ului (`/magazin`, `/produs/…`, `/cos/…` cu API-ul lui) rămân cum sunt; dacă și cum se închid pe
+un site `magazin_wc` hotărăsc pistele G și L.
+
+### Cheile de pe `/` (`App\Support\CompatWp\Interogari`)
+
+Un singur dispecer, chemat o dată din `public/index.php`, după mentenanță și politica CSP, înaintea formularelor capturate și a
+cache-ului de pagini. Doar pe calea `/`, doar cu grupul cheii pornit în `wp-compat.json`; o cheie care nu e în listă trece mai
+departe neatinsă, iar mai multe chei în aceeași cerere: câștigă prima din ordinea de mai jos. Cu pluginul proprietar oprit, 404-ul
+site-ului, în afara cheilor mereu deschise, care ajung la proprietar în orice stare (notificarea Stripe veche, adresele MailPoet din
+emailurile trimise: dezabonarea e mereu posibilă, RFC 8058). Până la pista lor, proprietarii răspund 404.
+
+| Cheia | Grupul | Pluginul | Mereu deschisă | Proprietarul | Pista |
+|---|---|---|---|---|---|
+| `wc-api` (`/?wc-api=wc_stripe`, notificarea Stripe a comenzilor importate) | `magazin_wc` | `plata_stripe` | da | `MagazinWcController::wcApi` | H |
+| `wc-ajax` | `magazin_wc` | — | — | 404 în JSON (endpointurile AJAX ale WooCommerce nu se portează; scripturile noastre au `/api/wc/*`) | — |
+| `download_file` | `magazin_wc` | `descarcari` | nu | `DescarcariController::descarca` | I |
+| `mailpoet_router`, `mailpoet_page` | `mailpoet` | `newsletter` | da | `MailPoetCompat\Router::raspunde($cheie)` (statică) | E |
+| `add-to-cart` | `magazin_wc` | `magazin` | nu | `MagazinWcController::adaugaDinAdresa` (ajunge mereu la `/cos/`) | G |
+
+### CSP pe rută
+
+`App\Support\CspSite` are o extensie închisă pe rută (`EXTENSII`, `RUTE_EXTINSE`), doar pe un site `magazin_wc`: `/checkout/…`,
+`/my-account/payment-methods/…` și `/my-account/add-payment-method/…` (calea comparată cu litere mici) primesc sursele documentate
+ale Stripe.js (`script-src` și `frame-src` `https://js.stripe.com`, `frame-src` `https://hooks.stripe.com`, `connect-src`
+`https://api.stripe.com` și `https://merchant-ui-api.stripe.com`); pista H completează lista după pagina CSP a Stripe. Restul
+politicii e același; pe orice altă cale și pe orice alt site politica e cea de până acum, octet cu octet (G-capturat).
+
+### Modulele runtime-ului: seturile
+
+Manifestul `public/assets/compat/divi4/v1/sloturi.json` are `seturi`, grupuri de module adăugate la sfârșitul slotului `final`
+(înaintea scriptului unui plugin) doar pe site-urile a căror temă le cere (`tema.json` → `runtime_seturi`, [PACHETE.md](PACHETE.md));
+fără cheie, paginile, P1 și amprentele rămân aceleași. Fiecare modul e deocamdată un loc rezervat care nu face nimic; pista lui îl
+scrie, iar contractul lui e cel al runtime-ului ([DEPLOY.md](DEPLOY.md), „Runtime-ul compat”): nu face nimic când DOM-ul lui
+lipsește, fără excepții, fără scripturi inline.
+
+| Setul | Modulele | Pista |
+|---|---|---|
+| `comportament` | `comun/v1/comutatoare.js`, `divi4/v1/salvattore.js`, `divi4/v1/video-fundal.js`, `divi4/v1/audio.js`, `divi4/v1/abonare.js` | C |
+| `magazin_wc` | `wc/v1/cos-plutitor.js`, `wc/v1/cos.js`, `wc/v1/checkout.js`, `wc/v1/selectie.js`, `wc/v1/cont.js`, `wc/v1/stripe-oc.js` (singurul care încarcă Stripe.js, doar pe rutele cu extensia CSP) | G, L, H |
+| `calendar` | `wcpc/v1/calendar.js` | K |
+
 ### Schema dialectului
 
 `HtmlCapturat\SchemaDivi4` primește atributele `data-*` ale markupului WooCommerce și Divi pe care le poartă documentele magazinului
@@ -59,6 +132,33 @@ importă pistele G și B.
 scalare), atributele regiunilor (`REGIUNI_ATRIBUTE`: `data-events`, `class`), forma jetonului unei regiuni (`RE_JETON_REGIUNE`) și
 clasele corpului (`CLASE_BODY`). Doar lărgesc politica pentru documentele care au aceste atribute; niciun document de azi nu se
 schimbă.
+
+### Pluginurile noi și migrările rezervate
+
+Trei pluginuri noi în catalog, fără rute, meniu sau cronuri până la pista lor ([PLUGINURI.md](PLUGINURI.md)): `descarcari` (cere
+`magazin`), `automatizari` (cere `newsletter`), `date_evenimente` (cere `catalog`), cu tabelele migrărilor lor. Tabelele noi ale
+pluginurilor existente sunt și ele în catalog (`order_item_meta`, `order_notes` la `magazin`; `metode_plata_salvate`,
+`parole_setare` la `conturi_clienti`; `newsletter_mailpoet_cozi`, `newsletter_mailpoet_linkuri`, `buget_trimitere` la
+`newsletter`). Numerele migrărilor sunt fixate de acum, ca pistele să nu se ciocnească:
+
+| Nr | Migrarea | Pista |
+|---|---|---|
+| 0072 | `nucleu/0072_regiuni_capturate` (făcută: tabelul `regiuni_capturate`, [MIGRARI.md](MIGRARI.md)) | A |
+| 0073 | `catalog/0073_produse_wc` | D |
+| 0074 | `magazin/0074_comenzi_wc` | D |
+| 0075 | `descarcari/0075_descarcari` | D (schema), I |
+| 0076 | `conturi_clienti/0076_conturi_wp` | D |
+| 0077 | `newsletter/0077_mailpoet` | E |
+| 0078 | `automatizari/0078_automatizari` | J |
+| 0079 | `date_evenimente/0079_date_produse` | K |
+| 0080 | `cupoane/0080_cupoane_wc` | D |
+| 0081 | `plata_stripe/0081_stripe_oc` (de rezervă: retras în `migrari.lock` dacă pista H nu are nevoie de un tabel) | H |
+
+### Licența de dezvoltare
+
+`config/plugins.php` → `licente_dev` → `ateliere`: `catalog`, `magazin`, `plata_stripe`, `cupoane`, `conturi_clienti`, `blog`,
+`newsletter`, `statistici`, `descarcari`, `automatizari`, `date_evenimente` (fără `livrare_fan`: livrarea e zero, fiecare produs e
+un serviciu; `migrare_wordpress` se adaugă doar pe durata mutării). `tools/dev/php.sh tools/dev/licenta.php ateliere`.
 
 ## G. Magazinul, partea 1: produsul, coșul, panoul plutitor
 

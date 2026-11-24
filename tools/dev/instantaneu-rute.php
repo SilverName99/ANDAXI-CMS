@@ -189,7 +189,8 @@ foreach ($licente as $numeLicenta => $stari) {
     foreach ($cereri as $c) {
         [$rezultat, $chei] = $raspuns($c);
         $cale = $afisat($c);
-        $rute[] = sprintf('%-4s %s -> %s [%s]', $c['metoda'], $cale, $rezultat, $chei);
+        // O rută condiționată (Router::CONDITII, de exemplu magazin_wc): ce face garda pe un site cu condiția; pe celelalte nu există.
+        $rute[] = sprintf('%-4s %s -> %s [%s]', $c['metoda'], $cale, $rezultat, $chei) . (($c['conditie'] ?? null) !== null ? ' (doar cu ' . $c['conditie'] . ')' : '');
         $cheieTipar = $c['metoda'] . ' ' . Plugins::normalizeazaTipar($c['tipar']);
         // MEREU ajunge și el la controller; e voie doar pentru adresele din lista fixă de mai sus.
         $mereuFix = isset($mereuDeschiseFixeNorm[$cheieTipar]);

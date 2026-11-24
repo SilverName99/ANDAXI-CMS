@@ -14,11 +14,12 @@ declare(strict_types=1);
  *
  * Fiecare cerere: metoda, tipar, cale (gata de cerut), parametri (ai rutei), get,
  * post (ai variantei), din_ruta (parametrii de rută puși de variantă, de exemplu
- * section=automation) și pagina (slug-ul, pentru paginile pluginurilor).
+ * section=automation), pagina (slug-ul, pentru paginile pluginurilor) și conditie
+ * (cheia din Router::CONDITII a unei rute condiționate, de exemplu `magazin_wc`; null fără).
  *
  * @param callable(string, string, string): string $valoare
  * @return list<array{metoda: string, tipar: string, cale: string, parametri: array<string, string>,
- *     get: array<string, string>, post: array<string, string>, din_ruta: array<string, string>, pagina: ?string}>
+ *     get: array<string, string>, post: array<string, string>, din_ruta: array<string, string>, pagina: ?string, conditie: ?string}>
  */
 function cereri_rute(\App\Http\Router $router, callable $valoare): array
 {
@@ -83,7 +84,7 @@ function cereri_rute(\App\Http\Router $router, callable $valoare): array
             }
         }
         foreach ($variante as $v) {
-            $cereri[] = ['metoda' => $metoda, 'tipar' => $tipar] + $v;
+            $cereri[] = ['metoda' => $metoda, 'tipar' => $tipar] + $v + ['conditie' => $ruta['conditie'] ?? null];
         }
     }
     return $cereri;

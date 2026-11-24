@@ -66,8 +66,9 @@ $tImplicitAzi = ['css' => [], 'incarca_app_css' => true, 'fonturi' => ['/assets/
     'main' => 'container', 'flash' => 'panou', 'buton_sus' => false, 'culoare_principala' => '#2f8d5b', 'logo_meniu_mobil' => null,
     'iconite_categorii' => null, 'css_inline' => [], 'newsletter' => null, 'pagina_cont' => 'panou',
     // Cadrul capturat (adoptarea WordPress, pasul 6): fără el, layout-ul nucleului, fără CSP-ul site-ului.
-    // Trackerele (Urmarire): fără declarație, niciunul, iar CSP-ul rămâne cel strict.
-    'cadru' => '', 'runtime' => '', 'csp' => [], 'urmarire' => [], 'previzualizare' => [390, 820, 1440]];
+    // Trackerele (Urmarire): fără declarație, niciunul, iar CSP-ul rămâne cel strict. Seturile runtime-ului (mutarea unui site
+    // WooCommerce, pista A): fără ele, doar scripturile din cap și din final ale manifestului.
+    'cadru' => '', 'runtime' => '', 'runtime_seturi' => [], 'csp' => [], 'urmarire' => [], 'previzualizare' => [390, 820, 1440]];
 $verifica('valorile implicite ale celor ' . count($tImplicitAzi) . ' chei sunt comportamentul de azi (fonturile din nucleu, app.css, .container, '
     . 'panourile, fără buton „sus”, #2f8d5b …)', Tema::IMPLICIT === $tImplicitAzi,
     (string) json_encode(array_diff_assoc(array_map('json_encode', Tema::IMPLICIT), array_map('json_encode', $tImplicitAzi)), JSON_UNESCAPED_SLASHES));

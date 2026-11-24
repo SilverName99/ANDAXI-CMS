@@ -30,6 +30,7 @@ namespace App\Support;
  * | `newsletter` | (lipsă) | `{logo, logo_alt, culori}`: înfățișarea șabloanelor de newsletter, a emailurilor de confirmare și a paginilor publice ale newsletterului (`newsletter()`) |
  * | `cadru` | `""` | `"capturat"`: paginile cu un document în `pagini_capturate` (un site mutat de pe WordPress pe drumul capturat) ies prin cadrul capturat (CadruCapturat), cu politica CSP a site-ului (CspSite) |
  * | `runtime` | `""` | `"divi4@1"`: versiunea runtime-ului compat, al cărei manifest (`public/assets/compat/divi4/v1/sloturi.json`) dă scripturile sloturilor |
+ * | `runtime_seturi` | `[]` | `["comportament", "magazin_wc", "calendar"]`: grupurile de module în plus ale manifestului (`seturi`), adăugate la sfârșitul slotului final (pista A a mutării unui site WooCommerce, docs/MAGAZIN-WC.md) |
  * | `csp` | `{}` | `{"mod": "aplica" \| "raport", "<directivă>": ["<sursă https>", …]}`: politica pe cadrul capturat (`raport`: Report-Only, pe copia de verificare) și sursele ei în plus |
  * | `urmarire` | `[]` | trackerele site-ului adoptat (Urmarire): felul (`gtag`, `gtm`, `clarity`), categoria de acord, adresa scriptului cu `{id}`, sursele CSP exacte pe directivă, cookie-urile de șters la retragere; identificatorii stau în `privat/urmarire.json` (git-ignorat); pornesc doar după acord |
  * | `previzualizare` | `[390, 820, 1440]` | lățimile previzualizării paginilor capturate în admin (pasul 12) |
@@ -80,6 +81,7 @@ final class Tema
         // Adoptarea WordPress pe drumul capturat (pasul 6): cadrul capturat, runtime-ul compat, CSP-ul lui, previzualizarea.
         'cadru' => '',
         'runtime' => '',
+        'runtime_seturi' => [],
         'csp' => [],
         'urmarire' => [],
         'previzualizare' => [390, 820, 1440],
@@ -183,6 +185,12 @@ final class Tema
     public static function runtime(): string
     {
         return (string) self::valori()['runtime'];
+    }
+
+    /** @return list<string> grupurile de module în plus ale runtime-ului (`runtime_seturi`; manifestul → `seturi`), sau [] */
+    public static function runtimeSeturi(): array
+    {
+        return array_values(array_map('strval', (array) self::valori()['runtime_seturi']));
     }
 
     /** @return array{mod?: string, img-src?: list<string>, connect-src?: list<string>, frame-src?: list<string>, font-src?: list<string>, media-src?: list<string>} */
@@ -504,6 +512,15 @@ final class Tema
                             . '(<dialect>@<versiune>, cu public/assets/compat/<dialect>/v<versiune>/sloturi.json)';
                     }
                     break;
+                case 'runtime_seturi':
+                    if (is_array($valoare) && array_is_list($valoare) && count($valoare) <= 10
+                        && array_filter($valoare, static fn (mixed $x): bool => !is_string($x) || preg_match('/^[a-z_]{2,40}$/D', $x) !== 1) === []
+                        && count(array_unique($valoare)) === count($valoare)) {
+                        $valori[$cheie] = $valoare; // seturile lor în manifestul runtime-ului: după bucla cheilor
+                    } else {
+                        $probleme[] = 'runtime_seturi trebuie să fie o listă de nume de seturi (litere mici și „_”), fiecare o dată';
+                    }
+                    break;
                 case 'csp':
                     if (!is_array($valoare) || ($valoare !== [] && array_is_list($valoare))) {
                         $probleme[] = 'csp trebuie să fie un obiect {"mod": "aplica"|"raport", "<directivă>": ["<sursă>", …]}';
@@ -569,6 +586,19 @@ final class Tema
                     }
                     $valori[$cheie] = $harta;
                     break;
+            }
+        }
+        // runtime_seturi: fiecare set e în manifestul runtime-ului ales (manifestul → `seturi`); fără runtime, niciunul.
+        if ($valori['runtime_seturi'] !== []) {
+            $mr = [];
+            $manifest = preg_match('/^([a-z0-9]{2,20})@([1-9][0-9]{0,2})$/D', (string) $valori['runtime'], $mr) === 1
+                ? json_decode((string) @file_get_contents(Paths::public('assets/compat/' . $mr[1] . '/v' . $mr[2] . '/sloturi.json')), true) : null;
+            $seturi = is_array($manifest) && is_array($manifest['seturi'] ?? null) ? $manifest['seturi'] : [];
+            $necunoscute = array_values(array_filter($valori['runtime_seturi'], static fn (string $x): bool => !isset($seturi[$x])));
+            if ($valori['runtime'] === '' || $necunoscute !== []) {
+                $probleme[] = 'runtime_seturi: ' . ($valori['runtime'] === '' ? 'cere un runtime' : 'setul „' . $necunoscute[0] . '” nu e în manifestul runtime-ului '
+                    . $valori['runtime']);
+                $valori['runtime_seturi'] = [];
             }
         }
         return [$valori, $probleme];

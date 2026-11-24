@@ -522,6 +522,10 @@ require_once __DIR__ . '/lib/cereri-rute.php';
 $router = new Router();
 (require $radacina . '/src/Http/rute.php')($router);
 $cereri = cereri_rute($router, $valoare);
+// Rutele condiționate (Router::CONDITII, de exemplu magazin_wc) a căror condiție nu e îndeplinită pe serverul de dezvoltare nu
+// există acolo (cererea ajunge la ruta de după, ca înainte de ele): nu se cer. Garda lor o arată instantaneul rutelor (B0), cu
+// condiția scrisă; pe un site cu condiția le cere tools/dev/test-regiuni.php (G-regiuni).
+$cereri = array_values(array_filter($cereri, static fn (array $c): bool => Router::conditieIndeplinita($c['conditie'] ?? null)));
 $scrie('  INFO  ' . count($router->rute()) . ' rute, ' . count($cereri) . ' cereri pe scenariu');
 
 // Licențele scenariilor, semnate cu cheia de dezvoltare (ca tools/dev/licenta.php).
