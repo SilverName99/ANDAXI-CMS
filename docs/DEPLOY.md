@@ -1274,8 +1274,10 @@ observate, `<style class="et_pb_sticky_module_style">` pe desktop, refăcut la r
 de dinainte revine la eliberare; doar id-uri `et_pb_*`), `divi4/v1/sus.js` (butonul „înapoi sus”: `et-hidden`/`et-visible` peste
 800 px, derularea la 0 în 800 ms), `divi4/v1/ancore.js` (legăturile `#id` din pagină — și cele scrise cu calea paginii — derulate în
 800 ms sub antetul fixat, fără hash; aterizarea cu `#id`: la 0 la `load`, apoi alunecarea după 700 ms; amândouă: salt cu
-`prefers-reduced-motion`, oprite de rotița sau atingerea utilizatorului) și `divi4/v1/aparitii.js` (`et-animated` pe `.et-waypoint` când intră în
-fereastră). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
+`prefers-reduced-motion`, oprite de rotița sau atingerea utilizatorului), `divi4/v1/aparitii.js` (`et-animated` pe `.et-waypoint` când intră în
+fereastră) și `divi4/v1/legaturi.js` (opțiunea Divi „Module Link URL”, `ax-date` → `et_link_options_data`: un clic pe modul — nu pe o
+legătură, un buton sau un câmp din el — încarcă adresa lui, `_blank` într-o filă nouă cu `noopener`; un modul interior câștigă; o
+intrare cu `javascript:`, o clasă sau un `target` necunoscut se sare). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
 la adresele vechi ca WordPress-ul: slash-ul final (`/x` → `/x/`), majusculele cu 200, `?page_id=`, `?p=`, `?cat=`,

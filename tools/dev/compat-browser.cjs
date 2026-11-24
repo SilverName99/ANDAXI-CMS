@@ -453,6 +453,23 @@ const formularDivi = (n, cale) => '<div id="et_pb_contact_form_' + n + '" class=
   + '<input type="hidden" id="_wpnonce-et-pb-contact-form-submitted-' + n + '" name="_wpnonce-et-pb-contact-form-submitted-' + n + '" value="53df77e5d9" />'
   + '<input type="text" name="ax_capcana" value="" tabindex="-1" autocomplete="off" aria-hidden="true" class="ax-capcana" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">'
   + '<input type="hidden" name="_wp_http_referer" value="' + cale + '" /></form></div></div>';
+// Modulele cu legătură (opțiunea Divi „Module Link URL”, ca subsolul live: module text fără <a>, cu et_clickable; inventate).
+const CORP_LEGATURI = '<div id="page-container"><div id="et-main-area"><div class="et-l et-l--post"><div class="et_builder_inner_content">'
+  + '<div class="et_pb_module et_pb_text et_pb_text_0 et_clickable proba-l0"><div class="et_pb_text_inner"><p>Contact</p></div></div>'
+  + '<div class="et_pb_module et_pb_text et_pb_text_1 et_clickable proba-l1"><div class="et_pb_text_inner"><p><a class="proba-l1-a" href="/pagina/baza?din=a">'
+  + 'legătura proprie</a></p><p><input class="proba-l1-i" value="x"></p></div></div>'
+  + '<div class="et_pb_module et_pb_text et_pb_text_2 et_clickable proba-l2"><p>Filă nouă</p></div>'
+  + '<div class="et_pb_row et_pb_row_3 et_clickable proba-l3"><div class="et_pb_module et_pb_text et_pb_text_4 et_clickable proba-l4"><p>Interior</p></div>'
+  + '<p class="proba-l3-p">Exterior</p></div>'
+  + '<div class="et_pb_module et_pb_text et_pb_text_5 et_clickable proba-l5"><p>Refuzat</p></div>'
+  + '</div></div></div></div>\n';
+const STIL_LEGATURI = 'body{margin:0}.et_clickable{cursor:pointer;padding:20px;margin:10px}.proba-l3{padding:30px}';
+const LEGATURI = [
+  { class: 'et_pb_text_0', url: '/pagina/baza?din=modul', target: '_self' }, { class: 'et_pb_text_1', url: '/pagina/baza?din=modul1', target: '_self' },
+  { class: 'et_pb_text_2', url: '/pagina/baza?din=fila', target: '_blank' }, { class: 'et_pb_row_3', url: '/pagina/baza?din=exterior', target: '_self' },
+  { class: 'et_pb_text_4', url: '/pagina/baza?din=interior', target: '_self' }, { class: 'et_pb_text_5', url: 'javascript:alert(1)', target: '_self' },
+  { class: 'x y', url: '/pagina/baza?din=rau', target: '_self' }, { class: 'et_pb_text_5', url: '/pagina/baza?din=rau', target: '_top' }];
+
 const CORP_FORMULAR = '<div id="page-container"><div id="et-main-area"><div class="proba-pagina">' + formularDivi(0, '/pagina/formular') + '</div>'
   + '<footer class="et-l et-l--footer"><div class="proba-subsol">' + formularDivi(1, '/pagina/formular') + '</div></footer></div></div>\n';
 const STIL_FORMULAR = 'body{margin:0}.et_contact_error{border:1px solid #f00!important}.et_pb_contact_form_label{display:none}';
@@ -568,6 +585,7 @@ const PAGINI = {
   toggle: { corp: CORP_TOGGLE, stil: STIL_TOGGLE },
   'toggle-dublu': { corp: CORP_TOGGLE, stil: STIL_TOGGLE, cap: capImplicit().concat(capImplicit()), final: finalImplicit().concat(finalImplicit()) },
   multiview: { corp: CORP_MV, stil: STIL_MV },
+  legaturi: { corp: CORP_LEGATURI, stil: STIL_LEGATURI, date: Object.assign({}, DATE_IMPLICITE, { et_link_options_data: LEGATURI }) },
   formular: { corp: CORP_FORMULAR, stil: STIL_FORMULAR, date: Object.assign({}, DATE_IMPLICITE, { et_pb_custom: Object.assign({}, DATE_IMPLICITE.et_pb_custom, TEXTE_FORMULAR) }) },
   derulare: { corp: CORP_DERULARE, stil: STIL_DERULARE, date: Object.assign({}, DATE_IMPLICITE, { et_pb_sticky_elements: CONFIG_STICKY }) },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -2697,6 +2715,61 @@ async function verificaSticky(browser) {
   }
 }
 
+async function verificaLegaturile(browser) {
+  scrie('== legăturile modulelor (opțiunea Divi „Module Link URL”, et_link_options_data): subsolul ca pe live');
+  // O pagină nouă pentru fiecare clic (clicul o poate părăsi); adresa la care a ajuns fila și filele noi deschise.
+  const clic = async (selector, pozitie, pregatire) => {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/legaturi' });
+    const f = page.mainFrame();
+    const s = await stare(f);
+    if (pregatire) {
+      await f.evaluate(pregatire);
+    }
+    const file = [];
+    context.on('page', (p) => file.push(p));
+    const inainte = page.url();
+    await page.click(selector, pozitie ? { position: pozitie } : {});
+    await page.waitForTimeout(700);
+    const rez = { adresa: page.url().slice(BAZA.length), aramas: page.url() === inainte, file: [], curat: curate(ev, s), detalii: detaliiCurate(ev, s) };
+    for (const p of file) {
+      await p.waitForLoadState('load').catch(() => {});
+      rez.file.push({ adresa: p.url().slice(BAZA.length), opener: await p.evaluate(() => window.opener === null ? 'null' : 'are').catch(() => '?') });
+    }
+    if (rez.aramas) {
+      rez.diag = await f.evaluate(() => window.axCompat.diagnostic().filter((x) => /^legaturi/.test(x)));
+      rez.deschideri = await f.evaluate(() => window.__deschideri || null);
+    }
+    await context.close();
+    return rez;
+  };
+  const a = await clic('.proba-l0 p');
+  verifica('un clic pe modulul cu legătură (_self) încarcă adresa lui în aceeași filă', a.curat && a.adresa === '/pagina/baza?din=modul' && a.file.length === 0, a);
+  const b = await clic('.proba-l1-a');
+  verifica('un clic pe un <a> din modul merge la adresa legăturii, nu la a modulului', b.adresa === '/pagina/baza?din=a', b);
+  const c = await clic('.proba-l1-i');
+  verifica('un clic într-un câmp de formular din modul nu navighează', c.aramas && c.file.length === 0, c);
+  const d = await clic('.proba-l1', { x: 3, y: 3 });
+  verifica('un clic pe marginea modulului care are și un <a> duce la adresa modulului', d.adresa === '/pagina/baza?din=modul1', d);
+  const e = await clic('.proba-l2 p');
+  verifica('_blank: o filă nouă cu adresa modulului, fără acces la pagina de acum (noopener); fila curentă rămâne', e.aramas && e.file.length === 1
+    && e.file[0].adresa === '/pagina/baza?din=fila' && e.file[0].opener === 'null', e);
+  const g = await clic('.proba-l4 p');
+  verifica('un modul cu legătură într-un rând cu legătură: clicul pe modul duce doar la adresa lui', g.adresa === '/pagina/baza?din=interior' && g.file.length === 0, g);
+  const h = await clic('.proba-l3-p');
+  verifica('clicul pe rând, în afara modulului interior, duce la adresa rândului', h.adresa === '/pagina/baza?din=exterior', h);
+  const i = await clic('.proba-l5 p');
+  verifica('intrările greșite (javascript:, o clasă cu spațiu, un target necunoscut) sunt refuzate și notate; modulul nu navighează', i.aramas && i.file.length === 0
+    && i.diag.length === 3 && i.diag.every((x) => x === 'legaturi: intrare refuzată în „et_link_options_data”'), i);
+  const j = await clic('.proba-l2 p', null, () => {
+    window.__deschideri = [];
+    window.open = (u, t, f) => { window.__deschideri.push([u, t, f]); return null; };
+    window.axCompat.legaturi.aplica();
+    window.axCompat.legaturi.aplica();
+  });
+  verifica('axCompat.legaturi.aplica() de două ori în plus: un singur ascultător (o singură deschidere la clic)', j.aramas
+    && egal(j.deschideri, [['/pagina/baza?din=fila', '_blank', 'noopener']]), j);
+}
+
 async function verificaSusSiAncorele(browser) {
   scrie('== sus, ancore și apariții (felia 2–3, sus.md, ancore-aterizare.md, aparitii.md): butonul „înapoi sus”, derularea lină la ancore, '
     + 'aterizarea cu #hash, et-animated');
@@ -3055,6 +3128,7 @@ async function main() {
     await verificaToggle(browser);
     await verificaMultiView(browser);
     await verificaFormularul(browser);
+    await verificaLegaturile(browser);
     await verificaSticky(browser);
     await verificaSusSiAncorele(browser);
     await verificaClaseleUa(browser);
