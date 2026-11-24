@@ -26,8 +26,9 @@ if (!defined('WP_PROBA_SITE')) {
 /**
  * O pagină Divi inventată.
  *
- * @param array{cale: string, titlu: string, id: int, formular?: bool, inCorp?: string, seoTitlu?: string, descriere?: string} $pg
- *   `seoTitlu`, `descriere`: valorile SEO ale paginii (AIOSEO, din inventar), scrise în head cu escaparea locului lor (ca jetoanele)
+ * @param array{cale: string, titlu: string, id: int, formular?: bool, inCorp?: string, seoTitlu?: string, descriere?: string, stil?: string} $pg
+ *   `seoTitlu`, `descriere`: valorile SEO ale paginii (AIOSEO, din inventar), scrise în head cu escaparea locului lor (ca jetoanele);
+ *   `stil`: CSS-ul critic al paginii, în `<style id="et-critical-inline-css">` (Divi pune acolo și regulile subsolului unor pagini)
  * @param array{url: string, nonce: string, ua: string, an: string, antet: int, subsol: int, corp404?: int, meniu: list<array{0: string, 1: string}>,
  *   tip?: string, cale404?: string} $o
  */
@@ -54,6 +55,7 @@ function paginaDiviProba(array $pg, array $o): string
         . "<link rel='stylesheet' id='proba-stil-css' href='{$u}/wp-content/themes/Divi/style.css?ver=9.9.9' media='all' />\n"
         . "<link rel='stylesheet' id='et-core-unified-{$layout}-{$id}-cached-inline-styles' href='{$u}/wp-content/et-cache/{$id}/et-core-unified-{$layout}-{$id}.min.css' media='all' />\n"
         . "<link rel='preload' id='proba-tarziu-css' href='{$u}/wp-content/et-cache/{$id}/et-proba-late.css?ver=1' as='style' media='all' onload=\"this.onload=null;this.rel='stylesheet'\" />\n"
+        . (($pg['stil'] ?? '') !== '' ? '<style id="et-critical-inline-css">' . $pg['stil'] . "</style>\n" : '')
         . "<script id=\"proba-biblioteca-js\" src=\"{$u}/wp-includes/js/proba/biblioteca.min.js?ver=1.0.0\"></script>\n"
         . "<script id=\"proba-stat-js\" src=\"https://www.googletagmanager.com/proba.js?id=G-PROBA123\" async></script>\n"
         . "<link rel=\"https://api.w.org/\" href=\"{$u}/wp-json/\" />\n"

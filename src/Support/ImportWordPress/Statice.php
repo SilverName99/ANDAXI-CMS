@@ -27,7 +27,8 @@ use App\Support\ImportWordPress\Captura\Normalizare;
  *  - plafoanele: cel mult MAX_FISIERE fișiere și MAX_OCTETI octeți în total (NU);
  *  - stilurile comune ale pachetului (`import-wordpress.json` → `stiluri_comune`, StiluriComune): regulile unui layout Theme
  *    Builder rămase vechi în foaia `et-cache` a unor pagini se înlocuiesc cu cele ale paginii-sursă, în copiile publicate (sha256-ul
- *    copiei din manifest e al foii rescrise); `stiluri` din rezultat spune ce pagini și ce foi.
+ *    copiei din manifest e al foii rescrise); `stiluri` din rezultat spune ce pagini și ce foi; o pagină care diferă doar prin
+ *    `<style>`-ul din HTML e ATENȚIE (`stiluri.atentii`), o foaie care nu se poate citi e NU.
  * Manifestul, cu sha256-ul sursei și al copiei: `storage/import-wordpress/statice.json` (îl citesc `diagnostic.php --capturat` și
  * verificarea adoptării, CadruCapturat::verificaFisiereManifest).
  */
@@ -42,11 +43,11 @@ final class Statice
     /**
      * @param array<string, string> $stiluriComune `import-wordpress.json` → `stiluri_comune` (marcaj → calea paginii-sursă), validat
      * @return array{copiate: int, octeti: int, necopiate: list<array{cale: string, motiv: string}>, probleme: list<string>, fonturi: int,
-     *   manifest: array<string, mixed>, stiluri: array{pagini: list<string>, foi: list<string>}}
+     *   manifest: array<string, mixed>, stiluri: array{pagini: list<string>, foi: list<string>, atentii: list<string>}}
      */
     public static function publica(string $dosarWp, string $dosarCaptura, string $shaRaport, string $url, string $docroot, bool $aplica, array $stiluriComune = []): array
     {
-        $rez = ['copiate' => 0, 'octeti' => 0, 'necopiate' => [], 'probleme' => [], 'fonturi' => 0, 'manifest' => [], 'stiluri' => ['pagini' => [], 'foi' => []]];
+        $rez = ['copiate' => 0, 'octeti' => 0, 'necopiate' => [], 'probleme' => [], 'fonturi' => 0, 'manifest' => [], 'stiluri' => ['pagini' => [], 'foi' => [], 'atentii' => []]];
         try {
             $dosar = DosarCapturi::deschideVerificat($dosarCaptura, $shaRaport, $url);
         } catch (EroareCaptura $e) {
@@ -122,14 +123,21 @@ final class Statice
                 }
                 try {
                     $text = $aplica ? @file_get_contents(rtrim($docroot, '/') . $f['publicat']) : CopiereStatica::continut($dosarWp, $cale, $normalizare);
-                } catch (EroareCaptura) {
-                    $text = false;
+                } catch (EroareCaptura $e) {
+                    $rez['probleme'][] = 'stiluri_comune: foaia ' . $cale . ' nu se poate citi: ' . $e->getMessage();
+                    continue;
                 }
-                if (is_string($text)) {
-                    $foiCss[$cale] = $text;
+                if (!is_string($text)) {
+                    $rez['probleme'][] = 'stiluri_comune: copia foii ' . $cale . ' nu se poate citi';
+                    continue;
                 }
+                $foiCss[$cale] = $text;
             }
-            $fisiere = self::stiluriComune($dosar, $fisiere, $foiCss, $docroot, $aplica, $stiluriComune, $rez);
+            // `<style>`-urile paginilor trec prin același drum ca foile copiate (adresele proprii relative), apoi prin aceeași comparație.
+            if ($rez['probleme'] === []) {
+                $fisiere = self::stiluriComune($dosar, $fisiere, $foiCss, $docroot, $aplica, $stiluriComune, $rez,
+                    static fn (string $css): string => CopiereStatica::textCss($css, $normalizare));
+            }
         }
         // Fonturile Google ale capturii (FonturiGoogle: în `fonturi/` al capturii, sha256-ul fiecăruia în manifestul verificat).
         $fonturi = [];
@@ -162,15 +170,17 @@ final class Statice
     /**
      * Stilurile comune (StiluriComune::unifica): paginile HTML ale capturii și foile `et-cache` (`$foi`, calea → textul copiei). La
      * copiere, o foaie rescrisă se scrie atomic, iar intrarea ei din manifest primește sha256-ul și mărimea noi; la plan, doar se
-     * spune ce pagini și ce foi s-ar schimba și ce probleme ar fi.
+     * spune ce pagini și ce foi s-ar schimba și ce probleme ar fi. Paginile care diferă doar prin `<style>`-ul din HTML ies în
+     * `stiluri.atentii` (ATENȚIE, nu NU).
      *
      * @param list<array<string, mixed>> $fisiere
      * @param array<string, string> $foi
      * @param array<string, string> $config
      * @param array<string, mixed> $rez
+     * @param callable(string): string $css drumul CSS-ului din `<style>`-urile paginilor (CopiereStatica::textCss)
      * @return list<array<string, mixed>>
      */
-    private static function stiluriComune(DosarCapturi $dosar, array $fisiere, array $foi, string $docroot, bool $aplica, array $config, array &$rez): array
+    private static function stiluriComune(DosarCapturi $dosar, array $fisiere, array $foi, string $docroot, bool $aplica, array $config, array &$rez, callable $css): array
     {
         $pagini = [];
         foreach ($dosar->toate() as $url => $i) {
@@ -186,11 +196,11 @@ final class Statice
                 }
             }
         }
-        $u = StiluriComune::unifica($pagini, $foi, $config);
+        $u = StiluriComune::unifica($pagini, $foi, $config, $css);
         foreach ($u['probleme'] as $p) {
             $rez['probleme'][] = $p;
         }
-        $rez['stiluri'] = ['pagini' => $u['pagini'], 'foi' => array_keys($u['foi'])];
+        $rez['stiluri'] = ['pagini' => $u['pagini'], 'foi' => array_keys($u['foi']), 'atentii' => $u['atentii']];
         if (!$aplica) {
             return $fisiere;
         }

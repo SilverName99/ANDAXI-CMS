@@ -195,11 +195,21 @@ try {
     file_put_contents($public . '/wp-includes/css/dashicons.min.css', ".dashicons{display:inline-block}\n");
     $i = \App\Support\ImportWordPress\ImportWordPress::planifica($public, $url, [], ['fara' => ['articole']], [])['inventar'];
     $prima = (int) $i->site['prima_pagina'];
+    // Subsolul Theme Builder (pachetul: import-wordpress.json → stiluri_comune, subsolul din „/”), ca pe site-ul real: pe Acasă și pe
+    // cele mai multe pagini în foaia et-cache, cu adresa proprie absolută a pozei de fundal (copia o face relativă); pe Camere regulile
+    // vechi rămase în cache; pe Contact același subsol doar în <style>-ul critic din HTML, cu adresa absolută și scris altfel (ca pe
+    // Contact, Galerie, Politica și Cookie Policy pe site-ul real, unde planul de pe server dădea NU); pe Politica o regulă veche doar
+    // în <style> (ATENȚIE, nu NU).
+    $subsolNou = "\n.et_pb_section_0_tb_footer.et_pb_section{padding-top:40px}\n.et_pb_text_0_tb_footer{font-size:15px}\n"
+        . 'div.et_pb_section_0_tb_footer{background-image:url(' . $url . "/wp-content/themes/Divi/images/sigla.png)!important}\n"
+        . '@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:13px}}';
+    $stilInline = ['contact' => str_replace(['{', ';', '}'], [' { ', '; ', " }\n"], $subsolNou), 'politica-de-confidentialitate' => '.et_pb_text_0_tb_footer{font-size:11px}'];
     $paginiProba = [];
     foreach ($i->pagini as $id => $pg) {
         if ($pg['stare'] === 'publish' && !$pg['parola']) {
             $paginiProba[] = ['cale' => $id === $prima ? '/' : (string) ($pg['cale_wp'] ?? $pg['cale']), 'titlu' => (string) $pg['titlu'], 'id' => (int) $id,
-                'formular' => $pg['slug'] === 'contact', 'seoTitlu' => (string) ($i->seo[$id]['titlu'] ?? ''), 'descriere' => (string) ($i->seo[$id]['descriere'] ?? '')];
+                'formular' => $pg['slug'] === 'contact', 'seoTitlu' => (string) ($i->seo[$id]['titlu'] ?? ''), 'descriere' => (string) ($i->seo[$id]['descriere'] ?? ''),
+                'stil' => $stilInline[$pg['slug']] ?? ''];
         }
     }
     $captura = $site . '/capturat';
@@ -217,17 +227,15 @@ try {
     $cere('/wp-content/themes/Divi/core/fonts/iconite.woff2', 'font');
     $cere('/wp-content/themes/Divi/js/proba.min.js', 'script');
     $cere('/wp-includes/css/dashicons.min.css', 'foaie');
-    // Subsolul Theme Builder în foaia et-cache a fiecărei pagini (pachetul: import-wordpress.json → stiluri_comune, subsolul din „/”):
-    // pe Camere regulile vechi, rămase din cache (ca pe site-ul real), pe celelalte cele de acum, ca pe Acasă.
-    $subsolNou = "\n.et_pb_section_0_tb_footer.et_pb_section{padding-top:40px}\n.et_pb_text_0_tb_footer{font-size:15px}\n"
-        . '@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:13px}}';
+    // Foaia et-cache a fiecărei pagini (subsolul, mai sus): pe Camere regulile vechi, pe paginile cu subsolul în <style> nimic, pe
+    // celelalte cele de acum, ca pe Acasă.
     $foiLate = [];
     foreach ($paginiProba as $pg) {
         $late = '/wp-content/et-cache/' . $pg['id'] . '/et-proba-late.css';
         @mkdir(dirname($public . $late), 0775, true);
         $foiLate[$pg['cale']] = [$late, '.et_pb_section_' . $pg['id'] . '{padding:1px}' . ($pg['cale'] === '/camere/'
             ? "\n.et_pb_section_0_tb_footer{padding:9px}\n@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:11px}.et_pb_section_" . $pg['id'] . '{margin:0}}'
-            : $subsolNou) . "\n"];
+            : ($pg['stil'] !== '' ? '' : $subsolNou)) . "\n"];
         file_put_contents($public . $late, $foiLate[$pg['cale']][1]);
         $cere($late, 'foaie');
     }
@@ -369,6 +377,8 @@ PHP);
     $verifica('planul: cod 0, niciun NU; captura găsită, planul importului și al fișierelor statice fără probleme, PHP-ul web cu sodium; nimic schimbat',
         $c === 0 && !preg_match('/^\s+NU /m', $o) && str_contains($o, 'captura site-ului live: ' . $captura) && str_contains($o, 'planul importului: fără probleme')
         && str_contains($o, 'planul fișierelor statice: fără probleme') && str_contains($o, 'stilurile comune (_tb_footer din /): /camere/ (1 foi de rescris)')
+        && str_contains($o, 'stiluri_comune._tb_footer: /politica-de-confidentialitate/ are alte reguli decât / doar în <style>-ul din HTML (nu se rescrie; 1 reguli față de 4')
+        && !str_contains($o, '/contact/ are alte reguli')
         && str_contains($o, 'sodium da') && str_contains($o, 'PLAN: site-ul n-a fost schimbat')
         && !is_dir($dosarSite . '/public_html.nou') && $amprentaArbore($public) === $amprentaWp, $scurt($o));
     // Întâi până după pregătire (ca o noapte în doi pași), apoi pregătirea din nou: APP_KEY se scrie o dată, rămâne la o reluare,
@@ -396,14 +406,17 @@ PHP);
     // rescrise (diagnostic --capturat îl verifică).
     [$foaieCamere, $sursaCamere] = $foiLate['/camere/'];
     $idCamere = (string) preg_replace('#^/wp-content/et-cache/(\d+)/.*$#', '$1', $foaieCamere);
-    $asteptatCamere = '.et_pb_section_' . $idCamere . "{padding:1px}\n@media only screen and (max-width:980px){.et_pb_section_" . $idCamere . "{margin:0}}\n" . $subsolNou . "\n";
+    $asteptatCamere = '.et_pb_section_' . $idCamere . "{padding:1px}\n@media only screen and (max-width:980px){.et_pb_section_" . $idCamere . "{margin:0}}\n"
+        . str_replace($url, '', $subsolNou) . "\n";
     $statice = json_decode((string) file_get_contents($site . '/storage/import-wordpress/statice.json'), true);
     $intrareCamere = array_values(array_filter((array) ($statice['fisiere'] ?? []), static fn (array $f): bool => ($f['cale'] ?? '') === $foaieCamere))[0] ?? [];
     $servitCamere = $cerere($foaieCamere . '?ver=1')['corp'];
-    $alteSchimbate = array_keys(array_filter($foiLate, static fn (array $x): bool => $x[0] !== $foaieCamere && $cerere($x[0] . '?ver=1')['corp'] !== $x[1]));
-    $randStiluri = str_contains($o0 . $o1, 'stilurile comune (_tb_footer din /): /camere/ (1 foi rescrise)');
-    $verifica('stilurile comune (subsolul din „/”): foaia et-cache a Camerelor rescrisă (regulile vechi scoase, cele de pe Acasă la sfârșit), celelalte '
-        . (count($foiLate) - 1) . ' neschimbate, manifestul cu sha256-ul foii rescrise',
+    $alteSchimbate = array_keys(array_filter($foiLate, static fn (array $x): bool => $x[0] !== $foaieCamere && $cerere($x[0] . '?ver=1')['corp'] !== str_replace($url, '', $x[1])));
+    $randStiluri = str_contains($o0 . $o1, 'stilurile comune (_tb_footer din /): /camere/ (1 foi rescrise)') && str_contains($o1, '/politica-de-confidentialitate/ are alte reguli')
+        && !str_contains($o0 . $o1, '/contact/ are alte reguli');
+    $verifica('stilurile comune (subsolul din „/”): foaia et-cache a Camerelor rescrisă (regulile vechi scoase, cele de pe Acasă la sfârșit, cu adresa relativă), '
+        . 'celelalte ' . (count($foiLate) - 1) . ' neschimbate, manifestul cu sha256-ul foii rescrise; Contact (același subsol doar în <style>, cu adresa absolută) '
+        . 'egal, Politica (o regulă veche doar în <style>) ATENȚIE, nu NU',
         $randStiluri && $servitCamere === $asteptatCamere && $alteSchimbate === []
         && ($intrareCamere['sha256_publicat'] ?? '') === hash('sha256', $asteptatCamere) && ($intrareCamere['sha256_sursa'] ?? '') === hash('sha256', $sursaCamere),
         json_encode(['randul' => $randStiluri, 'servit' => $servitCamere, 'alte' => $alteSchimbate, 'manifest' => $intrareCamere], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));

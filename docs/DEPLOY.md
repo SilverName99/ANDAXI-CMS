@@ -883,10 +883,14 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
   antetului și subsolului Theme Builder (selectorii cu `_tb_header`, `_tb_footer`) în foaia `et-cache` a fiecărei pagini și o
   reface doar când pagina e salvată, deci după o reproiectare a subsolului unele pagini rămân cu regulile vechi (pe `pensiune`,
   Camere și Obiective turistice arătau subsolul vechi). Pachetul numește doar pagina-sursă (`{"_tb_footer": "/"}`; niciun CSS al
-  clientului în git); la copiere, o pagină ale cărei reguli cu marcajul diferă de ale sursei (după normalizare: forma CPT a 404-ului,
-  spațiile, regula `font-variant-ligatures`) primește în foaia ei `et-cache` regulile sursei în locul celor vechi (restul foii octet
-  cu octet; manifestul ține sha256-ul foii rescrise). O pagină care diferă, dar își ține regulile doar în `<style>`-ul din HTML, sau
-  o pagină-sursă fără reguli e NU. Planul (`--plan`) spune ce pagini s-ar schimba. Pe un site deja adoptat, o schimbare a regulii
+  clientului în git); la copiere, o pagină ale cărei reguli cu marcajul diferă de ale sursei primește în foaia ei `et-cache`
+  regulile sursei în locul celor vechi (restul foii octet cu octet; manifestul ține sha256-ul foii rescrise). Comparația: regulile
+  din `<style>`-urile paginilor (Divi pune acolo, în CSS-ul critic, subsolul unor pagini) trec întâi prin același drum ca foile
+  copiate (`CopiereStatica::textCss`: adresele proprii relative), apoi totul prin aceeași normalizare (forma CPT a 404-ului,
+  spațiile, ordinea declarațiilor și a selectorilor, `! important`, adresele din `url()`, regula `font-variant-ligatures`). O pagină
+  care diferă doar prin `<style>`-ul din HTML (nerescris) e ATENȚIE, cu un rezumat (câte reguli, câte lipsesc, câte sunt în plus,
+  primul selector diferit), și publicarea merge mai departe; NU sunt doar o pagină-sursă lipsă sau fără reguli și o foaie care nu
+  se poate citi. Planul (`--plan`) spune ce pagini s-ar schimba. Pe un site deja adoptat, o schimbare a regulii
   (sau a codului ei) ajunge în foi doar cu o nouă publicare a fișierelor statice, un rând după `deploy/actualizeaza.sh … --aplica`
   (din WordPress-ul păstrat în `public_html.vechi`, cu captura adoptării; `--captura=`/`--sha-raport=` dacă adoptarea le-a primit;
   repetat de G-deploy-wp):

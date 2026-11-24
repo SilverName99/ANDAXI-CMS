@@ -308,6 +308,19 @@ final class CopiereStatica
     }
 
     /**
+     * CSS-ul cum îl scrie copia: adresele proprii relative (Normalizare::css), iar fonturile Google aduse printr-un @import al unei
+     * foi proprii (recenzia 2, R1-8) trec pe copia locală (FonturiGoogle::cale, aceeași cheie ca în pagini); CSP-ul site-ului
+     * (style-src 'self') ar bloca adresa Google. Același drum și pentru CSS-ul din `<style>`-urile paginilor, când se compară cu
+     * foile (StiluriComune).
+     */
+    public static function textCss(string $text, ?Normalizare $normalizare): string
+    {
+        $scris = $normalizare !== null ? $normalizare->css($text) : $text;
+        return (string) preg_replace_callback('/@import\s+(?:url\(\s*)?([\'"]?)((?:https?:)?\/\/fonts\.googleapis\.com\/css[^\'")\s;]*)\1\s*\)?/i',
+            static fn (array $m): string => '@import url("' . FonturiGoogle::cale($m[2]) . '")', $scris);
+    }
+
+    /**
      * Textul pe care copiaza() l-ar scrie pentru `$cale` (CSS-ul rescris de Normalizare), fără să scrie nimic: aceleași verificări,
      * dintr-o singură deschidere. Pentru planul fișierelor statice (Statice, stilurile comune).
      *
@@ -499,13 +512,7 @@ final class CopiereStatica
         if ($ext === 'svg' && ($p = SvgSigur::problemaFisierNesigur($text)) !== null) {
             throw $nu('SVG refuzat de SvgSigur (' . $p . '): ' . $cale);
         }
-        $scris = $ext === 'css' && $normalizare !== null ? $normalizare->css($text) : $text;
-        // Fonturile Google aduse printr-un @import al unei foi proprii (recenzia 2, R1-8): legătura trece pe copia locală
-        // (FonturiGoogle::cale, aceeași cheie ca în pagini); CSP-ul site-ului (style-src 'self') ar bloca adresa Google.
-        if ($ext === 'css') {
-            $scris = (string) preg_replace_callback('/@import\s+(?:url\(\s*)?([\'"]?)((?:https?:)?\/\/fonts\.googleapis\.com\/css[^\'")\s;]*)\1\s*\)?/i',
-                static fn (array $m): string => '@import url("' . FonturiGoogle::cale($m[2]) . '")', $scris);
-        }
+        $scris = $ext === 'css' ? self::textCss($text, $normalizare) : $text;
         if ($out !== null && fwrite($out, $scris) !== strlen($scris)) {
             throw new EroareCaptura('scriere', 'nu pot scrie copia lui ' . $cale);
         }

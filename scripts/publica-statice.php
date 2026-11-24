@@ -15,7 +15,7 @@ declare(strict_types=1);
  * prin bin/platforma cu --public=public_html.nou (App\Support\Paths::public). Manifestul copiilor:
  * `storage/import-wordpress/statice.json`. Cu `stiluri_comune` în `import-wordpress.json` al pachetului (`{"_tb_footer": "/"}`), regulile
  * subsolului (antetului) Theme Builder rămase vechi în foile `et-cache` ale unor pagini se iau din cele ale paginii numite
- * (StiluriComune); planul spune ce pagini s-ar schimba.
+ * (StiluriComune); planul spune ce pagini s-ar schimba. O pagină care diferă doar prin `<style>`-ul din HTML (nerescris) e ATENȚIE.
  *
  * Coduri de ieșire: 0 fără NU; 1 măcar un NU (nimic nu se copiază peste o coliziune; o copie cu alt sha256 decât în captură se scoate);
  * 2 folosire greșită.
@@ -69,6 +69,9 @@ if ($problemeStiluri !== []) {
 $r = Statice::publica((string) $o['wp'], $captura, $sha, (string) $o['url'], $docroot, (bool) $o['aplica'], $stiluri);
 foreach ($r['necopiate'] as $n) {
     $scrie('  ATENȚIE', 'necopiat (refuzat de verificări): ' . $n['cale'] . ': ' . $n['motiv']);
+}
+foreach ($r['stiluri']['atentii'] as $a) {
+    $scrie('  ATENȚIE', $a);
 }
 foreach ($r['probleme'] as $p) {
     $scrie('  NU', $p);

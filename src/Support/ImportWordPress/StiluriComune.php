@@ -13,18 +13,17 @@ namespace App\Support\ImportWordPress;
  * `{"_tb_footer": "/"}`); niciun CSS al clientului nu stă în pachet.
  *
  * La publicarea fișierelor statice: regulile cu marcajul din foile `et-cache` și din `<style>`-urile paginii-sursă sunt referința.
- * O altă pagină a cărei mulțime de reguli cu marcajul diferă de referință (comparată după normalizare: forma CPT a aceluiași
- * layout — `.et-db` și `#et-boc .et-l` în plus în selectori, pe paginile fără constructor și pe 404 — adusă la forma paginii,
- * spațiile strânse, regula `font-variant-ligatures` pe care Divi o scrie diferit pe fiecare pagină ignorată) primește, în foile ei `et-cache` care au reguli cu marcajul, regulile ei scoase (și din `@media`, unde un bloc gol
- * dispare) și regulile sursei adăugate la sfârșitul primei dintre ele (cu blocurile `@media` ale lor). O pagină care diferă, dar
- * își ține regulile doar în `<style>`-ul din HTML, nu se poate schimba aici: rămâne, cu o problemă raportată. Restul foii rămâne
- * octet cu octet.
+ * Foile și `<style>`-urile trec prin același drum înainte de comparație (`$css`: textul copiei publicate, cu adresele proprii
+ * relative), apoi prin aceeași normalizare (multime()). O altă pagină a cărei mulțime de reguli cu marcajul diferă de referință
+ * primește, în foile ei `et-cache` care au reguli cu marcajul, regulile ei scoase (și din `@media`, unde un bloc gol dispare) și
+ * regulile sursei adăugate la sfârșitul primei dintre ele (cu blocurile `@media` ale lor); restul foii rămâne octet cu octet. O
+ * pagină care diferă doar prin `<style>`-ul din HTML (pe care nu-l rescriem) e doar o ATENȚIE, cu un rezumat al diferenței:
+ * nu oprește publicarea. Doar o pagină-sursă lipsă sau fără reguli e o problemă (NU).
  */
 final class StiluriComune
 {
     /** Marcajele permise (selectorii layout-urilor Theme Builder). */
     public const MARCAJE = ['_tb_footer', '_tb_header'];
-
 
     /**
      * Regula pachetului validă? `{"_tb_footer": "/"}`: un marcaj din MARCAJE → calea paginii-sursă.
@@ -91,22 +90,99 @@ final class StiluriComune
         return ['rest' => $rest, 'reguli' => $reguli, 'lista' => $lista];
     }
 
-    /** Mulțimea normalizată a regulilor cu marcajul (pentru comparația între pagini). @param list<array{0: string, 1: string, 2: string}> $lista @return list<string> */
+    /**
+     * Mulțimea normalizată a regulilor cu marcajul, pentru comparația între pagini (aceeași pentru foi și pentru `<style>`):
+     *  - selectorii: forma CPT a aceluiași layout (paginile fără constructor, 404-ul: `.et-db` și `#et-boc .et-l` în plus) adusă
+     *    la forma paginii, spațiile strânse (și în jurul combinatorilor), lista de selectori sortată;
+     *  - declarațiile: proprietatea cu litere mici, valoarea cu spațiile strânse, `! important` → `!important`, adresele din
+     *    `url()` fără ghilimele și fără schemă și gazdă (`https://gazda/x`, `//gazda/x` → `/x`), declarațiile sortate;
+     *  - `@media`/`@supports`: spațiile strânse, litere mici; regulile doar cu `font-variant-ligatures` (Divi le scrie diferit pe
+     *    fiecare pagină) ignorate.
+     *
+     * @param list<array{0: string, 1: string, 2: string}> $lista
+     * @return list<string>
+     */
     public static function multime(array $lista): array
     {
         $rez = [];
         foreach ($lista as [$cap, $selector, $decl]) {
-            $d = (string) preg_replace('/\s+/', '', $decl);
-            if (preg_match('/^font-variant-ligatures:[a-z-]+;?$/i', $d) === 1) {
+            $declaratii = [];
+            foreach (self::desparte($decl, ';') as $d) {
+                $p = strpos($d, ':');
+                if ($p === false) {
+                    continue;
+                }
+                $declaratii[] = strtolower(trim(substr($d, 0, $p))) . ':' . self::valoare(substr($d, $p + 1));
+            }
+            $declaratii = array_values(array_unique($declaratii));
+            if ($declaratii === [] || array_filter($declaratii, static fn (string $d): bool => !str_starts_with($d, 'font-variant-ligatures:')) === []) {
                 continue;
             }
-            // forma CPT a aceluiași layout (paginile fără constructor, 404-ul): `.et-db` și `#et-boc .et-l` în plus în selectori
-            $s = (string) preg_replace('/(?:\s*#et-boc\s+\.et-l)+\s+/', ' ', str_replace('.et-db', '', $selector));
-            $s = (string) preg_replace('/\s*([,>+~])\s*/', '$1', (string) preg_replace('/\s+/', ' ', $s));
-            $rez[] = trim((string) preg_replace('/\s+/', ' ', $cap)) . '|' . trim($s) . '|' . rtrim($d, ';');
+            sort($declaratii);
+            $selectori = [];
+            foreach (self::desparte(str_replace('.et-db', '', $selector), ',') as $x) {
+                $x = (string) preg_replace('/(?:\s*#et-boc\s+\.et-l)+\s+/', ' ', ' ' . $x);
+                $selectori[] = trim((string) preg_replace('/\s*([>+~])\s*/', '$1', (string) preg_replace('/\s+/', ' ', $x)));
+            }
+            $selectori = array_values(array_unique($selectori));
+            sort($selectori);
+            $media = strtolower(trim((string) preg_replace('/\s*([():,])\s*/', '$1', (string) preg_replace('/\s+/', ' ', $cap))));
+            $rez[] = $media . '|' . implode(',', $selectori) . '|' . implode(';', $declaratii);
         }
         $rez = array_values(array_unique($rez));
         sort($rez);
+        return $rez;
+    }
+
+    /** Valoarea unei declarații, normalizată pentru comparație (multime()). */
+    private static function valoare(string $v): string
+    {
+        $v = (string) preg_replace('/\s+/', ' ', trim($v));
+        $v = (string) preg_replace('/\s*!\s*important$/i', '!important', $v);
+        $v = (string) preg_replace_callback('/url\(\s*([\'"]?)(.*?)\1\s*\)/i', static function (array $m): string {
+            $u = (string) preg_replace('#^(?:https?:)?//[^/]+#i', '', trim($m[2]));
+            return 'url(' . ($u === '' ? '/' : $u) . ')';
+        }, $v);
+        return (string) preg_replace('/\s*([,()\/])\s*/', '$1', $v);
+    }
+
+    /** Desparte după `$sep` în afara parantezelor, a parantezelor drepte și a ghilimelelor; bucățile goale scoase. @return list<string> */
+    private static function desparte(string $s, string $sep): array
+    {
+        $rez = [];
+        $bucata = '';
+        $adanc = 0;
+        $ghilimea = '';
+        $n = strlen($s);
+        for ($i = 0; $i < $n; $i++) {
+            $c = $s[$i];
+            if ($ghilimea !== '') {
+                $bucata .= $c;
+                if ($c === '\\' && $i + 1 < $n) {
+                    $bucata .= $s[++$i];
+                } elseif ($c === $ghilimea) {
+                    $ghilimea = '';
+                }
+                continue;
+            }
+            if ($c === '"' || $c === '\'') {
+                $ghilimea = $c;
+            } elseif ($c === '(' || $c === '[') {
+                $adanc++;
+            } elseif (($c === ')' || $c === ']') && $adanc > 0) {
+                $adanc--;
+            } elseif ($c === $sep && $adanc === 0) {
+                if (trim($bucata) !== '') {
+                    $rez[] = trim($bucata);
+                }
+                $bucata = '';
+                continue;
+            }
+            $bucata .= $c;
+        }
+        if (trim($bucata) !== '') {
+            $rez[] = trim($bucata);
+        }
         return $rez;
     }
 
@@ -116,17 +192,19 @@ final class StiluriComune
      * @param array<string, string> $pagini calea paginii → HTML-ul capturat
      * @param array<string, string> $foi calea foii (fără query) → CSS-ul publicat
      * @param array<string, string> $reguliPachet marcaj → calea paginii-sursă
-     * @return array{foi: array<string, string>, pagini: list<string>, probleme: list<string>}
+     * @param (callable(string): string)|null $css drumul CSS-ului din `<style>`-urile paginilor până la forma foilor publicate
+     *   (CopiereStatica::textCss: adresele proprii relative), ca o pagină identică să se compare egal
+     * @return array{foi: array<string, string>, pagini: list<string>, probleme: list<string>, atentii: list<string>}
      */
-    public static function unifica(array $pagini, array $foi, array $reguliPachet): array
+    public static function unifica(array $pagini, array $foi, array $reguliPachet, ?callable $css = null): array
     {
-        $rez = ['foi' => [], 'pagini' => [], 'probleme' => []];
+        $rez = ['foi' => [], 'pagini' => [], 'probleme' => [], 'atentii' => []];
         foreach ($reguliPachet as $marcaj => $sursa) {
             if (!isset($pagini[$sursa])) {
                 $rez['probleme'][] = 'stiluri_comune.' . $marcaj . ': pagina-sursă ' . $sursa . ' nu e în captură';
                 continue;
             }
-            [$refText, $refLista] = self::alePaginii($pagini[$sursa], $foi, $rez['foi'], $marcaj);
+            [$refText, $refLista] = self::alePaginii($pagini[$sursa], $foi, $rez['foi'], $marcaj, $css);
             if ($refLista === []) {
                 $rez['probleme'][] = 'stiluri_comune.' . $marcaj . ': pagina-sursă ' . $sursa . ' n-are reguli ' . $marcaj;
                 continue;
@@ -136,23 +214,46 @@ final class StiluriComune
                 if ($cale === $sursa) {
                     continue;
                 }
-                [, $lista, $cuReguli] = self::alePaginii($html, $foi, $rez['foi'], $marcaj);
+                [, $lista, $cuReguli, $dinFoi] = self::alePaginii($html, $foi, $rez['foi'], $marcaj, $css);
                 if ($lista === [] || self::multime($lista) === $ref) {
                     continue;
                 }
-                if ($cuReguli === []) {
-                    $rez['probleme'][] = 'stiluri_comune.' . $marcaj . ': ' . $cale . ' are alte reguli decât ' . $sursa . ', dar doar în HTML (nu se schimbă)';
+                // Foile paginii n-au reguli cu marcajul sau le au deja pe ale sursei: diferența e doar în `<style>`-ul din HTML.
+                if ($cuReguli === [] || self::multime($dinFoi) === $ref) {
+                    $rez['atentii'][] = 'stiluri_comune.' . $marcaj . ': ' . $cale . ' are alte reguli decât ' . $sursa . ' doar în <style>-ul din HTML (nu se rescrie; '
+                        . self::rezumat(self::multime($lista), $ref) . ')';
                     continue;
                 }
                 foreach ($cuReguli as $k => $f) {
-                    $css = $rez['foi'][$f] ?? $foi[$f];
-                    $rez['foi'][$f] = rtrim(self::separa($css, $marcaj)['rest']) . ($k === 0 ? "\n" . $refText . "\n" : "\n");
+                    $text = $rez['foi'][$f] ?? $foi[$f];
+                    $rez['foi'][$f] = rtrim(self::separa($text, $marcaj)['rest']) . ($k === 0 ? "\n" . $refText . "\n" : "\n");
                 }
                 $rez['pagini'][] = $cale;
+                // Foile rescrise; dacă pagina tot diferă, diferența e în `<style>`-ul din HTML, care rămâne.
+                $dupa = self::multime(self::alePaginii($html, $foi, $rez['foi'], $marcaj, $css)[1]);
+                if ($dupa !== $ref) {
+                    $rez['atentii'][] = 'stiluri_comune.' . $marcaj . ': ' . $cale . ': foile rescrise, dar <style>-ul din HTML are încă alte reguli decât ' . $sursa
+                        . ' (' . self::rezumat($dupa, $ref) . ')';
+                }
             }
         }
         $rez['pagini'] = array_values(array_unique($rez['pagini']));
         return $rez;
+    }
+
+    /**
+     * Rezumatul unei diferențe: câte reguli are pagina față de sursă, câte lipsesc, câte sunt în plus, primul selector diferit.
+     *
+     * @param list<string> $pagina
+     * @param list<string> $sursa
+     */
+    public static function rezumat(array $pagina, array $sursa): string
+    {
+        $lipsa = array_values(array_diff($sursa, $pagina));
+        $plus = array_values(array_diff($pagina, $sursa));
+        $prima = explode('|', (string) ($plus[0] ?? $lipsa[0] ?? '||'))[1] ?? '';
+        return count($pagina) . ' reguli față de ' . count($sursa) . ', ' . count($lipsa) . ' lipsesc, ' . count($plus) . ' în plus; prima diferită: '
+            . (mb_strlen($prima) > 80 ? mb_substr($prima, 0, 79) . '…' : $prima);
     }
 
     /** Foile et-cache ale unei pagini, în ordinea din HTML. @param array<string, string> $foi @return list<string> */
@@ -180,29 +281,33 @@ final class StiluriComune
      *
      * @param array<string, string> $foi
      * @param array<string, string> $scrise
-     * @return array{0: string, 1: list<array{0: string, 1: string, 2: string}>, 2: list<string>}
+     * @param (callable(string): string)|null $css
+     * @return array{0: string, 1: list<array{0: string, 1: string, 2: string}>, 2: list<string>, 3: list<array{0: string, 1: string, 2: string}>}
+     *   textul regulilor, toate regulile, foile cu reguli, doar regulile din foi
      */
-    private static function alePaginii(string $html, array $foi, array $scrise, string $marcaj): array
+    private static function alePaginii(string $html, array $foi, array $scrise, string $marcaj, ?callable $css): array
     {
         $text = '';
         $lista = [];
         $cuReguli = [];
+        $dinFoi = [];
         foreach (self::foiPagina($html, $foi) as $f) {
             $s = self::separa($scrise[$f] ?? $foi[$f], $marcaj);
             if ($s['lista'] !== []) {
                 $text .= $s['reguli'];
                 $lista = array_merge($lista, $s['lista']);
+                $dinFoi = array_merge($dinFoi, $s['lista']);
                 $cuReguli[] = $f;
             }
         }
         if (preg_match_all('/<style\b[^>]*>(.*?)<\/style>/is', $html, $m) > 0) {
-            foreach ($m[1] as $css) {
-                $s = self::separa($css, $marcaj);
+            foreach ($m[1] as $stil) {
+                $s = self::separa($css !== null ? $css($stil) : $stil, $marcaj);
                 $text .= $s['reguli'];
                 $lista = array_merge($lista, $s['lista']);
             }
         }
-        return [$text, $lista, $cuReguli];
+        return [$text, $lista, $cuReguli, $dinFoi];
     }
 
     /**
