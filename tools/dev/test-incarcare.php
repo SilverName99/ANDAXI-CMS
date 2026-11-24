@@ -287,7 +287,9 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     // Adoptarea WordPress pe drumul capturat (nucleu/0070): paginile capturate și ce ține de ele; se refac din captură, la import.
     'pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat', 'galerii_capturate', 'galerii_capturate_elemente',
     // Rapoartele CSP ale cadrului capturat (nucleu/0071): ale site-ului, nu ale copiei.
-    'rapoarte_csp'];
+    'rapoarte_csp',
+    // Regiunile dinamice ale documentelor capturate (nucleu/0072): se refac din captură, la import.
+    'regiuni_capturate'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',

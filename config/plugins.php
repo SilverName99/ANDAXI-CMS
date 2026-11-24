@@ -155,7 +155,10 @@ return [
             'import_amprente', 'wp_harta', 'pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat',
             'galerii_capturate', 'galerii_capturate_elemente',
             // Rapoartele CSP ale cadrului capturat (nucleu/0071; App\Support\RaportCsp): numărătorile pe zi.
-            'rapoarte_csp'],
+            'rapoarte_csp',
+            // Regiunile dinamice ale documentelor capturate (nucleu/0072; App\Support\CadruCapturat\Regiuni): octeții capturați ai
+            // fiecărei regiuni (dovada randatorului), scriși de import.
+            'regiuni_capturate'],
     ],
 
     'pluginuri' => [

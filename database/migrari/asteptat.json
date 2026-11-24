@@ -8198,6 +8198,89 @@
             },
             "motor": "InnoDB"
         },
+        "regiuni_capturate": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "atribut": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(60)"
+                },
+                "document": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "fel": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "importat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "n": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "octeti": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "mediumblob"
+                },
+                "regiune": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(60)"
+                },
+                "sha256": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "stare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_regiuni_capturate": {
+                    "coloane": [
+                        "document",
+                        "regiune",
+                        "n"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "seo_404_log": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {

@@ -16,7 +16,9 @@ namespace App\Support\ImportWordPress\Continut;
  *  - `valori`: valorile jetoanelor la import (cu ele, bucățile dau exact T: dovada), `meniu`: clasele și `aria-current` ale
  *    elementelor de meniu observate pe pagina aceasta, `date`: partea paginii din `ax-date` cu rețeta ordinii;
  *  - `seo`: `jetoane` (head-ul SEO pe jetoane, dovedit pe octeți) sau `inghetat` (cu `seoMotiv`: panoul SEO doar de citit);
- *  - `sectiuni` (numele din eticheta admin Divi), `formulare` și `galerii` (datele pentru server), `probleme` (NU), `avertismente`.
+ *  - `sectiuni` (numele din eticheta admin Divi), `formulare` și `galerii` (datele pentru server), `probleme` (NU), `avertismente`;
+ *  - `regiuni` (pista A): regiunile dinamice ale documentului, fiecare cu randatorul, numărul în document, modul, atributul, octeții
+ *    capturați și starea capturii (le scrie ScriereCapturata în `regiuni_capturate`); [] fără regulile regiunilor.
  */
 final class Taiere
 {
@@ -32,6 +34,8 @@ final class Taiere
      * @param list<array<string, mixed>> $galerii
      * @param list<string> $probleme
      * @param list<string> $avertismente
+     * @param list<array{regiune: string, n: int, mod: string, atribut: ?string, octeti: string, stare: ?array<string, mixed>, start: int}> $regiuni
+     *   (`start`: poziția octeților capturați în `html`)
      */
     public function __construct(
         public readonly string $html,
@@ -54,6 +58,7 @@ final class Taiere
         public readonly array $galerii,
         public readonly array $probleme,
         public readonly array $avertismente = [],
+        public readonly array $regiuni = [],
     ) {
     }
 

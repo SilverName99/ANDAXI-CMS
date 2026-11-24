@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Support\ImportWordPress;
 
 use App\Support\CadruCapturat;
+use App\Support\CadruCapturat\ContextRegiune;
+use App\Support\CadruCapturat\Regiuni;
+use App\Support\HtmlCapturat;
 use App\Support\ImportWordPress\Captura\Normalizare;
 use App\Support\ImportWordPress\Continut\Taiere;
 use PDO;
@@ -21,10 +24,15 @@ use Throwable;
  *  - **P1 la import:** fiecare document se randează din rândurile abia scrise (CadruCapturat, pe aceeași conexiune), cu valorile
  *    de la import, și se compară cu T (documentul servit, cu scripturile runtime-ului la locul lor), după normalizarea de comparație
  *    (nonce-urile: §6.7 #1). O diferență = EroareImport: tranzacția se anulează, nimic scris. `sha_randare` e amprenta aprobată.
+ *  - **regiunile dinamice** (pista A; nucleu/0072, `regiuni_capturate`): octeții capturați ai fiecărei regiuni (cu sha256-ul lor și
+ *    starea capturii), rescriși întregi la fiecare import (nu se editează de mână). P1 le pune la loc pe octeții capturați; apoi
+ *    **dovada fiecărei regiuni**: randatorul ei, cu starea capturii, dă aceiași octeți după normalizarea declarată (Regiuni::dovada),
+ *    iar documentul cu ieșirea lui nu are nicio problemă de politică (HtmlCapturat) în plus față de captură; altfel EroareImport.
  */
 final class ScriereCapturata
 {
-    public const TABELE = ['pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat', 'galerii_capturate', 'galerii_capturate_elemente'];
+    public const TABELE = ['pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat', 'galerii_capturate', 'galerii_capturate_elemente',
+        'regiuni_capturate'];
 
     /** Coloanele unui document acoperite de amprenta lui. */
     public const COLOANE_DOC = ['tip', 'page_id', 'cale', 'status', 'html_atribute', 'cap_html', 'body_atribute', 'inainte', 'continut', 'dupa', 'antet', 'subsol',
@@ -157,6 +165,8 @@ final class ScriereCapturata
                 throw new EroareImport('documentul capturat ' . $k . ' n-are pagina lui în `pages` (eroare internă)');
             }
             $valoriImport = array_filter(['cale' => $t->valori['cale'] ?? ($doc['valori_import']['cale'] ?? null), 'an' => $t->valori['an'] ?? null,
+                // Jetoanele documentului din regulile regiunilor (pista A): clasele corpului și titlul, cum le arată captura.
+                'clase_body' => $t->valori['clase_body'] ?? null, 'titlu' => $t->valori['titlu'] ?? null,
                 'seo' => array_filter(['titlu' => $t->valori['seo.titlu'] ?? null, 'descriere' => $t->valori['seo.descriere'] ?? null,
                     'canonical' => $t->valori['seo.canonical'] ?? null, 'robots' => $t->valori['seo.robots'] ?? null, 'imagine' => $t->valori['seo.imagine'] ?? null],
                     static fn (mixed $v): bool => $v !== null)], static fn (mixed $v): bool => $v !== null && $v !== []);
@@ -229,6 +239,18 @@ final class ScriereCapturata
             }
             $rez['galerii']++;
         }
+        // Regiunile dinamice (pista A): octeții capturați ai fiecăreia, cu starea capturii; rescrise întregi (nu se editează de mână).
+        $db->exec('DELETE FROM regiuni_capturate');
+        $rez['regiuni'] = 0;
+        $insRegiune = $db->prepare('INSERT INTO regiuni_capturate (document, regiune, n, fel, atribut, octeti, sha256, stare, importat_la)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($pc->documente as $k => $doc) {
+            foreach ($doc['taiere']->regiuni as $r) {
+                $insRegiune->execute([(string) $k, $r['regiune'], $r['n'], $r['mod'], $r['atribut'], $r['octeti'], hash('sha256', $r['octeti']),
+                    $r['stare'] === null ? null : $j($r['stare']), $acum]);
+                $rez['regiuni']++;
+            }
+        }
         // P1 la import: fiecare document, randat din rândurile abia scrise, = T cu scripturile runtime-ului la locul lor.
         $norm = new Normalizare($pc->url !== '' ? $pc->url : 'https://site.invalid');
         foreach ($pc->documente as $k => $doc) {
@@ -242,6 +264,75 @@ final class ScriereCapturata
             // Amprenta aprobată: a randării cu valorile de la import (deterministă, deci o refac la fel P1 de după import,
             // scripts/verifica-randare.php, fără captură și fără normalizare).
             $db->prepare('UPDATE pagini_capturate SET sha_randare = ? WHERE cheie = ?')->execute([hash('sha256', $randare), $k]);
+            // Dovada regiunilor documentului: randatorul fiecăreia, cu starea capturii.
+            $pb = self::dovadaRegiuni($db, $k, $doc, $asteptat, $runtime, $norm, $pc->politica);
+            if ($pb !== null) {
+                throw new EroareImport('dovada regiunilor: documentul ' . $k . ': ' . $pb . '; nimic scris');
+            }
+        }
+        return $rez;
+    }
+
+    /**
+     * Dovada regiunilor unui document (pista A): pentru fiecare regiune, randatorul ei (Regiuni::dovada), cu starea capturii
+     * (ContextRegiune la dovadă), dă octeții capturați după normalizarea declarată; documentul așteptat cu ieșirea lui în locul
+     * octeților capturați nu are nicio problemă HtmlCapturat în plus față de documentul capturat. null = dovedite; altfel motivul.
+     *
+     * @param array<string, mixed> $doc documentul din plan (cu `taiere`)
+     * @param string $asteptat documentul așteptat (asteptat(): T cu scripturile runtime-ului `$runtime` la ancorele lor)
+     * @param array{cap?: string, final?: string} $runtime
+     */
+    public static function dovadaRegiuni(PDO $db, string $cheie, array $doc, string $asteptat, array $runtime, Normalizare $norm,
+        ?HtmlCapturat\ContextCapturat $politica): ?string
+    {
+        /** @var Taiere $t */
+        $t = $doc['taiere'];
+        if ($t->regiuni === []) {
+            return null;
+        }
+        $cale = (string) ($doc['cale'] ?? ($doc['valori_import']['cale'] ?? '/'));
+        $problemeCaptura = null;
+        foreach ($t->regiuni as $r) {
+            $id = (string) $r['regiune'];
+            $ctx = (new ContextRegiune($db, $cheie, $cale, [], 'GET', is_array($r['stare']) ? $r['stare'] : []))
+                ->pentru($id, (int) $r['n'], Regiuni::cache($id), (string) $r['mod'], isset($r['atribut']) ? (string) $r['atribut'] : null);
+            $pb = Regiuni::dovada($id, (string) $r['octeti'], $ctx, $norm);
+            if ($pb !== null) {
+                return 'regiunea ' . $id . ':' . $r['n'] . ': ' . $pb;
+            }
+            // Politica pe ieșirea randatorului, în documentul ei: nicio problemă în plus față de captură.
+            $iesire = (string) Regiuni::randator($id)?->randeaza($ctx);
+            if ($r['mod'] === 'atribut' && !Regiuni::valoareAtributSigura($iesire)) {
+                return 'regiunea ' . $id . ':' . $r['n'] . ': ieșirea randatorului nu se poate pune între ghilimelele atributului ' . $r['atribut'];
+            }
+            // Poziția regiunii în documentul așteptat: cea din T, plus scripturile runtime-ului puse înaintea ei.
+            $poz = (int) $r['start'];
+            foreach ($t->ancore as $loc => $ancora) {
+                if ($ancora <= (int) $r['start']) {
+                    $poz += strlen((string) ($runtime[$loc] ?? ''));
+                }
+            }
+            if (substr($asteptat, $poz, strlen((string) $r['octeti'])) !== (string) $r['octeti']) {
+                return 'regiunea ' . $id . ':' . $r['n'] . ': octeții capturați nu sunt la locul lor în documentul așteptat (eroare internă)';
+            }
+            $problemeCaptura ??= self::numaraProbleme(HtmlCapturat::verifica($asteptat, $politica, 'import'));
+            $cuIesire = substr($asteptat, 0, $poz) . $iesire . substr($asteptat, $poz + strlen((string) $r['octeti']));
+            $inPlus = self::numaraProbleme(HtmlCapturat::verifica($cuIesire, $politica, 'import'));
+            foreach ($inPlus as $k => $n) {
+                if ($n > ($problemeCaptura[$k] ?? 0)) {
+                    return 'regiunea ' . $id . ':' . $r['n'] . ': ieșirea randatorului are o problemă de politică (HtmlCapturat): ' . explode("\0", $k)[1];
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Problemele politicii numărate pe cod și mesaj. @param list<HtmlCapturat\Problema> $pb @return array<string, int> */
+    private static function numaraProbleme(array $pb): array
+    {
+        $rez = [];
+        foreach ($pb as $p) {
+            $rez[$p->cod . "\0" . $p->mesaj] = ($rez[$p->cod . "\0" . $p->mesaj] ?? 0) + 1;
         }
         return $rez;
     }
@@ -306,6 +397,7 @@ final class ScriereCapturata
         $v = is_array($v) ? $v : [];
         return ['cale' => (string) ($v['cale'] ?? '/'), 'nonce' => 'p1', 'an' => (string) ($v['an'] ?? date('Y')), 'seo' => is_array($v['seo'] ?? null) ? $v['seo'] : [],
             'urmarire' => [], 'sablon_cmplz' => ''];
+        // Regiunile dinamice: fără context de cerere, cadrul pune octeții capturați (CadruCapturat::randeaza), deci P1 = T.
     }
 
     /** Cheia unui răspuns înghețat: metoda, calea și query-ul. */

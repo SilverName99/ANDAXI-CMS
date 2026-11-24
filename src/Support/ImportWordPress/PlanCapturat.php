@@ -12,6 +12,8 @@ use App\Support\ImportWordPress\Continut\Divi4;
 use App\Support\ImportWordPress\Continut\Divi4Taiere;
 use App\Support\ImportWordPress\Continut\Shortcoduri;
 use App\Support\ImportWordPress\Continut\Taiere;
+use App\Support\ImportWordPress\Continut\TaiereRegiuni;
+use App\Support\CadruCapturat\Regiuni;
 
 /**
  * Partea capturată a planului (drumul capturat, pasul 5a): documentele tăiate (paginile, 404-ul, cardurile embed, arhivele),
@@ -44,16 +46,53 @@ final class PlanCapturat
     public string $url = '';
     /** @var list<string> documentele (căile lor sau `404`) trecute prin dialect, pentru verificarea lui `captura.structura` */
     public array $documenteVazute = [];
+    /** Contextul politicii HTML-ului capturat (foile din manifestul capturii), pentru dovada regiunilor la scriere (pista A). */
+    public ?HtmlCapturat\ContextCapturat $politica = null;
+    /** @var array<string, array<string, mixed>>|null starea fiecărei adrese din `index.json` (scenariile capturii), citită o dată */
+    private ?array $stari = null;
 
     /**
      * Contextul tăierii unei pagini: secțiunile (etichetele admin din shortcoduri), anul din subsol (Dynamic Content).
      *
      * @return array<string, mixed>
      */
-    public static function contextPagina(Inventar $i, array $pagina, string $cale, ?array $seo, string $anCaptura): array
+    public static function contextPagina(Inventar $i, array $pagina, string $cale, ?array $seo, string $anCaptura, array $reguli = [], ?array $stare = null): array
     {
         return ['tip' => 'pagina', 'cale' => $cale, 'seo' => $seo, 'sectiuni' => self::sectiuniAdmin((string) ($pagina['continut'] ?? '')),
-            'an' => self::anDinamic($i, $anCaptura)];
+            'an' => self::anDinamic($i, $anCaptura), 'regiuni' => self::regiuniDocument($reguli, 'pagina', $cale), 'stare' => $stare];
+    }
+
+    /**
+     * Regulile regiunilor dinamice (pista A: `import-wordpress.json` → `regiuni`, validate de ImportWordPress::valideazaReguli) care
+     * se aplică unui document. @param array<string, mixed> $reguli regulile pachetului @return list<array<string, mixed>>
+     */
+    public static function regiuniDocument(array $reguli, string $tip, ?string $cale): array
+    {
+        $r = $reguli['regiuni'] ?? [];
+        return is_array($r) && $r !== [] ? TaiereRegiuni::reguliDocument($r, $tip, $cale) : [];
+    }
+
+    /**
+     * Starea pe care o arată captura unei adrese (pista A, pentru dovada regiunilor): `index.json` → `adrese[]` → `stare` (un obiect
+     * scris de unealta capturii pentru scenariile ei, de exemplu coșul cu un produs), sau null.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function stareCaptura(?DosarCapturi $d, string $cale): ?array
+    {
+        if ($d === null || !$d->alNostru || !is_file($d->dosar . '/index.json')) {
+            return null;
+        }
+        if ($this->stari === null) {
+            $this->stari = [];
+            $ix = json_decode((string) file_get_contents($d->dosar . '/index.json'), true);
+            foreach ((array) ($ix['adrese'] ?? []) as $a) {
+                if (is_array($a) && is_string($a['cale'] ?? null) && is_array($a['stare'] ?? null) && !array_is_list($a['stare'])) {
+                    $this->stari[$a['cale']] = $a['stare'];
+                }
+            }
+        }
+        return $this->stari[$cale] ?? null;
     }
 
     /**
@@ -146,6 +185,14 @@ final class PlanCapturat
         if ($t->probleme !== []) {
             return;
         }
+        // Regiunile dinamice (pista A): fiecare cere randatorul ei construit, altfel documentul nu se poate dovedi (NU în plan).
+        foreach ($t->regiuni as $r) {
+            if (Regiuni::randator((string) $r['regiune']) === null) {
+                $this->probleme[] = ($meta['titlu'] ?? $cheie) . ': regiunea „' . $r['regiune'] . '” n-are încă randatorul construit (pista '
+                    . (Regiuni::declaratie((string) $r['regiune'])['pista'] ?? '?') . '): documentul nu se poate importa până atunci';
+                return;
+            }
+        }
         $this->documente[$cheie] = $meta + ['cheie' => $cheie, 'tip' => $tip, 'taiere' => $t];
     }
 
@@ -162,6 +209,7 @@ final class PlanCapturat
         $this->url = $d->url;
         $divi4 = new Divi4($d);
         $ctxPolitica = $divi4->contextPolitica();
+        $this->politica = $ctxPolitica;
         foreach (self::adrese($d) as $a) {
             // După adresa cerută, nu după cale: la oEmbed calea din index e a paginii, adresa e a endpointului
             // (/wp-json/oembed/1.0/embed?url=…); după cale ar ieși pagina, înghețată peste ruta ei.
@@ -237,7 +285,8 @@ final class PlanCapturat
             if ($pb !== []) {
                 continue;
             }
-            $t = Divi4Taiere::taie($dialect, ['tip' => $tip, 'cale' => $a['cale'], 'an' => $an]);
+            $t = Divi4Taiere::taie($dialect, ['tip' => $tip, 'cale' => $a['cale'], 'an' => $an,
+                'regiuni' => self::regiuniDocument($reguli, $tip, $tip === '404' ? null : $a['cale']), 'stare' => $this->stareCaptura($d, $a['cale'])]);
             if ($t->probleme === []) {
                 foreach (HtmlCapturat::verifica($t->html, $ctxPolitica, 'import') as $problema) {
                     $this->probleme[] = $a['cale'] . ' (HtmlCapturat, după pasul 5a): ' . $problema->linie();
@@ -248,6 +297,30 @@ final class PlanCapturat
         }
         if (!isset($this->documente['404'])) {
             $this->avertismente[] = 'fără pagina 404 a site-ului: adresele necunoscute primesc 404-ul nucleului';
+        }
+        // Regiunile dinamice (pista A): o regulă pe calea unui document care nu e în import e NU (fail-closed: pagina ar ieși înghețată,
+        // cu starea capturii în ea, și ar putea intra în cache); una pe produse sau pe un șablon fără documente e doar o atenționare.
+        $reguliRegiuni = $reguli['regiuni'] ?? [];
+        if (is_array($reguliRegiuni) && $reguliRegiuni !== [] && Regiuni::valideazaReguli($reguliRegiuni) === []) {
+            foreach (array_values($reguliRegiuni) as $i => $r) {
+                $doc = (string) $r['document'];
+                $gasit = false;
+                foreach ($this->documente as $cheie => $d) {
+                    $cale = (string) ($d['cale'] ?? ($d['valori_import']['cale'] ?? ''));
+                    if (Regiuni::pentruDocument([$r], (string) $d['tip'], (string) $cheie === '404' ? null : $cale) !== []) {
+                        $gasit = true;
+                        break;
+                    }
+                }
+                if (!$gasit) {
+                    $text = 'import-wordpress.json → regiuni[' . $i . '] („' . $doc . '”): niciun document importat nu e al ei';
+                    if (str_starts_with($doc, '/') || $doc === '404') {
+                        $this->probleme[] = $text . ' (regiunea ar rămâne înghețată în pagină)';
+                    } else {
+                        $this->avertismente[] = $text;
+                    }
+                }
+            }
         }
         // `captura.structura` pe un document care nu e în import (o cale greșită în pachet): clasele lui nu s-ar pune nicăieri.
         foreach (array_keys((array) ($reguli['captura']['structura'] ?? [])) as $cheieS) {

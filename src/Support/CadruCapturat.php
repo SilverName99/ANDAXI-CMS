@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Support\CadruCapturat\ContextRegiune;
 use App\Support\CadruCapturat\EroareJeton;
 use App\Support\CadruCapturat\Jetoane;
+use App\Support\CadruCapturat\Regiuni;
 
 /**
  * Cadrul paginilor capturate (adoptarea unui site WordPress, pașii 5a și 6; DECIZIE §2.7 [design] 1, I-C §6, B Anexa C): un
@@ -19,6 +21,13 @@ use App\Support\CadruCapturat\Jetoane;
  * Spațiile și rândurile dintre bucăți sunt cele din captură (tăierea le ține în bucăți). Un jeton necunoscut sau rămas e o
  * EroareJeton: răspunsul e 500 și un rând în jurnal, niciodată o pagină pe jumătate. Aceeași funcție o folosesc dovada tăierii
  * (la import), P1 și cererile web.
+ *
+ * Regiunile dinamice (pista A a mutării unui site WooCommerce; CadruCapturat\Regiuni): un jeton `{{ax:regiune:<id>:<n>}}` primește,
+ * la o cerere (raspunde, cu un ContextRegiune), ieșirea randatorului lui, iar altfel (P1, amprenta randării, previzualizarea,
+ * verificarea salvării) octeții capturați din `regiuni_capturate`. Ieșirea se pune între bucățile rezolvate, fără să mai treacă prin
+ * jetoane: un `{{ax:` din datele unui randator rămâne text. Doar regiunile declarate pentru document (rândurile lui din
+ * `regiuni_capturate`); altă regiune e o EroareJeton. `{{ax:clase_body}}` și `{{ax:titlu}}`: valorile capturate, schimbate doar de
+ * regiunile documentului (ContextRegiune). Un document cu o regiune `sesiune` pleacă `Cache-Control: no-store, private`.
  */
 final class CadruCapturat
 {
@@ -44,7 +53,9 @@ final class CadruCapturat
      *   (obiect: partea paginii din `ax-date`), `date_reteta` (rețeta ordinii), `meniu` (clasele și aria-current ale elementelor
      *   de meniu care diferă pe pagina aceasta de cele ale fragmentului), `valori_import` (cale, an, seo: valorile de la import)
      * @param array<string, array{html: string, date?: mixed, meniu?: array<string, array{0: string, 1: string}>}> $fragmente fel → fragmentul ales
-     * @param array{cale: string, nonce: string, an: string, runtime?: array{cap?: string, final?: string}, seo?: array<string, string>, sablon_cmplz?: string, urmarire?: list<array<string, mixed>>|null, statistici?: array<string, mixed>|null} $cerere
+     * @param array{cale: string, nonce: string, an: string, runtime?: array{cap?: string, final?: string}, seo?: array<string, string>, sablon_cmplz?: string, urmarire?: list<array<string, mixed>>|null, statistici?: array<string, mixed>|null, regiuni?: ContextRegiune} $cerere
+     *   `regiuni`: contextul cererii pentru randatorii regiunilor (doar raspunde); fără el, regiunile primesc octeții capturați
+     *   (`$doc['regiuni']`: jetonul → rândul din `regiuni_capturate`, regiuniDocument())
      * @throws EroareJeton
      */
     public static function randeaza(array $doc, string $continut, array $fragmente, array $cerere): string
@@ -100,9 +111,85 @@ final class CadruCapturat
                 $v = $cerere['seo'][$m[1]] ?? $seoImport[$m[1]] ?? null;
                 return is_string($v) ? $v : null;
             }
+            // Jetoanele documentului din regulile regiunilor (pista A): valorile capturate, schimbate doar de regiunile lui.
+            if ($nume === 'clase_body' || $nume === 'titlu') {
+                $v = self::lista($doc['valori_import'] ?? [])[$nume] ?? null;
+                if (!is_string($v)) {
+                    return null;
+                }
+                $ctx = $cerere['regiuni'] ?? null;
+                return $ctx instanceof ContextRegiune ? ($nume === 'clase_body' ? $ctx->claseBody($v) : $ctx->titluFinal($v)) : $v;
+            }
             return null;
         };
-        return Jetoane::rezolva($html, $valori);
+        if (!str_contains($html, '{{ax:regiune:')) {
+            return Jetoane::rezolva($html, $valori);
+        }
+        // Regiunile dinamice: ieșirea fiecăreia (randatorul la o cerere, altfel octeții capturați), apoi bucățile dintre ele rezolvate
+        // fiecare (aceeași singură trecere), cu ieșirile puse între ele, nerezolvate.
+        $declarate = is_array($doc['regiuni'] ?? null) ? $doc['regiuni'] : [];
+        $ctx = $cerere['regiuni'] ?? null;
+        $iesiri = [];
+        $taieturi = [];
+        foreach (Jetoane::gaseste($html) as $j) {
+            if (!str_starts_with($j['nume'], 'regiune:')) {
+                continue;
+            }
+            $r = $declarate[$j['nume']] ?? null;
+            if (!is_array($r) || $j['escapare'] !== null || preg_match(Regiuni::RE_JETON, $j['nume'], $m) !== 1) {
+                throw new EroareJeton('regiune nedeclarată pentru document: ' . $j['nume']);
+            }
+            if ($ctx instanceof ContextRegiune) {
+                $iesire = Regiuni::randeaza($m[1], $ctx->pentru($m[1], (int) $m[2], Regiuni::cache($m[1]), (string) ($r['fel'] ?? 'interior'),
+                    isset($r['atribut']) ? (string) $r['atribut'] : null));
+                if ((string) ($r['fel'] ?? '') === 'atribut' && !Regiuni::valoareAtributSigura($iesire)) {
+                    throw new EroareJeton('regiunea ' . $j['nume'] . ': ieșirea nu se poate pune între ghilimelele atributului');
+                }
+            } else {
+                $iesire = (string) ($r['octeti'] ?? '');
+            }
+            $taieturi[] = [$j['start'], $j['end']];
+            $iesiri[] = $iesire;
+        }
+        $rez = '';
+        $poz = 0;
+        foreach ($taieturi as $i => [$a, $b]) {
+            $rez .= Jetoane::rezolva(substr($html, $poz, $a - $poz), $valori) . $iesiri[$i];
+            $poz = $b;
+        }
+        return $rez . Jetoane::rezolva(substr($html, $poz), $valori);
+    }
+
+    /**
+     * Regiunile dinamice declarate ale unui document (pista A): jetonul (`regiune:<id>:<n>`) → rândul din `regiuni_capturate` (regiunea,
+     * numărul, felul, atributul, octeții capturați). [] fără tabel sau fără regiuni.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function regiuniDocument(\PDO $db, string $cheie): array
+    {
+        try {
+            $q = $db->prepare('SELECT regiune, n, fel, atribut, octeti FROM regiuni_capturate WHERE document = ? ORDER BY regiune, n');
+            $q->execute([$cheie]);
+            $rez = [];
+            foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+                $rez['regiune:' . $r['regiune'] . ':' . (int) $r['n']] = $r;
+            }
+            return $rez;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** Documentul are o regiune cu `cache` = `sesiune` (Regiuni::CATALOG)? @param array<string, array<string, mixed>> $regiuni */
+    public static function cuRegiuniSesiune(array $regiuni): bool
+    {
+        foreach ($regiuni as $r) {
+            if (Regiuni::cache((string) ($r['regiune'] ?? '')) === 'sesiune') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -146,6 +233,11 @@ final class CadruCapturat
             if (is_string($sablon) && !str_contains($sablon, '{{ax:fragment:')) {
                 $cerere['sablon_cmplz'] = $sablon;
             }
+        }
+        // Regiunile dinamice (pista A): rândurile lor, doar când documentul are jetoanele lor.
+        if (!is_array($doc['regiuni'] ?? null)) {
+            $doc['regiuni'] = str_contains((string) ($doc['cap_html'] ?? '') . (string) ($doc['inainte'] ?? '') . $continut . (string) ($doc['dupa'] ?? ''), '{{ax:regiune:')
+                ? self::regiuniDocument($db, (string) ($doc['cheie'] ?? '')) : [];
         }
         $doc['date_pagina'] = self::dinJson($doc['date_pagina'] ?? null);
         $doc['date_reteta'] = self::dinJsonLista($doc['date_reteta'] ?? null);
@@ -465,6 +557,13 @@ final class CadruCapturat
             }
             if (($cerere['statistici'] ?? null) !== null && isset($runtime['pluginuri']['statistici'])) {
                 $runtime['final'] .= $runtime['pluginuri']['statistici'];
+            }
+            // Regiunile dinamice (pista A): randatorii lor, cu contextul cererii; o regiune `sesiune` face răspunsul no-store.
+            $doc['regiuni'] = self::regiuniDocument($db, (string) ($doc['cheie'] ?? ''));
+            if ($doc['regiuni'] !== []) {
+                $faraCache = $faraCache || self::cuRegiuniSesiune($doc['regiuni']);
+                $cerere['regiuni'] ??= new ContextRegiune($db, (string) ($doc['cheie'] ?? ''), (string) $cerere['cale'], $_GET,
+                    strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
             }
             $html = self::legaNonceFormulare(self::randeazaRand($db, $doc, $cerere, $runtime), (string) $cerere['cale']);
             if ($dupa !== null) {

@@ -57,7 +57,30 @@ final class SchemaDivi4
         // text/toggle (dica), iconițe, SEO
         'data-settings' => 'json', 'data-icon' => 'scalar', 'data-prefix' => 'scalar', 'data-nosnippet' => 'scalar',
         'data-wp-strategy' => 'scalar', 'data-title' => 'scalar',
+        // Mutarea unui site WooCommerce (pista A, docs/MAGAZIN-WC.md; numele atributelor din markupul WooCommerce și Divi, fără
+        // valorile unui site): evenimentele calendarului (regiunea wcpc:evenimente), coloanele grilei de articole (salvattore),
+        // ordinea câmpurilor din checkout, produsul și cantitatea unui link de coș, textul gol al unei liste de alegere.
+        'data-events' => 'json', 'data-columns' => 'scalar', 'data-priority' => 'scalar', 'data-product_id' => 'scalar',
+        'data-product_sku' => 'scalar', 'data-quantity' => 'scalar', 'data-placeholder' => 'scalar',
     ];
+
+    /**
+     * Regiunile dinamice (pista A; CadruCapturat\Regiuni): atributele pe care le poate umple o regiune în modul `atribut` (lista
+     * închisă: `data-events`, evenimentele calendarului, JSON, și în DATA; `class`, clasa modulelor coșului, care primesc
+     * `et_pb_wc_cart_empty` la coșul gol) și forma jetonului unei regiuni, `{{ax:regiune:<id>:<n>}}`, pus de import în locul
+     * octeților capturați (în interiorul unui element sau în valoarea atributului).
+     */
+    public const REGIUNI_ATRIBUTE = ['data-events', 'class'];
+    public const RE_JETON_REGIUNE = '/\{\{ax:regiune:[a-z]{2,12}:[a-z_]{2,40}:\d{1,3}\}\}/';
+
+    /**
+     * Clasele corpului pe care le pot adăuga sau scoate regiunile, după starea paginii (`{{ax:clase_body}}`, ContextRegiune): cele pe
+     * care WooCommerce le pune pe `<body>` la contul clientului, la endpointurile lui, la coș și la checkout. Lista e închisă.
+     */
+    public const CLASE_BODY = ['logged-in', 'woocommerce-account', 'woocommerce-cart', 'woocommerce-checkout', 'woocommerce-order-received',
+        'woocommerce-order-pay', 'woocommerce-orders', 'woocommerce-view-order', 'woocommerce-downloads', 'woocommerce-edit-account',
+        'woocommerce-edit-address', 'woocommerce-payment-methods', 'woocommerce-add-payment-method', 'woocommerce-delete-payment-method',
+        'woocommerce-set-default-payment-method', 'woocommerce-lost-password', 'woocommerce-customer-logout'];
 
     /** Cheile permise în `data-props` (dg-carousel). O cheie în plus = NU (lista se lărgește după o revizie). */
     public const PROPS = ['allowtouchmove', 'arrow', 'autoSpeed', 'autoplay', 'autoplay_viewport', 'autowidth', 'center_mode',

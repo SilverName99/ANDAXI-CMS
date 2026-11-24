@@ -796,8 +796,8 @@ function problemePrivat(string $nume, string $text): array
     $p = [];
     if ($nume === 'import-wordpress.json') {
         foreach (array_keys($j) as $k) {
-            if (!in_array($k, ['_despre', 'scripturi_aruncate', 'captura'], true)) {
-                $p[] = 'cheie nepermisă „' . $k . '” (doar scripturi_aruncate și captura.nonce)';
+            if (!in_array($k, ['_despre', 'scripturi_aruncate', 'captura', 'regiuni', 'sabloane'], true)) {
+                $p[] = 'cheie nepermisă „' . $k . '” (doar scripturi_aruncate, captura.nonce, regiuni și sabloane)';
             }
         }
         if (isset($j['captura']) && (!is_array($j['captura']) || array_keys($j['captura']) !== ['nonce'] || !is_array($j['captura']['nonce'])

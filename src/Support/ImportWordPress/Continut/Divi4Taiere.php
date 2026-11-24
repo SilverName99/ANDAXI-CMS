@@ -34,6 +34,14 @@ use InvalidArgumentException;
  *     conținutul, după până la `</body>` inclusiv: așa ancorele de pe `</head>` și `</body>` stau în bucăți), cu antetul,
  *     subsolul și bannerul ca fragmente (`{{ax:fragment:antet}}`…).
  *
+ * **Regiunile dinamice** (pista A a mutării unui site WooCommerce; CadruCapturat\Regiuni, TaiereRegiuni): cu regulile pachetului
+ * pentru document (`$ctx['regiuni']`), trecerea 1 nu atinge nimic din interiorul unei regiuni (octeții ei rămân cei capturați), iar
+ * trecerea 2 pune jetonul `{{ax:regiune:<id>:<n>}}` în locul fiecărei regiuni (interiorul elementului sau valoarea atributului),
+ * `{{ax:clase_body}}` în valoarea lui `class` de pe `<body>` și `{{ax:titlu}}` în interiorul elementului titlului, printr-o
+ * editare Html5\Editare (contextul verificat). Octeții capturați ai fiecărei regiuni ies în `regiuni` (îi scrie ScriereCapturata în
+ * `regiuni_capturate`, cu starea capturii), iar valorile jetoanelor la import sunt chiar ei: dovada de mai jos îi cuprinde. Fără
+ * reguli (toate site-urile de azi) nimic din toate acestea nu se întâmplă.
+ *
  * **Dovada:** bucățile, cu fragmentele și valorile de la import, dau exact T (altfel NU). Forma documentului trebuie să fie cea
  * a cadrului (`<!DOCTYPE html>`, `<html…>`, `<head>`, `</head>`, `<body…>`, `</body>`, `</html>`, cu câte un rând între ele).
  */
@@ -43,13 +51,19 @@ final class Divi4Taiere
     public const FELURI = ['sectiune', 'slot', 'grup', 'capcana'];
 
     /** Felurile jetoanelor (trecerea 2). */
-    public const JETOANE = ['runtime-cap', 'runtime-final', 'date', 'meniu', 'formular-index', 'cale', 'an', 'seo', 'fragment'];
+    public const JETOANE = ['runtime-cap', 'runtime-final', 'date', 'meniu', 'formular-index', 'cale', 'an', 'seo', 'fragment', 'regiune', 'clase_body',
+        'titlu'];
 
     /** Valorile lui `data-ax-slot`. */
     public const SLOTURI = ['text', 'titlu', 'buton', 'imagine', 'video', 'meniu', 'lista', 'camp'];
 
-    /** Felurile documentelor capturate. */
-    public const TIPURI = ['pagina', '404', 'embed', 'arhiva'];
+    /**
+     * Felurile documentelor capturate. Pe lângă pagini, 404, carduri embed și arhive, pista A a rezervat (nucleu/0072, coloana
+     * `pagini_capturate.tip`): `produs` (pagina capturată a unui produs, `/product/<slug>/`, pista G) și șabloanele
+     * `sablon_articol`, `sablon_categorie`, `sablon_cautare` (un articol, o categorie, o căutare capturate, randate pentru alte
+     * articole și categorii prin regiunile lor; pista B).
+     */
+    public const TIPURI = ['pagina', '404', 'embed', 'arhiva', 'produs', 'sablon_articol', 'sablon_categorie', 'sablon_cautare'];
 
     /** Fragmentele, în ordinea din document. */
     public const FRAGMENTE = ['antet', 'subsol', 'banner'];
@@ -69,10 +83,11 @@ final class Divi4Taiere
     public const SANTINELA_NONCE = "\u{E000}nonce\u{E000}";
 
     /**
-     * @param array{tip?: string, cale?: string, seo?: ?array<string, string>, sectiuni?: ?list<string>, an?: ?array{modul: string, an: string}} $ctx
+     * @param array{tip?: string, cale?: string, seo?: ?array<string, string>, sectiuni?: ?list<string>, an?: ?array{modul: string, an: string}, regiuni?: list<array<string, mixed>>, stare?: ?array<string, mixed>} $ctx
      *   `tip` (TIPURI), `cale` (calea capturată: valoarea lui `{{ax:cale}}` la import), `seo` (valorile AIOSEO ale paginii:
      *   titlu, descriere, canonical, robots, imagine), `sectiuni` (etichetele admin ale secțiunilor, din shortcoduri, în ordine),
-     *   `an` (modulul subsolului cu Dynamic Content `current_date` și anul capturii)
+     *   `an` (modulul subsolului cu Dynamic Content `current_date` și anul capturii), `regiuni` (regulile pachetului care se aplică
+     *   documentului, validate: Regiuni::pentruDocument), `stare` (starea pe care o arată captura, pentru dovada regiunilor)
      */
     public static function taie(RezultatDialect $d, array $ctx): Taiere
     {
@@ -97,6 +112,27 @@ final class Divi4Taiere
         if ($s['probleme'] !== []) {
             return Taiere::refuz($s['probleme']);
         }
+        // Regiunile dinamice (pista A): locurile lor în documentul dialectului; nimic din interiorul unei regiuni nu se editează aici.
+        $reguliRegiuni = array_values((array) ($ctx['regiuni'] ?? []));
+        $locuriD = [];
+        if ($reguliRegiuni !== [] && ($pr = \App\Support\CadruCapturat\Regiuni::valideazaReguli($reguliRegiuni)) !== []) {
+            return Taiere::refuz(array_map(static fn (string $x): string => 'import-wordpress.json → ' . $x, $pr));
+        }
+        if ($reguliRegiuni !== []) {
+            $lr = TaiereRegiuni::locuri($D, $tk, $reguliRegiuni, array_values(array_filter([$s['antet'], $s['subsol'], $s['banner']])), (int) $s['body']);
+            if ($lr['probleme'] !== []) {
+                return Taiere::refuz($lr['probleme']);
+            }
+            $locuriD = $lr['locuri'];
+        }
+        $inRegiune = static function (Token $t) use ($locuriD): bool {
+            foreach ($locuriD as $l) {
+                if ($l['mod'] === 'interior' && $t->start >= $l['start'] && $t->end <= $l['end']) {
+                    return true;
+                }
+            }
+            return false;
+        };
         $atribute = []; // index tag → [nume => valoare]
         $ops = []; // [start, end, text, fel]
         $probleme = [];
@@ -116,7 +152,7 @@ final class Divi4Taiere
         $nrSectiune = 0;
         $texte = [];
         foreach ($tk as $k => $t) {
-            if ($t->tip !== Token::DESCHIDERE || $t->ignorat || $t->spatiu !== 'html' || !$inOrice($t)) {
+            if ($t->tip !== Token::DESCHIDERE || $t->ignorat || $t->spatiu !== 'html' || !$inOrice($t) || ($locuriD !== [] && $inRegiune($t))) {
                 continue;
             }
             $cl = $t->clase($D);
@@ -411,6 +447,39 @@ final class Divi4Taiere
             array_push($j, ...$jSeo);
             $valori += $valoriSeo;
         }
+        // Regiunile dinamice (pista A): locurile lor pe T (aceleași ca pe documentul dialectului), jetoanele lor printr-o editare
+        // Html5\Editare (contextul arborelui verificat) și octeții capturați ca valori la import. Calea din formularele unei regiuni
+        // (action, _wp_http_referer) o dă randatorul ei, deci nu mai e un jeton al documentului; orice alt jeton într-o regiune e NU
+        // (suprapunerea, mai jos).
+        $regiuniTaiere = [];
+        if ($reguliRegiuni !== []) {
+            $lr2 = TaiereRegiuni::locuri($T, $tk2, $reguliRegiuni, array_values(array_filter([$s2['antet'], $s2['subsol'], $s2['banner']])), (int) $s2['body']);
+            if ($lr2['probleme'] !== [] || array_column($lr2['locuri'], 'jeton') !== array_column($locuriD, 'jeton')) {
+                return Taiere::refuz($lr2['probleme'] !== [] ? $lr2['probleme'] : ['regiuni: locurile de pe T nu sunt cele din documentul dialectului'], $T);
+            }
+            $jr = TaiereRegiuni::jetoane($T, $tk2, $lr2['locuri']);
+            if (is_string($jr)) {
+                return Taiere::refuz([$jr], $T);
+            }
+            $interioare = array_values(array_filter($lr2['locuri'], static fn (array $l): bool => $l['fel'] === 'regiune' && $l['mod'] === 'interior'));
+            $j = array_values(array_filter($j, static function (array $x) use ($interioare): bool {
+                foreach ($interioare as $l) {
+                    if ($x[3] === 'cale' && $x[0] >= $l['start'] && $x[1] <= $l['end']) {
+                        return false;
+                    }
+                }
+                return true;
+            }));
+            array_push($j, ...$jr);
+            foreach ($lr2['locuri'] as $l) {
+                $octeti = substr($T, $l['start'], $l['end'] - $l['start']);
+                $valori[$l['jeton']] = $octeti;
+                if ($l['fel'] === 'regiune') {
+                    $regiuniTaiere[] = ['regiune' => (string) $l['regiune'], 'n' => (int) $l['n'], 'mod' => (string) $l['mod'], 'atribut' => $l['atribut'],
+                        'octeti' => $octeti, 'stare' => is_array($ctx['stare'] ?? null) ? $ctx['stare'] : null, 'start' => (int) $l['start']];
+                }
+            }
+        }
         // Intervalele jetoanelor nu se suprapun și nu trec peste marginile bucăților sau ale fragmentelor.
         usort($j, static fn (array $a, array $b): int => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
         $margini = [$s2['headStart'], $s2['capEnd'], $s2['bodyStart'], $s2['corpEnd']];
@@ -452,7 +521,8 @@ final class Divi4Taiere
         $tHtml = $tk2[$s2['html']];
         $tBody = $tk2[$s2['body']];
         $htmlAtribute = substr($T, $tHtml->numeEnd, $tHtml->end - 1 - $tHtml->numeEnd);
-        $bodyAtribute = substr($T, $tBody->numeEnd, $tBody->end - 1 - $tBody->numeEnd);
+        // Atributele lui <body>, cu jetonul `{{ax:clase_body}}` dacă regulile îl cer (fără el, octeții lor întocmai).
+        $bodyAtribute = self::bucata($T, $j, $tBody->numeEnd, $tBody->end - 1, []);
         $cap = self::bucata($T, $j, $s2['headStart'], $s2['capEnd'], $fz);
         if ($s2['continut'] !== null) {
             $inainte = self::bucata($T, $j, $s2['bodyStart'], $s2['continut'][0], $fz);
@@ -465,7 +535,8 @@ final class Divi4Taiere
         }
         // Dovada: bucățile, cu fragmentele și valorile de la import, dau exact T.
         $taiere = new Taiere($T, $editari, $ancore, $htmlAtribute, $cap, $bodyAtribute, $inainte, $continut, $dupa, $fragmente, $valori, $meniu, $date,
-            $seo, $seoMotiv, self::sectiuni($ctx['sectiuni'] ?? null, $nrSectiune, $avertismente), $formulare, self::galerii($T, $tk2, $s2), [], $avertismente);
+            $seo, $seoMotiv, self::sectiuni($ctx['sectiuni'] ?? null, $nrSectiune, $avertismente), $formulare, self::galerii($T, $tk2, $s2), [], $avertismente,
+            $regiuniTaiere);
         try {
             $refacut = self::refa($taiere);
         } catch (\Throwable $e) {
@@ -590,7 +661,7 @@ final class Divi4Taiere
             return $rez;
         };
         $prima = static fn (array $l): ?int => $l[0] ?? null;
-        if (in_array($tip, ['pagina', 'arhiva', '404'], true)) {
+        if (in_array($tip, ['pagina', 'arhiva', '404', 'produs', 'sablon_articol', 'sablon_categorie', 'sablon_cautare'], true)) {
             $invelis = $prima($cauta(static fn (Token $t, array $c): bool => $t->nume === 'div' && in_array($tip === '404' ? 'et-l--body' : 'et-l--post', $c, true)));
             $zona = null;
             if ($invelis !== null && ($el = $element($invelis)) !== null) {
@@ -601,7 +672,7 @@ final class Divi4Taiere
                 $entry = $prima($cauta(static fn (Token $t, array $c): bool => $t->nume === 'div' && in_array('entry-content', $c, true)));
                 $zona = $entry !== null ? $interior($entry) : null;
             }
-            if ($zona === null && $tip !== 'arhiva') {
+            if ($zona === null && in_array($tip, ['pagina', '404'], true)) {
                 $rez['probleme'][] = 'conținutul ' . ($tip === '404' ? 'șablonului 404 (.et-l--body)' : 'paginii (.et-l--post sau .entry-content)') . ' nu se găsește sau nu se închide';
             }
             $rez['continut'] = $zona;

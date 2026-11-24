@@ -407,7 +407,8 @@ final class Plan
                     continue;
                 }
                 try {
-                    $t = Divi4Taiere::taie($rd, PlanCapturat::contextPagina($i, $sursa, $cale, $this->pagini[$k]['seo'], $anCaptura));
+                    $t = Divi4Taiere::taie($rd, PlanCapturat::contextPagina($i, $sursa, $cale, $this->pagini[$k]['seo'], $anCaptura, $ctx->reguli,
+                        $this->capturata->stareCaptura($dosar, $cale)));
                     if ($t->probleme === []) {
                         foreach (HtmlCapturat::verifica($t->html, $ctxPolitica, 'import') as $problema) {
                             $this->probleme[] = 'pagina „' . $pg['titlu'] . '” (HtmlCapturat, după pasul 5a): ' . $problema->linie();

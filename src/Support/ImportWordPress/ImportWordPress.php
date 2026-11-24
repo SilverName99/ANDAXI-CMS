@@ -47,10 +47,19 @@ final class ImportWordPress
      *    publicarea fișierelor statice);
      *  - `legaturi`: pe drumul capturat, `[{"modul": "et_pb_text_8_tb_footer", "text": "…", "href": "https://…"}]`: textul exact din
      *    modulul numit devine o legătură `<a href>` (Divi4, la import; legătura Divi a modulului, prin script, se scoate);
+     *  - `regiuni`: pe drumul capturat (pista A a mutării unui site WooCommerce), regiunile dinamice ale documentelor și locurile
+     *    jetoanelor `{{ax:clase_body}}` și `{{ax:titlu}}` (CadruCapturat\Regiuni::valideazaReguli: documentul, selectorul din gramatica
+     *    închisă, randatorul din lista închisă, modul). Reguli și în privat/ (documentele al căror nume e o dată a site-ului), adăugate
+     *    după cele din pachet;
+     *  - doar în privat/ (`privat/import-wordpress.json`): `sabloane` (`{"articol": "/<cale>/", "categorie": "/<cale>/",
+     *    "cautare": "/?s=<termen>"}`: adresele capturate din care se fac documentele-șablon, pista B).
      * Pachetul e public: niciun literal de email, nicio adresă de destinatar.
      */
     public const REGULI = ['_despre', 'pagini', 'articole', 'redirecturi', 'setari', 'continut', 'dialect', 'scripturi_aruncate', 'captura', 'stiluri_comune',
-        'stiluri_dupa_model', 'legaturi'];
+        'stiluri_dupa_model', 'legaturi', 'regiuni', 'sabloane'];
+
+    /** Felurile documentelor-șablon din `sabloane` (pista B; tipurile `sablon_*` din Divi4Taiere::TIPURI). */
+    public const SABLOANE = ['articol', 'categorie', 'cautare'];
 
     /** Valoarea lui `continut` pentru drumul capturat. */
     public const CONTINUT_CAPTURAT = 'capturat';
@@ -122,6 +131,12 @@ final class ImportWordPress
                     }
                     if ($k === 'scripturi_aruncate' && is_array($v) && array_is_list($v)) {
                         $r['scripturi_aruncate'] = array_merge(array_values((array) ($r['scripturi_aruncate'] ?? [])), $v);
+                    } elseif ($k === 'regiuni' && is_array($v) && array_is_list($v) && (!array_key_exists('regiuni', $r) || (is_array($r['regiuni'])
+                        && array_is_list($r['regiuni'])))) {
+                        // Regulile regiunilor din privat (documentele al căror nume e o dată a site-ului), după cele din pachet.
+                        $r['regiuni'] = array_merge(array_values((array) ($r['regiuni'] ?? [])), $v);
+                    } elseif ($k === 'sabloane' && !array_key_exists('sabloane', $r)) {
+                        $r['sabloane'] = $v;
                     } elseif ($k === 'captura' && is_array($v) && array_keys($v) === ['nonce'] && is_array($v['nonce']) && array_is_list($v['nonce'])
                         && (!array_key_exists('captura', $r) || is_array($r['captura']))) {
                         $r['captura']['nonce'] = array_values(array_merge((array) ($r['captura']['nonce'] ?? []), $v['nonce']));
@@ -136,7 +151,8 @@ final class ImportWordPress
 
     /**
      * Cheile unui import-wordpress.json PUBLIC care au voie doar în privat/ (recenzia 2, R3-7): `scripturi_aruncate` (sha256-urile
-     * scripturilor site-ului real), `captura.structura` (selectorii observați), `captura.nonce`.
+     * scripturilor site-ului real), `captura.structura` (selectorii observați), `captura.nonce`, `sabloane` (pista A: adresele
+     * documentelor-șablon).
      *
      * @param array<mixed> $public
      * @return list<string>
@@ -146,6 +162,10 @@ final class ImportWordPress
         $rez = [];
         if (array_key_exists('scripturi_aruncate', $public)) {
             $rez[] = 'scripturi_aruncate';
+        }
+        // Pista A: adresele documentelor-șablon (un articol, o categorie, un termen de căutare ale site-ului real).
+        if (array_key_exists('sabloane', $public)) {
+            $rez[] = 'sabloane';
         }
         foreach (['structura', 'nonce'] as $k) {
             if (is_array($public['captura'] ?? null) && array_key_exists($k, $public['captura'])) {
@@ -234,9 +254,28 @@ final class ImportWordPress
         } elseif (!$capturat && array_key_exists('dialect', $r)) {
             $p[] = 'dialect: doar cu "continut": "' . self::CONTINUT_CAPTURAT . '"';
         }
-        foreach (['scripturi_aruncate', 'captura'] as $cheie) {
+        foreach (['scripturi_aruncate', 'captura', 'regiuni', 'sabloane'] as $cheie) {
             if (!$capturat && array_key_exists($cheie, $r)) {
                 $p[] = $cheie . ': doar cu "continut": "' . self::CONTINUT_CAPTURAT . '"';
+            }
+        }
+        // Regiunile dinamice (pista A): gramatica închisă a regulilor, randatorii din lista închisă.
+        if (array_key_exists('regiuni', $r)) {
+            $p = array_merge($p, \App\Support\CadruCapturat\Regiuni::valideazaReguli($r['regiuni']));
+        }
+        if (array_key_exists('sabloane', $r)) {
+            $sab = $r['sabloane'];
+            if (!is_array($sab) || ($sab !== [] && array_is_list($sab))) {
+                $p[] = 'sabloane: un obiect {"articol": "/<cale>/", "categorie": "/<cale>/", "cautare": "/?s=<termen>"}';
+            } else {
+                foreach ($sab as $fel => $cale) {
+                    if (!in_array((string) $fel, self::SABLOANE, true)) {
+                        $p[] = 'sabloane: felul „' . mb_substr((string) $fel, 0, 40) . '” nu e unul din ' . implode(', ', self::SABLOANE);
+                    } elseif (!is_string($cale) || !str_starts_with($cale, '/') || str_starts_with($cale, '//') || strlen($cale) > 300
+                        || preg_match('/[\s\\\\\x00-\x1F]/', $cale) === 1 || str_contains('/' . rawurldecode($cale) . '/', '/../')) {
+                        $p[] = 'sabloane.' . $fel . ': adresa unui document capturat („/…/” sau „/?s=…”)';
+                    }
+                }
             }
         }
         $vazute = [];

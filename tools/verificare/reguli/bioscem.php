@@ -242,6 +242,9 @@ return [
         'galerii_capturate_elemente' => ['mod' => 'doar_structura', 'motiv' => 'elementele galeriilor capturate: se refac din captură, la import'],
         // Rapoartele CSP ale cadrului capturat (nucleu/0071): numărători pe zi, fără nimic despre vizitator, ale site-ului de pe care vin.
         'rapoarte_csp' => ['mod' => 'doar_structura', 'motiv' => 'rapoartele CSP ale site-ului (numărători pe zi): ale site-ului, nu ale copiei'],
+        // Regiunile dinamice ale documentelor capturate (nucleu/0072; pista A a mutării unui site WooCommerce): octeții capturați ai
+        // fiecărei regiuni (pot arăta starea unui coș capturat), refăcuți din captură la import. Goale pe un site fără regiuni.
+        'regiuni_capturate' => ['mod' => 'doar_structura', 'motiv' => 'regiunile dinamice ale documentelor capturate: se refac din captură, la import'],
         'gallery_folders' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'],
             'motive' => ['name' => 'numele unui dosar al galeriei']],
         'gallery_images' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'title', 'media_type', 'image_url', 'folder_id', 'alt_text', 'sort_order',

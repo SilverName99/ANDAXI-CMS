@@ -1167,6 +1167,48 @@ se publică), niciun `.php`/`.phtml`/`.phar` în
 `wp-content/`, `wp-includes/`, `capturat/`, iar `.htaccess`-urile arborilor copiați au `nosniff`. Pe cadrul capturat, `/health`
 are și rândul `capturat: <primele 12 caractere ale sha256-ului manifestului>` (sau `lipsa`).
 
+**Regiunile dinamice** (mutarea unui site WooCommerce, pista A; `App\Support\CadruCapturat\Regiuni`, `CadruCapturat\ContextRegiune`,
+`CadruCapturat\Randator`, `ImportWordPress\Continut\TaiereRegiuni`, migrarea `nucleu/0072`; [MAGAZIN-WC.md](MAGAZIN-WC.md)): un nod al
+documentului capturat al cărui interior, sau valoarea unui atribut, îl randează codul nostru la cerere, în markupul site-ului, ca
+foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de articole, calendarul). Restul documentului rămâne T.
+
+- **Regulile** stau în pachet: `import-wordpress.json` → `regiuni`, o listă de `{"document", "selector", "regiune", "mod",
+  "atribut"}` (`document`: o cale „/…/”, `404`, `produs:*` sau un șablon, `sablon:articol`, `sablon:categorie`, `sablon:cautare`;
+  `mod`: `interior`, implicit, sau `atribut`, cu `atribut` = `data-events` sau `class`), plus `{"document", "jeton": "clase_body"}`
+  și `{"document", "selector", "jeton": "titlu"}`. Selectorii au o gramatică închisă (`SchemaDivi4::selectorSigur`: taguri, `#id`,
+  `.clasă`, legate prin spații și `>`; fără atribute, pseudo-clase, `*`, virgule, `+`, `~`, escapări), iar randatorii o listă
+  închisă (`Regiuni::CATALOG`, cu familiile `wc:`, `wcpc:`, `mailpoet:`, `articol:`, `blog:`, `cautare:`). Un id necunoscut, altă
+  formă de selector, o cheie necunoscută sau aceeași regulă de două ori sunt refuzate de `verifica-pachet.php` și de import, pe
+  fiecare document cu reguli: o regulă greșită nu se ignoră în tăcere. Același element poate avea o regiune pe interior și una pe
+  `class`. Regulile pe paginile al căror nume ține de site și adresele documentelor-șablon (`sabloane`: un articol, o categorie,
+  un termen de căutare) stau în `privat/import-wordpress.json`; regulile de acolo se adaugă celor publice.
+- **Tăierea** (`Divi4Taiere` cu `TaiereRegiuni`): pasul 5a nu atinge nimic din interiorul unei regiuni. Pe T, fiecare loc primește
+  jetonul `{{ax:regiune:<id>:<n>}}` (`n`: al câtelea loc al aceluiași randator în document) printr-o editare `Html5\Editare`, care
+  verifică efectul în arbore; `{{ax:clase_body}}` intră în valoarea lui `class` de pe `<body>`, `{{ax:titlu}}` în interiorul
+  elementului titlului. Octeții capturați ai fiecărei regiuni se scriu în `regiuni_capturate`: documentul, id-ul, `n`, modul,
+  atributul, octeții, sha256-ul și starea pe care o arată captura (`index.json` → `adrese[].stare`, de exemplu coșul cu un produs).
+  Refuzate (NU, pe documentul lor): o regulă care nu găsește nimic, o regulă pe o cale fără document importat (pagina ar rămâne
+  înghețată în starea capturii), un element fără tagul lui de închidere sau mutat de parser, un atribut lipsă, dublat sau fără
+  ghilimele, un titlu cu taguri, două locuri care se suprapun, un loc într-un fragment (antetul, subsolul și bannerul sunt comune
+  mai multor documente). Fără reguli `regiuni` (toate site-urile de azi), tăierea e cea de dinainte.
+- **Dovada** (la import, după P1): fiecare randator, cu starea capturii, dă octeții capturați după normalizarea declarată
+  (`Captura\Normalizare`, apoi `Randator::normalizeaza` pe ambele părți: nonce-urile, cheile rândurilor coșului, id-urile
+  `quantity_<uniqid>`); altfel NU, cu primul octet diferit, și nimic scris. Ieșirea lui, pusă în documentul așteptat, nu aduce nicio
+  problemă nouă a politicii HTML-ului capturat, iar ieșirea unui atribut se poate pune între ghilimele. Un randator încă
+  neconstruit (clasa lui din catalog nu există) n-are dovadă: un document cu regiunea lui nu se poate importa.
+- **Randarea** (CadruCapturat): la o cerere, fiecare jeton de regiune primește ieșirea randatorului (`Regiuni::randeaza`, cu
+  `ContextRegiune`: baza, documentul, calea, query-ul, metoda, modul, atributul); bucățile dintre regiuni se rezolvă fiecare, în
+  aceeași singură trecere a jetoanelor, iar ieșirile se pun între ele nerezolvate, deci un `{{ax:` din datele cererii sau ale unui
+  client rămâne text. O valoare de atribut cu ghilimele, `<` sau un `&` care nu e o referință, un jeton de regiune nedeclarat
+  pentru document, un randator lipsă: 500 și nimic din pagină. La P1, la previzualizare și la verificarea salvării din editor se pun
+  octeții capturați (niciun randator nu rulează); o regiune nedeclarată pentru pagină e refuzată la salvare.
+- **Cache-ul**: fiecare randator e `pagina` (documentul poate sta în cache-ul de pagini; randatorul nu citește sesiunea:
+  `ContextRegiune::sesiune` aruncă, deci 500 și nimic în cache) sau `sesiune` (documentul cu o asemenea regiune pleacă
+  `Cache-Control: no-store, private` și nu se scrie în cache-ul de pagini: `X-Page-Cache: BYPASS`).
+- **Clasele corpului și titlul**: `{{ax:clase_body}}` dă clasele capturate, neschimbate, cât nicio regiune nu cere altceva; o regiune
+  poate adăuga sau scoate doar clase din lista închisă `SchemaDivi4::CLASE_BODY` (`logged-in`, `woocommerce-account`,
+  `woocommerce-<endpoint>`…), puse la sfârșit. `{{ax:titlu}}` dă titlul capturat sau pe cel cerut de o regiune, ca text scăpat.
+
 **Răspunsurile înghețate** (pasul 9a; `App\Support\RaspunsuriInghetate`): pe cadrul capturat, o cerere GET sau HEAD cu metoda, calea
 și query-ul exacte ale unui răspuns din captură (robots.txt, sitemap-urile și XSL-ul lor, feed-urile, oEmbed, redirecționările
 capturate) îl primește din `raspunsuri_inghetate`, înaintea stratului de adrese WordPress, a ghicirii, a rutelor nucleului și a
