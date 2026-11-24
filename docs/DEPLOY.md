@@ -1088,8 +1088,8 @@ mereu pe rezultatul final la `aplica()` (o editare refuzată oprește tot, iar u
 protejată). Tokenizarea recompusă dă exact octeții paginii (poarta G-html5, `tools/dev/test-html5.php`).
 
 **Politica listei albe** (`App\Support\HtmlCapturat`, cu `HtmlCapturat\ContextCapturat`, `SchemaDivi4` și `Problema`) rulează
-peste acești tokeni la import (`verifica($html, $ctx, 'import')`; modul `'salvare'` există în cod, dar **niciun drum de salvare din
-admin nu o cheamă încă**: editorul paginilor capturate nu e făcut, deci o pagină capturată nu se editează din admin până atunci):
+peste acești tokeni la import (`verifica($html, $ctx, 'import')`) și la fiecare salvare a unei pagini capturate din admin
+(`'salvare'`, prin `CadruCapturat::problemeContinut`; mai jos, „Editorul paginilor capturate”):
 HTML-ul capturat e de neîncredere, iar pe site-ul nou NU rulează niciun script capturat — comportamentul vine doar din
 runtime-ul nostru, pe același DOM. Ce nu e explicit permis e REFUZAT, cu motivul (o `Problema`); nimic nu se scoate în
 tăcere, lista albă se lărgește doar după o revizie de om. Un document cu măcar o problemă nu se importă și nu se salvează
@@ -1135,7 +1135,25 @@ cerere: nici gazda): `default-src 'self'`, `script-src 'self' 'inline-speculatio
 Report-Only (copia de verificare, înainte de comutare). Trackerele active ale site-ului (`tema.json` → `urmarire`, cu id-urile în
 `privat/urmarire.json`; `App\Support\Urmarire`) adaugă doar sursele lor exacte, și numai ele pot lărgi `script-src`; fără id-uri în
 privat, politica rămâne cea strictă. Încălcările de după acord (o gazdă de colectare nedeclarată) se văd în rapoartele CSP. `X-Content-Type-Options: nosniff` pe orice răspuns. Fără `cadru`, nimic din
-toate acestea: site-urile de azi ies octet cu octet ca înainte (G-cmp). Poarta: **G-capturat** (`tools/dev/test-capturat.php`).
+toate acestea: site-urile de azi ies octet cu octet ca înainte (G-cmp). Politica pleacă pe rutele cadrului după metoda cererii: un
+POST spre o rută a CMS-ului (`/admin/pages/save`, care poate răspunde cu formularul și refuzul) e al adminului, deci fără ea.
+Poarta: **G-capturat** (`tools/dev/test-capturat.php`).
+
+**Editorul paginilor capturate** (Pagini → Editează, pe o pagină cu document în `pagini_capturate`): previzualizarea e pagina de pe
+site, randată de server pe același drum ca pagina publică (`POST /admin/pages/{id}/previzualizare`, cu jetonul sesiunii
+`AdminCsrf`; `CadruCapturat::previzualizare`): head-ul capturat (foile temei, `et-cache` cu foile amânate ca foi obișnuite, foile
+rescrise de `stiluri_comune` și `stiluri_dupa_model`, fonturile), antetul și subsolul, scripturile runtime-ului pe sloturi, cu codul
+din editor în locul conținutului salvat. Cadrul rămâne izolat (`sandbox="allow-scripts"`, fără `allow-same-origin`: origine opacă,
+fără acces la admin și la cookie-urile lui), cu politica site-ului fără trackere și fără `report-uri`, fără cache, `noindex`;
+rulează doar runtime-ul, niciun script capturat. Taburile JS și CSS lipsesc (pe paginile capturate nu se folosesc). Codul trece
+întâi de politica listei albe (modul `salvare`, cu contextul capturii: foile din `capturat/manifest.json`): ce n-ar trece la
+salvare nu se randează, previzualizarea arată problemele, cu rândul lor din cod. **Salvarea** aplică aceeași politică pe documentul
+întreg randat cu codul nou (problemele head-ului și ale fragmentelor, trecute la import, nu se pun pe seama paginii; un jeton pe
+care cadrul nu-l cunoaște, care ar da 500, e și el refuzat) și refuză, fără să scrie nimic, cu mesajul în română și codul rămas în
+editor (422); un cod CSS sau JavaScript trimis pentru pagină e refuzat la fel. Nimic nu se scoate în tăcere. După o salvare, P1
+(`verifica-randare.php --capturat`) dă diferența paginii până la `--aproba=<page_id>`. **Antet, subsol și meniu**, pe un site
+capturat: antetul și subsolul paginilor, cum apar pe site (prima pagină, cu locul conținutului; `GET /admin/design/previzualizare`,
+același cadru izolat), iar codul și meniul de acolo rămân ale paginilor proprii ale CMS-ului (coșul, contul, logarea).
 
 **P1 după import** (pasul 7): `php scripts/verifica-randare.php --capturat` randează din linia de comandă fiecare document
 capturat, pe drumul cererii web (CadruCapturat, cu scripturile runtime-ului din `tema.json` → `runtime`), cu valorile de la

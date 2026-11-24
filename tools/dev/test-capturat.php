@@ -859,6 +859,188 @@ $scrie('== 11. P1 la import: valorile de la import fără adaosurile răspunsulu
 }
 
 $scrie('');
+$scrie('== 12. Editorul unei pagini capturate: previzualizarea = pagina de pe site cu ciorna; politica HTML-ului la salvare; antetul și subsolul în „Antet, subsol și meniu”');
+{
+    $idCamere = $paginiId['pagina:102'];
+    $docCamere = CadruCapturat::document($db, pagina: $idCamere);
+    $salvatCamere = (string) $db->query('SELECT html_content FROM pages WHERE id = ' . $idCamere)->fetchColumn();
+    // Politica la salvare (în proces): codul salvat trece; scripturile, handlerele, schemele de script, un al doilea ax-date și
+    // un jeton necunoscut nu, fiecare cu motivul și rândul lui din codul paginii; problemele head-ului și ale fragmentelor nu se
+    // pun pe seama paginii (pagina:101 are de la secțiunea 6 un script în bucata de după conținut).
+    $pb = static fn (string $c, string $cheie = 'pagina:102'): array => CadruCapturat::problemeContinut($db, (array) CadruCapturat::document($db, cheie: $cheie), $c);
+    $randuri = substr_count($salvatCamere, "\n") + 1;
+    $cuScript = $pb($salvatCamere . "\n<script>alert(1)</script>");
+    $verifica('politica la salvare: codul salvat trece (și pe o pagină cu o problemă în afara conținutului); un <script> e refuzat cu rândul lui din cod',
+        $pb($salvatCamere) === [] && $pb((string) $db->query('SELECT html_content FROM pages WHERE id = ' . $paginiId['pagina:101'])->fetchColumn(), 'pagina:101') === []
+        && count($cuScript) === 1 && str_starts_with($cuScript[0], 'rândul ' . ($randuri + 1) . ': '), json_encode($cuScript, JSON_UNESCAPED_UNICODE) . ' (rânduri: ' . $randuri . ')');
+    $rele = ['<img src="/x.png" onerror="alert(1)">', '<a href="javascript:alert(1)">x</a>', '<script type="application/json" id="ax-date">{}</script>',
+        '<iframe src="https://rau.example.test/"></iframe>', '<object data="/x"></object>', '<div style="background:url(javascript:alert(1))">x</div>', '{{ax:necunoscut}}',
+        '<base href="https://rau.example.test/">', '<meta http-equiv="refresh" content="0;url=https://rau.example.test/">'];
+    $trecute12 = [];
+    foreach ($rele as $r) {
+        if ($pb($salvatCamere . "\n" . $r) === []) {
+            $trecute12[] = $r;
+        }
+    }
+    $jeton = $pb($salvatCamere . '{{ax:necunoscut}}');
+    $verifica('politica la salvare: handlerele on…, javascript:, un al doilea ax-date, iframe-uri din afara listei albe, object, url(javascript:) în style, '
+        . '<base>, meta refresh și un jeton necunoscut (pagina ar da 500) sunt refuzate', $trecute12 === [] && count($jeton) === 1 && str_contains($jeton[0], 'jeton'),
+        'trecute: ' . implode(' | ', $trecute12) . ' ' . json_encode($jeton, JSON_UNESCAPED_UNICODE));
+    $verifica('politica previzualizării: a site-ului (cu sursele din tema.json), fără trackere, fără report-uri, aplicată', CspSite::politicaPrevizualizare()
+        === preg_replace('/; report-uri [^;]*$/', '', CspSite::politica(false, Tema::csp(), [])) && !str_contains(CspSite::politicaPrevizualizare(), 'report-uri')
+        && str_contains(CspSite::politicaPrevizualizare(), "script-src 'self' 'inline-speculation-rules';") && str_contains(CspSite::politicaPrevizualizare(), "frame-ancestors 'self'"));
+
+    // Foile inventate ale temei (public/ al codului e docroot-ul serverului; public/wp-content/ e ignorat de git și se șterge la
+    // final): fundalul antetului în foaia temei, chenarul subsolului în foaia amânată a paginii (data-ax-tarziu).
+    $publicWp = $radacina . '/public/wp-content';
+    $foiNoi = !file_exists($publicWp);
+    if ($foiNoi) {
+        register_shutdown_function(static function () use ($publicWp): void {
+            exec('rm -rf ' . escapeshellarg($publicWp));
+        });
+        @mkdir($publicWp . '/themes/Divi', 0775, true);
+        @mkdir($publicWp . '/et-cache/102', 0775, true);
+        file_put_contents($publicWp . '/themes/Divi/style.css', "body{margin:0;font-family:Georgia,'Times New Roman',serif;color:#2d2a26;background:#f7f3ec}\n"
+            . ".et_pb_section{padding:36px 0}.et_pb_row{max-width:1080px;margin:0 auto;padding:0 24px}\n"
+            . ".et_pb_section_0_tb_header{background-color:rgb(31, 77, 58);padding:18px 0}\n"
+            . ".et-menu{display:flex;gap:28px;justify-content:center;list-style:none;margin:0;padding:0}\n"
+            . ".et-menu a{color:#f2e8d5;text-decoration:none;font:600 14px/1.4 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase}\n"
+            . ".current-menu-item>a{border-bottom:2px solid #e0b062;padding-bottom:4px}\n"
+            . ".et_pb_text_inner p{font-size:18px;line-height:1.7}.et_pb_text_inner h1,.et_pb_text_inner h2{font-weight:400;color:#1f4d3a}\n"
+            . ".et_pb_section_0_tb_footer{background:#1c1a17;color:#d9d2c5}.et_pb_section_0_tb_footer input,.et_pb_section_0_tb_footer textarea{"
+            . "display:block;width:100%;max-width:420px;margin:6px 0;padding:10px;border:1px solid #4a453d;background:#2a2722;color:#f2e8d5}\n"
+            . ".et_pb_button{display:inline-block;background:#e0b062;color:#1c1a17;border:0;padding:10px 22px;font:600 14px system-ui,sans-serif}\n"
+            . ".ax-proba-ciorna{max-width:1080px;margin:0 auto;padding:16px 24px;background:#fff4dc;border-left:4px solid #e0b062}\n");
+        file_put_contents($publicWp . '/et-cache/102/et-proba-late.css', ".et_pb_section_0_tb_footer{border-top:6px solid rgb(224, 176, 98)}\n");
+    }
+
+    // Prin server, după logare: previzualizarea codului salvat = pagina publică (aceleași foi, antet, subsol, runtime), nonce-urile
+    // normalizate; CSRF-ul cerut; cu ciorna, ciorna; cu un script, problemele.
+    $borcan = $lucru . '/borcan-admin.txt';
+    $http = static function (string $metoda, string $cale, array $campuri = []) use ($port, $borcan): array {
+        $c = curl_init('http://127.0.0.1:' . $port . $cale);
+        $antete = [];
+        curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 60,
+            CURLOPT_COOKIEJAR => $borcan, CURLOPT_COOKIEFILE => $borcan, CURLOPT_HEADERFUNCTION => static function ($c, string $l) use (&$antete): int {
+                if (str_contains($l, ':')) {
+                    [$n, $v] = explode(':', $l, 2);
+                    $antete[strtolower(trim($n))] = trim($v);
+                }
+                return strlen($l);
+            }]);
+        if ($metoda === 'POST') {
+            curl_setopt($c, CURLOPT_POST, true);
+            curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($campuri));
+        }
+        $corp = (string) curl_exec($c);
+        $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+        curl_close($c);
+        return ['cod' => $cod, 'antete' => $antete, 'corp' => $corp];
+    };
+    $politicaP = (string) preg_replace('/; report-uri [^;]*$/', '', CspSite::politica(false, ['img-src' => ['https://poze.example.test/p/']], []));
+    // Secțiunea 6 a lăsat un script în bucata de după conținut a primei pagini (P1 îl prinde); înapoi, ca previzualizarea antetului să fie a paginii.
+    $db->exec("UPDATE pagini_capturate SET dupa = REPLACE(dupa, '<script>alert(1)</script>', '') WHERE cheie = 'pagina:101'");
+    $faraLogare = $http('POST', '/admin/pages/' . $idCamere . '/previzualizare', ['html_content_b64' => base64_encode('<p>x</p>')]);
+    $http('GET', '/admin/login');
+    $logare = $http('POST', '/admin/login', ['email' => (string) getenv('ADMIN_DEFAULT_EMAIL'), 'password' => (string) getenv('ADMIN_DEFAULT_PASSWORD')]);
+    $editor = $http('GET', '/admin/pages/' . $idCamere . '/edit');
+    preg_match('#id="previzualizare-capturata-form"[^>]*>\s*<input type="hidden" name="_csrf" value="([0-9a-f]{64})">#', $editor['corp'], $mj);
+    $jetonP = $mj[1] ?? '';
+    $previz = static fn (string $cod, string $jeton) => $http('POST', '/admin/pages/' . $idCamere . '/previzualizare', ['_csrf' => $jeton, 'html_content_b64' => base64_encode($cod)]);
+    $faraJeton = $previz($salvatCamere, '');
+    $pSalvat = $previz($salvatCamere, $jetonP);
+    $public = $cerere($port, '/camere/');
+    $dP = $egale($pSalvat['corp'], $public['corp']);
+    $verifica('previzualizarea: fără logare spre logare, fără jetonul sesiunii 403; cu el, codul salvat dă exact pagina publică (octet cu octet, cu nonce-urile '
+        . 'normalizate: head-ul capturat cu foile lui, foile amânate ca foi, antetul, subsolul, runtime-ul), cu politica previzualizării, fără cache, noindex',
+        $faraLogare['cod'] === 302 && str_ends_with($faraLogare['antete']['location'] ?? '', '/admin/login') && $logare['cod'] === 302 && $jetonP !== ''
+        && !isset($faraLogare['antete']['content-security-policy'])
+        && $faraJeton['cod'] === 403 && !str_contains($faraJeton['corp'], 'et_pb_section') && $pSalvat['cod'] === 200 && $dP === null && $public['cod'] === 200
+        && ($pSalvat['antete']['content-security-policy'] ?? '') === $politicaP && str_contains($pSalvat['antete']['cache-control'] ?? '', 'no-store')
+        && str_contains($pSalvat['antete']['x-robots-tag'] ?? '', 'noindex') && ($pSalvat['antete']['x-content-type-options'] ?? '') === 'nosniff'
+        && CadruCapturat::scripturiNepermise($pSalvat['corp'], $runtime) === [] && !str_contains($pSalvat['corp'], 'data-ax-tarziu'),
+        $faraLogare['cod'] . ' ' . $logare['cod'] . ' ' . $faraJeton['cod'] . ' ' . $pSalvat['cod'] . ' ' . json_encode($pSalvat['antete']) . ' '
+        . json_encode(CadruCapturat::scripturiNepermise($pSalvat['corp'], $runtime)) . ' dif ' . ($dP ?? '-') . ': „'
+        . substr($norm->document($pSalvat['corp']), max(0, (int) $dP - 60), 160) . '” față de „' . substr($norm->document($public['corp']), max(0, (int) $dP - 60), 160) . '”');
+    $ciornaP = $previz($salvatCamere . "\n<p class=\"ax-proba-ciorna\">Ciorna din editor</p>", $jetonP);
+    $scriptP = $previz($salvatCamere . "\n<script>alert(1)</script>", $jetonP);
+    $verifica('previzualizarea unei ciorne: ciorna în locul conținutului, restul paginii la fel; o ciornă cu un script dă problemele (rândul lui), nu pagina',
+        $ciornaP['cod'] === 200 && str_contains($ciornaP['corp'], '<p class="ax-proba-ciorna">Ciorna din editor</p>') && str_contains($ciornaP['corp'], 'et-l--header')
+        && str_contains($ciornaP['corp'], 'et-l--footer') && CadruCapturat::scripturiNepermise($ciornaP['corp'], $runtime) === []
+        && $scriptP['cod'] === 200 && str_contains($scriptP['corp'], 'ar fi refuzată') && str_contains($scriptP['corp'], 'rândul ' . ($randuri + 1) . ':')
+        && !str_contains($scriptP['corp'], '<script>alert') && !str_contains($scriptP['corp'], 'et_pb_section'), substr($scriptP['corp'], 0, 600));
+    $designP = $http('GET', '/admin/design/previzualizare');
+    $verifica('„Antet, subsol și meniu”: antetul și subsolul paginilor capturate (prima pagină), cu head-ul și foile lor și locul conținutului; politica previzualizării',
+        $designP['cod'] === 200 && str_contains($designP['corp'], 'et-l--header') && str_contains($designP['corp'], 'et-l--footer')
+        && str_contains($designP['corp'], CadruCapturat::LOC_CONTINUT) && str_contains($designP['corp'], '/wp-content/themes/Divi/style.css')
+        && ($designP['antete']['content-security-policy'] ?? '') === $politicaP && CadruCapturat::scripturiNepermise($designP['corp'], $runtime) === [],
+        $designP['cod'] . ' ' . substr($designP['corp'], 0, 300));
+    $verifica('editorul pe o pagină capturată: nota, doar tabul HTML, cadrul numit cu sandbox="allow-scripts" (fără allow-same-origin), formularul previzualizării '
+        . 'cu jetonul; fără tabul JS și CSS', str_contains($editor['corp'], 'id="nota-pagina-capturata"') && !str_contains($editor['corp'], 'data-code-type="js"')
+        && !str_contains($editor['corp'], 'id="js-code"') && str_contains($editor['corp'], '<iframe id="page-preview" name="page-preview-capturata" title="Preview pagină" sandbox="allow-scripts"></iframe>')
+        && preg_match('#<iframe[^>]*allow-same-origin#', $editor['corp']) !== 1, (string) (preg_match('#<iframe[^>]*>#', $editor['corp'], $mi) === 1 ? $mi[0] : substr($editor['corp'], 0, 300)));
+
+    // Salvarea: un script e refuzat cu motivul (422), codul rămâne în editor, nimic scris; un cod CSS sau JS trimis e refuzat; codul bun se salvează.
+    $inainte = (string) $db->query('SELECT html_content FROM pages WHERE id = ' . $idCamere)->fetchColumn();
+    $campuriSalvare = static fn (string $html, array $extra = []): array => ['id' => (string) $idCamere, 'title' => 'Camere & prețuri', 'slug' => 'camere',
+        'is_published' => '1', 'html_content_b64' => base64_encode($html)] + $extra;
+    $refuz = $http('POST', '/admin/pages/save', $campuriSalvare($salvatCamere . "\n<script>alert(1)</script>"));
+    $dupaRefuz = (string) $db->query('SELECT html_content FROM pages WHERE id = ' . $idCamere)->fetchColumn();
+    $refuzJs = $http('POST', '/admin/pages/save', $campuriSalvare($salvatCamere, ['js_content_b64' => base64_encode('alert(1)')]));
+    $verifica('salvarea unei pagini capturate cu un <script>: refuzată (422) cu motivul în română și rândul lui, codul trimis rămas în editor (pagina adminului, '
+        . 'fără politica site-ului: un POST spre o rută a CMS-ului nu e al cadrului), baza neschimbată; '
+        . 'un cod JavaScript trimis pentru pagină: refuzat la fel', $refuz['cod'] === 422 && str_contains($refuz['corp'], 'Pagina nu s-a salvat')
+        && str_contains($refuz['corp'], 'rândul ' . ($randuri + 1) . ':') && str_contains($refuz['corp'], htmlspecialchars('<script>alert(1)</script>', ENT_NOQUOTES))
+        && !isset($refuz['antete']['content-security-policy']) && $dupaRefuz === $inainte && $refuzJs['cod'] === 422 && str_contains($refuzJs['corp'], 'codul CSS și JavaScript al paginii nu se folosește')
+        && (string) $db->query('SELECT js_content FROM pages WHERE id = ' . $idCamere)->fetchColumn() === '', $refuz['cod'] . ' ' . $refuzJs['cod']);
+
+    // În Chromium: editorul, cadrul previzualizării (foile capturate aplicate, runtime-ul rulat, izolat de admin), ciorna, refuzul, salvarea.
+    preg_match('#<p>([^<>{}]{6,60})<#u', $salvatCamere, $mt);
+    $envNode = ['CMS_DEV_URL=http://127.0.0.1:' . $port, 'CMS_DEV_ADMIN_EMAIL=' . (string) getenv('ADMIN_DEFAULT_EMAIL'), 'CMS_DEV_PAROLA=' . (string) getenv('ADMIN_DEFAULT_PASSWORD'),
+        'CMS_DEV_PAGINA=' . $idCamere, 'CMS_DEV_TEXT=' . ($mt[1] ?? ''), 'CMS_DEV_POZE=' . (string) getenv('CMS_DEV_POZE'),
+        'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers'), 'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'),
+        'NO_PROXY=*', 'no_proxy=*'];
+    $iesireNode = [];
+    exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy ' . implode(' ', array_map('escapeshellarg', $envNode))
+        . ' node ' . escapeshellarg(__DIR__ . '/capturat-editor.cjs') . ' 2>&1', $iesireNode, $codNode);
+    $n = json_decode((string) end($iesireNode), true);
+    $n = is_array($n) ? $n : [];
+    if ((string) getenv('CMS_DEV_POZE') !== '') {
+        file_put_contents(getenv('CMS_DEV_POZE') . '/editor.json', json_encode($n, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+    $ce = $n['editor']['cadru'] ?? [];
+    $stiluri = !$foiNoi || (($ce['fundalAntet'] ?? '') === 'rgb(31, 77, 58)' && ($ce['chenarSubsol'] ?? '') === 'rgb(224, 176, 98)');
+    $scripturiCadru = $ce['scripturi'] ?? ['?'];
+    $doarRuntime = $scripturiCadru !== [] && array_filter($scripturiCadru, static fn (string $s): bool => !str_starts_with($s, 'src /assets/compat/')
+        && preg_match('#^inline (?:application/json ax-date|application/ld\+json |speculationrules )$#', $s) !== 1) === [];
+    $verifica('Chromium, editorul: previzualizarea e pagina de pe site (antetul, subsolul, foaia temei și foaia amânată aplicate' . ($foiNoi ? '' : ' — sărit: public/wp-content există')
+        . '), runtime-ul a rulat (html.js), doar scripturile runtime-ului, origine opacă (adminul și cookie-urile lui de neatins), 0 încălcări CSP',
+        ($n['logat'] ?? false) && ($n['editor']['status'] ?? 0) === 200 && ($ce['antet'] ?? false) && ($ce['subsol'] ?? false) && $stiluri && ($ce['htmlJs'] ?? false)
+        && $doarRuntime && ($ce['tarzii'] ?? 1) === 0 && ($ce['origine'] ?? '') === 'null' && ($ce['parinte'] ?? '') === 'blocat' && ($ce['cookie'] ?? 'citit') !== 'citit'
+        && ($ce['incalcari'] ?? ['?']) === [] && ($n['editor']['incalcariSus'] ?? ['?']) === [] && ($n['editor']['areText'] ?? false)
+        && str_contains((string) ($ce['text'] ?? ''), html_entity_decode((string) ($mt[1] ?? '?'), ENT_QUOTES | ENT_HTML5, 'UTF-8')) && ($n['editor']['sandbox'] ?? '') === 'allow-scripts'
+        && ($n['editor']['taburi'] ?? []) === ['html'] && ($n['editor']['nota'] ?? false), json_encode([array_diff_key($ce, ['text' => 1, 'foi' => 1, 'scripturi' => 1]),
+            array_diff_key($n['editor'] ?? [], ['cadru' => 1]), $doarRuntime, $mt[1] ?? null, $n['eroare'] ?? null], JSON_UNESCAPED_UNICODE));
+    $verifica('Chromium, ciorna: previzualizarea se reface cu codul nesalvat; cu un script, problemele în cadru și niciun dialog',
+        str_contains((string) ($n['ciorna']['text'] ?? ''), 'Text de probă din editor, încă nesalvat') && ($n['ciorna']['antet'] ?? false) && ($n['ciorna']['subsol'] ?? false)
+        && str_contains((string) ($n['ciornaScript']['text'] ?? ''), 'ar fi refuzată') && !($n['ciornaScript']['antet'] ?? true) && ($n['dialoguri'] ?? 1) === 0,
+        json_encode([$n['ciorna'] ?? null, $n['ciornaScript'] ?? null], JSON_UNESCAPED_UNICODE));
+    $verifica('Chromium, salvarea: cu scriptul refuzată (422, motivul, codul rămas în editorul de cod, previzualizarea cu problemele, nicio încălcare CSP pe '
+        . 'pagina adminului), fără el salvată; pagina publică are apoi ciorna',
+        ($n['refuz']['status'] ?? 0) === 422 && str_contains((string) ($n['refuz']['eroare'] ?? ''), 'Pagina nu s-a salvat') && ($n['refuz']['codRamas'] ?? false)
+        && ($n['refuz']['taburi'] ?? []) === ['html'] && ($n['refuz']['codemirror'] ?? false) && preg_grep('/Content Security Policy/i', (array) ($n['refuz']['consola'] ?? ['?'])) === []
+        && str_contains((string) ($n['refuz']['cadru']['text'] ?? ''), 'ar fi refuzată') && ($n['salvare']['status'] ?? 0) === 200 && str_contains((string) ($n['salvare']['succes'] ?? ''), 'salvată')
+        && str_contains($cerere($port, '/camere/')['corp'], 'Text de probă din editor, încă nesalvat')
+        && !str_contains((string) $db->query('SELECT html_content FROM pages WHERE id = ' . $idCamere)->fetchColumn(), '<script'),
+        json_encode([$n['refuz'] ?? null, $n['salvare'] ?? null], JSON_UNESCAPED_UNICODE));
+    $cd = $n['design']['cadru'] ?? [];
+    $verifica('Chromium, „Antet, subsol și meniu”: nota, cadrul izolat cu antetul și subsolul capturate, cu foile lor, și locul conținutului',
+        ($n['design']['status'] ?? 0) === 200 && ($n['design']['nota'] ?? false) && ($n['design']['sandbox'] ?? '') === 'allow-scripts' && ($cd['antet'] ?? false)
+        && ($cd['subsol'] ?? false) && ($cd['loc'] ?? false) && (!$foiNoi || ($cd['fundalAntet'] ?? '') === 'rgb(31, 77, 58)') && ($cd['incalcari'] ?? ['?']) === [],
+        json_encode($n['design'] ?? null, JSON_UNESCAPED_UNICODE));
+}
+
+$scrie('');
 $scrie('== 5. Tema::valideaza pe cheile cadrului capturat');
 [$v, $pb] = Tema::valideaza(['cadru' => 'capturat', 'runtime' => 'divi4@1', 'csp' => ['mod' => 'raport', 'img-src' => ['https://poze.example.test/p/']],
     'previzualizare' => [390, 1440]], $lucru . '/pachet');

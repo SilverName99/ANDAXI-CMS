@@ -17078,11 +17078,102 @@ final class AdminController
         }
         $pageSeo = $this->loadCustomPageSeoSettings($db, (int) ($page['id'] ?? 0));
 
+        $this->randeazaEditorPagina($db, $page, $pageSeo);
+    }
+
+    /**
+     * Editorul unei pagini. Pe cadrul capturat, o pagină cu document capturat (CadruCapturat::document) are previzualizarea
+     * paginii de pe site (POST /admin/pages/{id}/previzualizare, cu jetonul AdminCsrf) și fără taburile JS și CSS.
+     *
+     * @param array<string, mixed> $page
+     * @param array<string, mixed> $pageSeo
+     */
+    private function randeazaEditorPagina(PDO $db, array $page, array $pageSeo): void
+    {
+        $capturata = \App\Support\Tema::cadru() === 'capturat' && \App\Support\CadruCapturat::document($db, pagina: (int) ($page['id'] ?? 0)) !== null;
         View::render('admin/page-editor', array_merge([
             'title' => 'Editează pagină',
             'page' => $page,
             'pageSeo' => $pageSeo,
-        ], $this->previzualizariEditorPagini($db)), 'admin/layout');
+        ], $capturata ? ['paginaCapturata' => true, 'jetonPrevizualizare' => \App\Support\AdminCsrf::token()] : [],
+            $this->previzualizariEditorPagini($db)), 'admin/layout');
+    }
+
+    /**
+     * Previzualizarea unei pagini capturate în editor (POST /admin/pages/{id}/previzualizare; cererea pleacă din editor, cu
+     * jetonul AdminCsrf, într-un cadru `sandbox="allow-scripts"`): documentul paginii randat pe drumul paginii publice
+     * (CadruCapturat::previzualizare: head-ul, antetul și subsolul capturate, runtime-ul), cu codul din editor în locul
+     * conținutului salvat. Codul trece întâi de politica salvării (CadruCapturat::problemeContinut): ce n-ar trece la salvare nu
+     * se randează, se arată problemele. Politica site-ului pentru previzualizare (fără trackere și rapoarte), fără cache.
+     */
+    public function pagePreview(array $params): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        $mesaj = static function (int $cod, string $titlu, array $randuri = []): void {
+            $lista = '';
+            foreach ($randuri as $r) {
+                $lista .= '<li>' . htmlspecialchars((string) $r, ENT_QUOTES) . '</li>';
+            }
+            \App\Support\CadruCapturat::trimitePrevizualizare("<!DOCTYPE html>\n<html lang=\"ro\"><head><meta charset=\"utf-8\"><title>Previzualizare</title></head>"
+                . '<body style="font:16px/1.5 system-ui,sans-serif;margin:24px;color:#1f2937"><p style="font-weight:700">' . htmlspecialchars($titlu, ENT_QUOTES) . '</p>'
+                . ($lista !== '' ? '<ul>' . $lista . '</ul>' : '') . "</body></html>\n", $cod);
+        };
+        if (!\App\Support\AdminCsrf::valid()) {
+            $mesaj(403, 'Previzualizarea a expirat: reîncarcă pagina editorului.');
+            return;
+        }
+        $db = $this->db();
+        $id = (int) ($params['id'] ?? 0);
+        $doc = $db instanceof PDO && \App\Support\Tema::cadru() === 'capturat' ? \App\Support\CadruCapturat::document($db, pagina: $id) : null;
+        $q = $doc !== null ? $db->prepare('SELECT slug FROM pages WHERE id = ? AND deleted_at IS NULL') : null;
+        $slug = $q !== null && $q->execute([$id]) ? $q->fetchColumn() : false;
+        if ($doc === null || !is_string($slug)) {
+            $mesaj(404, 'Pagina nu are un document capturat: previzualizarea paginii de pe site e doar pentru paginile aduse din WordPress.');
+            return;
+        }
+        $continut = $this->postedEditorContent('html_content');
+        $probleme = \App\Support\CadruCapturat::problemeContinut($db, $doc, $continut);
+        if ($probleme !== []) {
+            $mesaj(200, 'Codul HTML are ce nu e permis pe o pagină adusă din WordPress (pe site nu rulează niciun script al paginii; comportamentul îl dă runtime-ul). '
+                . 'La salvare pagina ar fi refuzată. De schimbat:', $probleme);
+            return;
+        }
+        try {
+            $html = \App\Support\CadruCapturat::previzualizare($db, $doc, $continut, \App\Support\WpCompat::adresaPagina($slug),
+                \App\Support\CadruCapturat::seoPagina($db, $id));
+        } catch (Throwable $e) {
+            error_log('ANDAXI-CMS: previzualizarea paginii capturate ' . $id . ': ' . get_class($e) . ': ' . $e->getMessage());
+            $mesaj(500, 'Pagina nu se poate previzualiza acum.');
+            return;
+        }
+        \App\Support\CadruCapturat::trimitePrevizualizare($html);
+    }
+
+    /**
+     * Salvarea unei pagini capturate: politica HTML-ului capturat (CadruCapturat::problemeContinut, ca la import), iar codul
+     * CSS și JavaScript al paginii rămâne cel salvat (pe paginile capturate nu se folosește; tabul lor e închis). Mesajul
+     * refuzului (în română), sau null dacă se poate salva.
+     *
+     * @param array<string, mixed> $doc
+     * @param array{css: string, js: string} $salvat
+     */
+    private function refuzPaginaCapturata(PDO $db, array $doc, string $html, ?string $css, ?string $js, array $salvat): ?string
+    {
+        $norm = static fn (string $t): string => trim(str_replace("\r\n", "\n", $t));
+        if (($css !== null && $norm($css) !== $norm($salvat['css'])) || ($js !== null && $norm($js) !== $norm($salvat['js']))) {
+            return 'Pagina nu s-a salvat: pe o pagină adusă din WordPress codul CSS și JavaScript al paginii nu se folosește (foile și '
+                . 'comportamentul vin din captură și din runtime), deci nu se poate schimba. Codul HTML a rămas în editor.';
+        }
+        $probleme = \App\Support\CadruCapturat::problemeContinut($db, $doc, $html);
+        if ($probleme === []) {
+            return null;
+        }
+        $primele = array_slice($probleme, 0, 6);
+        return 'Pagina nu s-a salvat: codul HTML are ce nu e permis pe o pagină adusă din WordPress (pe site nu rulează niciun '
+            . 'script al paginii; comportamentul îl dă runtime-ul). De schimbat: ' . implode('; ', $primele)
+            . (count($probleme) > count($primele) ? '; și încă ' . (count($probleme) - count($primele)) : '') . '. Codul tău a rămas în editor.';
     }
 
     public function pageSave(): void
@@ -17171,6 +17262,28 @@ final class AdminController
             Flash::set('error', 'Titlul și codul paginii sunt obligatorii.');
             header('Location: /admin/pages');
             return;
+        }
+        // O pagină capturată (adoptarea WordPress): aceeași politică a HTML-ului ca la import, refuz cu motivul (nimic scos în
+        // tăcere); codul rămâne în editor (422).
+        $docCapturat = $id > 0 && \App\Support\Tema::cadru() === 'capturat' ? \App\Support\CadruCapturat::document($db, pagina: $id) : null;
+        if ($docCapturat !== null) {
+            $stmtSalvat = $db->prepare('SELECT id, title, slug, html_content, css_content, js_content, is_published'
+                . \App\Support\AccesMembri::coloanaSql($db, 'pages', 'pages') . ' FROM pages WHERE id = :id AND deleted_at IS NULL LIMIT 1');
+            $stmtSalvat->execute(['id' => $id]);
+            $salvata = $stmtSalvat->fetch() ?: [];
+            $trimis = static fn (string $camp): bool => isset($_POST[$camp]) || isset($_POST[$camp . '_b64']);
+            $refuz = $this->refuzPaginaCapturata($db, $docCapturat, $htmlContent, $trimis('css_content') ? $cssContent : null,
+                $trimis('js_content') ? $jsContent : null, ['css' => (string) ($salvata['css_content'] ?? ''), 'js' => (string) ($salvata['js_content'] ?? '')]);
+            if ($refuz !== null) {
+                Flash::set('error', $refuz);
+                http_response_code(422);
+                $this->randeazaEditorPagina($db, array_merge($salvata, ['id' => $id, 'title' => $title, 'slug' => $slugInput, 'html_content' => $htmlContent,
+                    'is_published' => $isPublished]), array_merge($this->loadCustomPageSeoSettings($db, $id), ['title' => $seoTitle, 'description' => $seoDescription,
+                    'canonical_url' => $seoCanonicalUrl, 'image_url' => $seoImageUrl]));
+                return;
+            }
+            $cssContent = (string) ($salvata['css_content'] ?? '');
+            $jsContent = (string) ($salvata['js_content'] ?? '');
         }
 
         try {
@@ -19103,7 +19216,41 @@ final class AdminController
             'section' => $section,
             'availableMenuPages' => $availableMenuPages,
             'menuItems' => $menuItems,
-        ], 'admin/layout');
+        ] + ($this->siteCapturat($db) ? ['siteCapturat' => true] : []), 'admin/layout');
+    }
+
+    /** Pe cadrul capturat, cu măcar o pagină capturată (adusă din WordPress)? */
+    private function siteCapturat(?PDO $db): bool
+    {
+        if (!$db instanceof PDO || \App\Support\Tema::cadru() !== 'capturat') {
+            return false;
+        }
+        try {
+            return $db->query("SELECT 1 FROM pagini_capturate WHERE tip = 'pagina' LIMIT 1")->fetchColumn() !== false;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Antetul și subsolul paginilor capturate, cum apar pe site (GET /admin/design/previzualizare, în cadrul izolat din „Antet,
+     * subsol și meniu”): CadruCapturat::previzualizareFragmente, cu politica previzualizării, fără cache.
+     */
+    public function designPreviewCapturat(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        $db = $this->db();
+        try {
+            $html = $this->siteCapturat($db) ? \App\Support\CadruCapturat::previzualizareFragmente($db) : null;
+        } catch (Throwable $e) {
+            error_log('ANDAXI-CMS: previzualizarea antetului și subsolului capturate: ' . get_class($e) . ': ' . $e->getMessage());
+            $html = null;
+        }
+        \App\Support\CadruCapturat::trimitePrevizualizare($html ?? "<!DOCTYPE html>\n<html lang=\"ro\"><head><meta charset=\"utf-8\"><title>Previzualizare</title></head>"
+            . '<body style="font:16px/1.5 system-ui,sans-serif;margin:24px"><p>Antetul și subsolul paginilor capturate nu se pot arăta acum.</p></body></html>' . "\n",
+            $html === null ? 404 : 200);
     }
 
     public function designSiteSave(): void

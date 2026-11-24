@@ -30,6 +30,10 @@ $gdprAgreementsFormCodeToken = (string) ($gdprAgreementsFormCode ?? '{{gdpr_agre
 $gdprAgreementsFormPreviewHtml = (string) ($gdprAgreementsFormPreviewHtml ?? '');
 $checkoutSuccessOrderInfoCodeToken = (string) ($checkoutSuccessOrderInfoCode ?? '{{checkout_success_order_info}}');
 $checkoutSuccessOrderInfoPreviewHtml = (string) ($checkoutSuccessOrderInfoPreviewHtml ?? '');
+// Pe cadrul capturat, o pagină adusă din WordPress (AdminController::randeazaEditorPagina): previzualizarea e documentul paginii de
+// pe site, randat de server (POST /admin/pages/{id}/previzualizare), iar taburile JS și CSS lipsesc (nu se folosesc pe site).
+$paginaCapturata = ($paginaCapturata ?? false) === true;
+$jetonPrevizualizare = (string) ($jetonPrevizualizare ?? '');
 $previewAppCssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time();
 $previewAppCssHref = '/assets/css/app.css?v=' . $previewAppCssVersion;
 $previewAppCssContent = @file_get_contents(\App\Support\Paths::public('assets/css/app.css'));
@@ -155,11 +159,22 @@ if (!is_string($previewAppCssContent)) {
 
         <div class="editor-grid" id="page-editor-grid" style="margin-top:14px;">
             <div class="code-column" id="code-column">
+<?php if ($paginaCapturata): ?>
+                <div class="code-type-tabs">
+                    <button type="button" class="code-type-tab active" data-code-type="html">HTML</button>
+                </div>
+                <p class="ax-nota-capturata" id="nota-pagina-capturata" style="margin:6px 0 10px;color:var(--ax-text-3);font-size:.9em;">
+                    Pagină adusă din WordPress: previzualizarea e pagina de pe site (antetul, subsolul și foile ei), cu codul de aici în locul
+                    conținutului. Codul JavaScript și CSS al paginii nu se folosește pe site: comportamentul îl dă runtime-ul, iar la salvare
+                    codul trece prin aceeași verificare ca la import (niciun script, niciun atribut <code>on…</code>).
+                </p>
+<?php else: ?>
                 <div class="code-type-tabs">
                     <button type="button" class="code-type-tab active" data-code-type="html">HTML</button>
                     <button type="button" class="code-type-tab" data-code-type="js">Java Script</button>
                     <button type="button" class="code-type-tab" data-code-type="css">CSS</button>
                 </div>
+<?php endif; ?>
                 <div class="code-editor-toolbar">
                     <div class="code-editor-toolbar-right">
                         <button type="button" class="btn btn-secondary" id="code-search-btn">Search/Replace</button>
@@ -168,13 +183,19 @@ if (!is_string($previewAppCssContent)) {
                     </div>
                 </div>
                 <textarea id="html-code" name="html_content" class="code-editor code-editor-pane" data-code-pane="html" required><?= htmlspecialchars($pageHtml, ENT_NOQUOTES) ?></textarea>
+<?php if (!$paginaCapturata): ?>
                 <textarea id="js-code" name="js_content" class="code-editor code-editor-pane is-hidden" data-code-pane="js"><?= htmlspecialchars($pageJs, ENT_NOQUOTES) ?></textarea>
                 <textarea id="css-code" name="css_content" class="code-editor code-editor-pane is-hidden" data-code-pane="css"><?= htmlspecialchars($pageCss, ENT_NOQUOTES) ?></textarea>
+<?php endif; ?>
             </div>
             <div class="preview-column">
                 <h3 style="margin-top:0;">Preview — <span id="preview-mode-label">Desktop</span></h3>
                 <div class="preview-shell desktop" id="preview-shell">
+<?php if ($paginaCapturata): ?>
+                    <iframe id="page-preview" name="page-preview-capturata" title="Preview pagină" sandbox="allow-scripts"></iframe>
+<?php else: ?>
                     <iframe id="page-preview" title="Preview pagină" sandbox="allow-scripts"></iframe>
+<?php endif; ?>
                 </div>
             </div>
         </div>
@@ -203,6 +224,13 @@ admin_componenta('panou-seo', [
             </div>
         </article>
     </form>
+<?php if ($paginaCapturata): ?>
+    <?php // Previzualizarea paginii capturate: codul din editor, trimis spre cadrul izolat (target), cu jetonul sesiunii. ?>
+    <form method="post" action="/admin/pages/<?= $pageId ?>/previzualizare" target="page-preview-capturata" id="previzualizare-capturata-form" hidden>
+        <input type="hidden" name="_csrf" value="<?= htmlspecialchars($jetonPrevizualizare, ENT_QUOTES) ?>">
+        <input type="hidden" name="html_content_b64" value="">
+    </form>
+<?php endif; ?>
 
     <div style="margin-top:12px;">
 <?php if (\App\Support\WpCompat::activ()): ?>
@@ -432,6 +460,24 @@ admin_componenta('panou-seo', [
     };
     const scriptPunte = '<script>(' + puntePrevizualizare.toString() + ')(' + JSON.stringify(window.location.origin) + ');<\/script>';
 
+<?php if ($paginaCapturata): ?>
+    // Pagina capturată: serverul randează documentul paginii de pe site cu codul din editor (după o pauză de scris), în același
+    // cadru izolat (sandbox="allow-scripts", fără allow-same-origin): scripturile runtime-ului rulează ca pe site, cu politica lui.
+    const formularPrevizualizare = document.getElementById('previzualizare-capturata-form');
+    let temporizarePrevizualizare = 0;
+    const trimitePrevizualizare = () => {
+        if (!(formularPrevizualizare instanceof HTMLFormElement)) {
+            return;
+        }
+        formularPrevizualizare.elements.namedItem('html_content_b64').value = encodeBase64Utf8(getEditorValue('html'));
+        formularPrevizualizare.submit();
+    };
+    const renderPreview = () => {
+        window.clearTimeout(temporizarePrevizualizare);
+        temporizarePrevizualizare = window.setTimeout(trimitePrevizualizare, 400);
+    };
+    editors.html?.onChange?.(renderPreview);
+<?php else: ?>
     const renderPreview = () => {
         const bodyRaw = getEditorValue('html') || '<p>Scrie codul paginii pentru preview...</p>';
         const body = applyPreviewTokens(bodyRaw);
@@ -451,6 +497,7 @@ admin_componenta('panou-seo', [
     editors.html?.onChange?.(renderPreview);
     editors.js?.onChange?.(renderPreview);
     editors.css?.onChange?.(renderPreview);
+<?php endif; ?>
     renderPreview();
 
     codeTypeTabs.forEach((button) => {
@@ -585,8 +632,10 @@ admin_componenta('panou-seo', [
         Object.values(editors).forEach((editor) => editor?.save?.());
 
         addHidden(form, 'html_content_b64', encodeBase64Utf8(getEditorValue('html')));
+<?php if (!$paginaCapturata): ?>
         addHidden(form, 'css_content_b64', encodeBase64Utf8(getEditorValue('css')));
         addHidden(form, 'js_content_b64', encodeBase64Utf8(getEditorValue('js')));
+<?php endif; ?>
 
         // Avoid sending raw HTML/CSS/JS fields that can trigger strict WAF rules.
         [htmlCode, cssCode, jsCode].forEach((textarea) => {

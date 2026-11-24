@@ -103,17 +103,20 @@ final class CadruCapturat
 
     /**
      * Un rând din `pagini_capturate` randat: conținutul lui (`pages.html_content` pentru o pagină, altfel coloana `continut`),
-     * fragmentele alese din `fragmente_capturate`, coloanele JSON decodate.
+     * fragmentele alese din `fragmente_capturate`, coloanele JSON decodate. `$ciorna`: conținutul de pus în locul celui salvat
+     * (previzualizarea din editor și verificarea la salvare: previzualizare(), problemeContinut()).
      *
      * @param array<string, mixed> $doc rândul, cum vine din bază
      * @param array{cale: string, nonce: string, an: string, seo?: array<string, string>} $cerere
      * @param array{cap?: string, final?: string} $runtime
      * @throws EroareJeton
      */
-    public static function randeazaRand(\PDO $db, array $doc, array $cerere, array $runtime): string
+    public static function randeazaRand(\PDO $db, array $doc, array $cerere, array $runtime, ?string $ciorna = null): string
     {
         $continut = (string) ($doc['continut'] ?? '');
-        if (($doc['tip'] ?? '') === 'pagina') {
+        if ($ciorna !== null) {
+            $continut = $ciorna;
+        } elseif (($doc['tip'] ?? '') === 'pagina') {
             $q = $db->prepare('SELECT html_content FROM pages WHERE id = ?');
             $q->execute([(int) $doc['page_id']]);
             $continut = (string) $q->fetchColumn();
@@ -145,6 +148,119 @@ final class CadruCapturat
         $doc['meniu'] = self::dinJsonLista($doc['meniu'] ?? null);
         $doc['valori_import'] = self::dinJsonLista($doc['valori_import'] ?? null);
         return self::randeaza($doc, $continut, $fragmente, $cerere + ['runtime' => $runtime]);
+    }
+
+    /**
+     * Previzualizarea unei pagini capturate în editorul din admin (POST /admin/pages/{id}/previzualizare): documentul ei randat
+     * pe aceeași cale ca pagina publică (randeazaRand, cu `$ciorna` în locul conținutului salvat): head-ul capturat (foile temei,
+     * `et-cache`, foile rescrise de stilurile comune și după model, fonturile), antetul și subsolul, scripturile runtime-ului pe
+     * sloturi, nonce-urile formularelor legate de cale, foile amânate ca foi obișnuite (foiTarziiCaFoi). Fără trackere (nicio
+     * vizită de numărat în admin). Ciorna trece întâi de problemeContinut() (o face cine cere): niciun script capturat.
+     *
+     * @param array<string, mixed> $doc rândul paginii din `pagini_capturate`
+     * @param array<string, string> $seo seoPagina()
+     * @throws EroareJeton
+     */
+    public static function previzualizare(\PDO $db, array $doc, string $ciorna, string $cale, array $seo = []): string
+    {
+        $html = self::randeazaRand($db, $doc, ['cale' => $cale, 'nonce' => self::nonceZi(), 'an' => date('Y'), 'seo' => $seo, 'urmarire' => []],
+            self::scripturiRuntime(Tema::runtime()), $ciorna);
+        return self::foiTarziiCaFoi(self::legaNonceFormulare($html, $cale));
+    }
+
+    /**
+     * Răspunsul previzualizării (documentul unei pagini capturate în cadrul editorului, sandbox="allow-scripts"): politica
+     * site-ului pentru previzualizare (CspSite::politicaPrevizualizare: fără trackere, fără rapoarte, aplicată), `nosniff`,
+     * fără cache și fără indexare.
+     */
+    public static function trimitePrevizualizare(string $html, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: text/html; charset=UTF-8');
+        header('Content-Security-Policy: ' . CspSite::politicaPrevizualizare());
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: no-store, private');
+        header('X-Robots-Tag: noindex, nofollow');
+        header('Referrer-Policy: same-origin');
+        echo $html;
+    }
+
+    /** Locul conținutului în previzualizarea antetului și subsolului („Antet, subsol și meniu”, previzualizareFragmente()). */
+    public const LOC_CONTINUT = '<div class="ax-previzualizare-continut" style="box-sizing:border-box;max-width:1080px;margin:32px auto;padding:40px 16px;'
+        . 'border:2px dashed #c7cdd4;border-radius:8px;text-align:center;color:#6b7280;font:16px/1.5 system-ui,sans-serif">Conținutul paginii</div>';
+
+    /**
+     * Antetul și subsolul paginilor capturate, cum apar pe site (previzualizarea din „Antet, subsol și meniu”, GET
+     * /admin/design/previzualizare): documentul primei pagini (slug-ul gol, altfel prima pagină capturată) randat ca în
+     * editor (previzualizare()), cu LOC_CONTINUT în locul conținutului: head-ul cu foile lui, antetul cu meniul, subsolul,
+     * runtime-ul. Null dacă site-ul n-are nicio pagină capturată.
+     *
+     * @throws EroareJeton
+     */
+    public static function previzualizareFragmente(\PDO $db): ?string
+    {
+        try {
+            $r = $db->query("SELECT pc.page_id, p.slug FROM pagini_capturate pc JOIN pages p ON p.id = pc.page_id AND p.deleted_at IS NULL "
+                . "WHERE pc.tip = 'pagina' ORDER BY p.slug = '' DESC, pc.page_id LIMIT 1")->fetch(\PDO::FETCH_ASSOC);
+        } catch (\Throwable) {
+            return null;
+        }
+        $doc = is_array($r) ? self::document($db, pagina: (int) $r['page_id']) : null;
+        if ($doc === null) {
+            return null;
+        }
+        return self::previzualizare($db, $doc, self::LOC_CONTINUT, WpCompat::adresaPagina((string) $r['slug']), self::seoPagina($db, (int) $r['page_id']));
+    }
+
+    /** Marcajele inerte din jurul conținutului, în documentul pe care îl verifică problemeContinut() (rândul unei probleme). */
+    private const INCEPUT_CONTINUT = '<!--ax-continut-inceput-->';
+    private const SFARSIT_CONTINUT = '<!--ax-continut-sfarsit-->';
+
+    /**
+     * Politica HTML-ului capturat (HtmlCapturat, modul `salvare`) pe codul unei pagini capturate, înainte de salvare și de
+     * previzualizare: documentul întreg randat cu acest conținut (ca la import: fără runtime, fără trackere, fără șablonul
+     * managerului), verificat cu contextul capturii site-ului (foile din manifest, iframe-urile permise). Se numără doar ce aduce
+     * conținutul: problemele documentului randat cu un conținut gol (head-ul și fragmentele, trecute deja la import) nu se pun
+     * pe seama paginii. Un jeton pe care cadrul nu-l cunoaște (pagina ar da 500) e și el o problemă. Rândurile, în română, cu
+     * rândul din codul paginii acolo unde problema e în el; [] = se poate salva.
+     *
+     * @param array<string, mixed> $doc rândul paginii din `pagini_capturate`
+     * @return list<string>
+     */
+    public static function problemeContinut(\PDO $db, array $doc, string $continut, ?HtmlCapturat\ContextCapturat $ctx = null): array
+    {
+        $ctx ??= HtmlCapturat\ContextCapturat::dinManifest(self::fisierManifest());
+        $cerere = ['cale' => '/', 'nonce' => 'abcdef0123', 'an' => date('Y'), 'urmarire' => [], 'sablon_cmplz' => ''];
+        $randeaza = static fn (string $c): string => self::randeazaRand($db, $doc, $cerere, ['cap' => '', 'final' => ''], $c);
+        try {
+            $html = $randeaza(self::INCEPUT_CONTINUT . $continut . self::SFARSIT_CONTINUT);
+        } catch (EroareJeton $e) {
+            return ['codul are un jeton pe care pagina nu-l poate completa (' . $e->getMessage() . '): pagina n-ar mai putea fi afișată'];
+        }
+        $inainte = [];
+        try {
+            foreach (HtmlCapturat::verifica($randeaza(''), $ctx, 'salvare') as $p) {
+                $inainte[$p->cod . "\0" . $p->mesaj] = ($inainte[$p->cod . "\0" . $p->mesaj] ?? 0) + 1;
+            }
+        } catch (EroareJeton) {
+        }
+        $inceput = strpos($html, self::INCEPUT_CONTINUT);
+        $sfarsit = $inceput === false ? false : strpos($html, self::SFARSIT_CONTINUT, $inceput);
+        $rez = [];
+        foreach (HtmlCapturat::verifica($html, $ctx, 'salvare') as $p) {
+            $k = $p->cod . "\0" . $p->mesaj;
+            if (($inainte[$k] ?? 0) > 0) {
+                $inainte[$k]--;
+                continue;
+            }
+            $start = $inceput === false ? 0 : $inceput + strlen(self::INCEPUT_CONTINUT);
+            if ($p->octet >= $start && $sfarsit !== false && $p->octet <= $sfarsit) {
+                $rez[] = 'rândul ' . (substr_count(substr($html, $start, $p->octet - $start), "\n") + 1) . ': ' . $p->mesaj;
+            } else {
+                $rez[] = $p->mesaj;
+            }
+        }
+        return $rez;
     }
 
     /**

@@ -86,6 +86,16 @@ final class CspSite
         return implode('; ', $parti);
     }
 
+    /**
+     * Politica previzualizării unei pagini capturate în editorul din admin (CadruCapturat::trimitePrevizualizare): cea a site-ului
+     * cu sursele din `tema.json`, fără trackere (nicio sursă de la Urmarire), fără `report-uri` (încălcările din previzualizare nu
+     * sunt ale vizitatorilor) și mereu aplicată (și când site-ul e în `csp.mod` = `raport`).
+     */
+    public static function politicaPrevizualizare(): string
+    {
+        return (string) preg_replace('/; report-uri [^;]*$/', '', self::politica(false, Tema::csp(), []));
+    }
+
     /** O cale de card embed (`/<pagină>/embed/`, cu sau fără query). */
     public static function caleEmbed(string $uri): bool
     {
@@ -105,7 +115,7 @@ final class CspSite
         // Doar pe cadrul capturat (recenzia 2, R2-2): pe paginile CMS-ului însuși (adminul, contul, logarea, API-ul, paginile
         // pluginurilor) scripturile lor inline trebuie să ruleze, deci politica site-ului nu se trimite acolo. Cadrul răspunde
         // pe prima pagină, pe pagina generală, pe /contact și pe 404 (nicio rută); răspunsurile înghețate o cer singure.
-        if (!$raspunsCapturat && !self::rutaCadru($uri)) {
+        if (!$raspunsCapturat && !self::rutaCadru($uri, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'))) {
             return false;
         }
         $csp = Tema::csp();
@@ -117,12 +127,17 @@ final class CspSite
     /** Tiparele de rută pe care răspunde cadrul capturat (SiteController: home, customPage, contact). */
     public const RUTE_CADRU = ['/', '/{slug*}', '/contact'];
 
-    /** Cererea ajunge la cadrul capturat (o rută a lui sau nicio rută, deci 404-ul capturat)? */
-    public static function rutaCadru(string $uri): bool
+    /**
+     * Cererea ajunge la cadrul capturat (o rută a lui sau nicio rută, deci 404-ul capturat)? După metoda cererii: un POST spre o
+     * rută a CMS-ului fără pereche GET (`/admin/pages/save`, care poate răspunde cu formularul și mesajul refuzului) e al CMS-ului,
+     * nu al cadrului; HEAD ca GET.
+     */
+    public static function rutaCadru(string $uri, string $metoda = 'GET'): bool
     {
         $cale = (string) (parse_url($uri, PHP_URL_PATH) ?? '/');
+        $metoda = strtoupper($metoda);
         try {
-            $t = \App\Support\ImportWordPress\Captura\CopiereStatica::rutaCms($cale);
+            $t = \App\Support\ImportWordPress\Captura\CopiereStatica::rutaCms($cale, $metoda === 'HEAD' ? 'GET' : $metoda);
         } catch (\Throwable) {
             return true; // la îndoială, politica strictă
         }

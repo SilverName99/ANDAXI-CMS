@@ -311,6 +311,7 @@ return static function (Router $router): void {
     $router->get('/admin/pages/new', [AdminController::class, 'pageCreateForm']);
     $router->get('/admin/pages/{id}/edit', [AdminController::class, 'pageEditForm']);
     $router->post('/admin/pages/save', [AdminController::class, 'pageSave']);
+    $router->post('/admin/pages/{id}/previzualizare', [AdminController::class, 'pagePreview']);
     $router->post('/admin/pages/{id}/delete', [AdminController::class, 'deletePage']);
     $router->post('/admin/pages/{id}/restore', [AdminController::class, 'restorePage']);
     $router->post('/admin/pages/{id}/force-delete', [AdminController::class, 'forceDeletePage']);
@@ -327,6 +328,7 @@ return static function (Router $router): void {
     $router->post('/admin/gallery/{id}/delete', [AdminController::class, 'galleryDelete']);
     $router->post('/admin/gallery/bulk-delete', [AdminController::class, 'galleryBulkDelete']);
     $router->get('/admin/design', [AdminController::class, 'designSite']);
+    $router->get('/admin/design/previzualizare', [AdminController::class, 'designPreviewCapturat']);
     $router->post('/admin/design/save', [AdminController::class, 'designSiteSave']);
 
     // WP-R (20 oct 2026, Bioscem 9f59e79..4254ca4): livrarea 2 SEO și avertismentul pe produs.

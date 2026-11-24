@@ -38,6 +38,7 @@ if (trim($currentHtml) === '') {
 }
 $availableMenuPages = is_array($availableMenuPages ?? null) ? $availableMenuPages : [];
 $menuItems = is_array($menuItems ?? null) ? $menuItems : [];
+$siteCapturat = ($siteCapturat ?? false) === true;
 $menuEmbedToken = '{{menu}}';
 $mobileMenuEmbedToken = '{{mobile_menu}}';
 ?>
@@ -59,6 +60,22 @@ admin_componenta('antet-pagina', [
         <?php endforeach; ?>
     </div>
 
+<?php if ($siteCapturat): ?>
+    <?php // Cadrul capturat: paginile aduse din WordPress au antetul, meniul și subsolul din captură; setările de aici sunt ale paginilor CMS-ului. ?>
+    <p class="ax-nota-capturata" id="nota-site-capturat" style="margin:12px 0;color:var(--ax-text-3);">
+        Paginile site-ului (aduse din WordPress) au antetul, meniul și subsolul din captură, cu foile lor: le vezi mai jos cum apar pe site.
+        Se schimbă cu o captură și un import nou, nu de aici. Codul și meniul de pe această pagină se folosesc doar pe paginile proprii ale
+        CMS-ului (coșul, contul, logarea).
+    </p>
+<?php if ($section !== 'menu'): ?>
+    <div class="panel" id="previzualizare-capturata-design" style="margin:0 0 12px;">
+        <h3 style="margin-top:0;">Pe paginile site-ului — <span id="design-preview-capturat-label">Desktop</span></h3>
+        <div class="preview-shell desktop" id="design-preview-capturat-shell">
+            <iframe id="design-preview-capturat" title="Antetul și subsolul paginilor site-ului" sandbox="allow-scripts" src="/admin/design/previzualizare"></iframe>
+        </div>
+    </div>
+<?php endif; ?>
+<?php endif; ?>
     <?php if ($section === 'menu'): ?>
         <form method="post" action="/admin/design/save" class="design-editor-wrap" id="design-site-form">
             <input type="hidden" name="section" value="<?= htmlspecialchars($section, ENT_QUOTES) ?>">
@@ -197,7 +214,11 @@ admin_componenta('antet-pagina', [
                     <textarea class="code-editor code-editor-pane is-hidden" id="design-css" data-code-pane="css" name="css_content"><?= htmlspecialchars($currentCss, ENT_NOQUOTES) ?></textarea>
                 </div>
                 <div class="preview-column">
+<?php if ($siteCapturat): ?>
+                    <h3 style="margin-top:0;">Preview pe paginile CMS-ului — <span id="design-preview-label">Desktop</span></h3>
+<?php else: ?>
                     <h3 style="margin-top:0;">Preview — <span id="design-preview-label">Desktop</span></h3>
+<?php endif; ?>
                     <div class="preview-shell desktop" id="design-preview-shell">
                         <iframe id="design-preview" title="Preview design" sandbox="allow-scripts"></iframe>
                     </div>
@@ -1043,3 +1064,21 @@ ${footerHtml}
     });
 })();
 </script>
+<?php if ($siteCapturat && $section !== 'menu'): ?>
+<script>
+(() => {
+    // Cadrul capturat: aceleași lățimi (desktop, tabletă, telefon) și pentru antetul și subsolul paginilor site-ului.
+    const shellCapturat = document.getElementById('design-preview-capturat-shell');
+    const labelCapturat = document.getElementById('design-preview-capturat-label');
+    const etichete = { desktop: 'Desktop', tablet: 'Tabletă', mobile: 'Telefon' };
+    document.querySelectorAll('.device-switch').forEach((buton) => {
+        buton.addEventListener('click', () => {
+            if (!shellCapturat || !labelCapturat) return;
+            shellCapturat.classList.remove('desktop', 'tablet', 'mobile');
+            shellCapturat.classList.add(buton.dataset.device);
+            labelCapturat.textContent = etichete[buton.dataset.device] || 'Desktop';
+        });
+    });
+})();
+</script>
+<?php endif; ?>

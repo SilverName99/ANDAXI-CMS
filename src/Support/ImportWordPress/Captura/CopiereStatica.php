@@ -224,10 +224,10 @@ final class CopiereStatica
         return $rez;
     }
 
-    /** Tiparul rutei GET a CMS-ului pentru o cale (`/{slug*}` pentru pagina generală), sau null (nicio rută: 404). */
-    public static function rutaCms(string $cale): ?string
+    /** Tiparul rutei CMS-ului pentru o cale și o metodă (implicit GET; `/{slug*}` pentru pagina generală), sau null (nicio rută: 404). */
+    public static function rutaCms(string $cale, string $metoda = 'GET'): ?string
     {
-        $g = self::rute(rtrim(Paths::radacina(), '/'))->gaseste('GET', '/' . ltrim($cale, '/'));
+        $g = self::rute(rtrim(Paths::radacina(), '/'))->gaseste($metoda, '/' . ltrim($cale, '/'));
         return $g !== null ? (string) $g['tipar'] : null;
     }
 
