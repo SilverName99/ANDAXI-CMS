@@ -30,7 +30,12 @@ final class RaspunsuriInghetate
         if (!$db instanceof PDO || Tema::cadru() !== 'capturat' || !in_array($metoda, ['GET', 'HEAD'], true)) {
             return false;
         }
-        $cale = (string) (parse_url($uri, PHP_URL_PATH) ?? '/');
+        // N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate o cale
+        // („//cos?feed=…”, pe care stratul SEO n-o repară) nu e „/”: nu primește răspunsul înghețat al lui „/?feed=…”, ci 404-ul.
+        $cale = \App\Http\Router::caleCerere($uri);
+        if ($cale === null) {
+            return false;
+        }
         $query = (string) (parse_url($uri, PHP_URL_QUERY) ?? '');
         try {
             $q = $db->prepare('SELECT status, antete, corp FROM raspunsuri_inghetate WHERE cheie = ?');

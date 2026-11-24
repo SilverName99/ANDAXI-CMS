@@ -16,7 +16,10 @@ declare(strict_types=1);
  *     pagini e refuzată la salvare;
  *  3. un server cu `wp-compat.json` → `magazin_wc` (licența de dezvoltare „ateliere”): pagina = T cu octeții regiunilor (dus-întors
  *     octet cu octet), conținutul viu al unui randator, o regiune `sesiune` = `no-store, private` și nicio scriere în cache-ul de
- *     pagini (una `pagina` intră în cache), un randator `pagina` care citește sesiunea = 500 și nimic în cache, `{{ax:` din datele
+ *     pagini (una `pagina` intră în cache), un randator `pagina` care citește sesiunea = 500 și nimic în cache, unul care citește
+ *     direct `$_SESSION` vede un tablou gol, iar pagina lui randată cu o sesiune pornită pleacă no-store peste un Cache-Control public
+ *     capturat (SEC-A3: secretul unui vizitator nu ajunge la altul), unul care scrie în `$_SESSION` = 500; adresele din care parse_url
+ *     nu scoate o cale (`/x:1/?lista=1`, N6) = 404-ul capturat, no-store, nicio intrare, prima pagină din cache a ei; `{{ax:` din datele
  *     cererii rămâne text, valoarea unui atribut cu ghilimele = 500, clasele corpului și titlul cerute de o regiune; CSP-ul neschimbat
  *     pe căile din afara magazinului, sursele Stripe doar pe checkout și pe metodele de plată; fiecare rută nouă și fiecare cheie de pe
  *     `/` răspund 404 cât pista lor nu e construită; o cheie necunoscută trece mai departe; seturile runtime-ului din tema.json;
@@ -187,6 +190,9 @@ $reguliBune = [
     ['document' => '/cont-proba/', 'jeton' => 'clase_body'],
     ['document' => '/cont-proba/', 'selector' => 'h1.proba-titlu', 'jeton' => 'titlu'],
     ['document' => '/indiscret/', 'selector' => 'div.proba-regiune-indiscret', 'regiune' => 'proba:indiscret'],
+    ['document' => '/seif-proba/', 'selector' => 'div.proba-regiune-seif', 'regiune' => 'proba:seif'],
+    ['document' => '/direct-proba/', 'selector' => 'div.proba-regiune-direct', 'regiune' => 'proba:direct'],
+    ['document' => '/scrie-proba/', 'selector' => 'div.proba-regiune-scrie', 'regiune' => 'proba:scrie'],
 ];
 $verifica('regulile de probă trec de validare (regiuni, atributele data-events și class, interiorul și clasa aceluiași element, clase_body, titlu)', Regiuni::valideazaReguli($reguliBune) === [],
     implode('; ', Regiuni::valideazaReguli($reguliBune)));
@@ -327,17 +333,25 @@ $pagini = [
     ['cale' => '/cont-proba/', 'titlu' => 'Cont', 'id' => 206,
         'inCorp' => '<h1 class="proba-titlu">Contul meu</h1><div class="proba-regiune-cont"><div class="proba-cont">Panou</div></div>' . "\n"],
     ['cale' => '/indiscret/', 'titlu' => 'Indiscret', 'id' => 207, 'inCorp' => '<div class="proba-regiune-indiscret"><p class="proba-indiscret">Nimic din sesiune.</p></div>' . "\n"],
+    ['cale' => '/seif-proba/', 'titlu' => 'Seif', 'id' => 208, 'inCorp' => '<div class="proba-regiune-seif"><p class="proba-seif">Nimic.</p></div>' . "\n"],
+    ['cale' => '/direct-proba/', 'titlu' => 'Direct', 'id' => 209, 'inCorp' => '<div class="proba-regiune-direct"><p class="proba-direct">Nimic.</p></div>' . "\n"],
+    ['cale' => '/scrie-proba/', 'titlu' => 'Scrie', 'id' => 210, 'inCorp' => '<div class="proba-regiune-scrie"><p class="proba-scrie">Nimic.</p></div>' . "\n"],
 ];
 $optiuni = ['url' => $url, 'nonce' => 'dddd222222', 'ua' => 'windows', 'an' => $an, 'antet' => 21, 'subsol' => 22, 'corp404' => 23,
     'meniu' => [['/', 'Acasă'], ['/lista/', 'Lista']], 'cale404' => '/x2-inexistent/'];
 $stari = ['/lista/' => ['produse' => RegiuneProbaLista::LISTA], '/sesiune-proba/' => ['numar' => 1], '/calendar-proba/' => ['evenimente' => RegiuneProbaEvenimente::EVENIMENTE]];
-$facaCaptura = static function (string $dosarCaptura, array $pagini) use ($optiuni, $stari, $url): void {
+// Un Cache-Control public capturat (SEC-A3): pagina cu randatorul care citește direct din $_SESSION pleacă, fără sesiune, cu el.
+$anteteCaptura = ['/direct-proba/' => "cache-control: max-age=0, public\r\n"];
+$facaCaptura = static function (string $dosarCaptura, array $pagini) use ($optiuni, $stari, $url, $anteteCaptura): void {
     capturaDiviProba($dosarCaptura, $pagini, $optiuni);
     // Starea fiecărei capturi (ce arată pagina: lista, coșul cu un produs, evenimentele), cum o scrie unealta capturii.
     $ix = json_decode((string) file_get_contents($dosarCaptura . '/index.json'), true);
     foreach ($ix['adrese'] as $i => $a) {
         if (isset($stari[$a['cale']])) {
             $ix['adrese'][$i]['stare'] = $stari[$a['cale']];
+        }
+        if ($a['fel'] === 'pagina' && isset($anteteCaptura[$a['cale']]) && str_ends_with($a['referinta'], '.corp')) {
+            file_put_contents($dosarCaptura . '/' . substr($a['referinta'], 0, -5) . '.antete', $anteteCaptura[$a['cale']], FILE_APPEND);
         }
     }
     file_put_contents($dosarCaptura . '/index.json', json_encode($ix, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
@@ -379,8 +393,9 @@ $planifica = static function (string $dosarCaptura, array $reguliRegiuni, array 
     return [$pc, $taieri];
 };
 [$pc, $taieri] = $planifica($lucru . '/captura', $reguliBune, $pagini);
-$verifica('tăierea: niciun NU; 7 regiuni (lista, coșul cu interiorul și clasa, evenimentele, ecoul, contul, indiscretul) plus clase_body și titlu pe pagina contului',
-    $pc->probleme === [] && array_sum(array_map(static fn ($t): int => count($t->regiuni), $taieri)) === 7, implode('; ', $pc->probleme));
+$verifica('tăierea: niciun NU; 10 regiuni (lista, coșul cu interiorul și clasa, evenimentele, ecoul, contul, indiscretul, seiful, directul, scrisul) plus '
+    . 'clase_body și titlu pe pagina contului',
+    $pc->probleme === [] && array_sum(array_map(static fn ($t): int => count($t->regiuni), $taieri)) === 10, implode('; ', $pc->probleme));
 $ts = $taieri['/sesiune-proba/'];
 $verifica('interiorul și clasa aceluiași element: două regiuni, clasa întâi (proba:cos:0, valoarea lui class), apoi interiorul (proba:cos:1)',
     str_contains($ts->continut, '<div class="{{ax:regiune:proba:cos:0}}">{{ax:regiune:proba:cos:1}}</div>')
@@ -416,8 +431,8 @@ try {
     $scris = ['eroare' => $e->getMessage()];
 }
 $randuri = $db->query('SELECT document, regiune, n, fel, atribut, octeti, sha256, stare FROM regiuni_capturate ORDER BY document, regiune, n')->fetchAll();
-$verifica('scrierea: P1 la import cu octeții regiunilor, dovada fiecărui randator (proba:cos cu câmpul volatil declarat și cu clasa), 7 rânduri în regiuni_capturate cu sha256-ul și starea lor',
-    ($scris['regiuni'] ?? -1) === 7 && count($randuri) === 7 && array_filter($randuri, static fn (array $r): bool => hash('sha256', $r['octeti']) !== $r['sha256']) === []
+$verifica('scrierea: P1 la import cu octeții regiunilor, dovada fiecărui randator (proba:cos cu câmpul volatil declarat și cu clasa), 10 rânduri în regiuni_capturate cu sha256-ul și starea lor',
+    ($scris['regiuni'] ?? -1) === 10 && count($randuri) === 10 && array_filter($randuri, static fn (array $r): bool => hash('sha256', $r['octeti']) !== $r['sha256']) === []
     && json_decode((string) $randuri[1]['stare'], true) === ['numar' => 1], json_encode($scris, JSON_UNESCAPED_UNICODE));
 $politica = new HtmlCapturat\ContextCapturat();
 $iesiriRele = [];
@@ -493,6 +508,33 @@ $verifica('salvarea din editor: o regiune nedeclarată pentru pagină e refuzat�
     implode(' | ', $pbSalvare));
 $p1 = CadruCapturat::randeazaRand($db, (array) $docLista, ScriereCapturata::cerereImport((array) $docLista), $runtime);
 $verifica('P1 (fără context de cerere): octeții capturați ai regiunii, fără să ruleze randatorul', str_contains($p1, '<div class="proba-regiune-lista">' . $lista . '</div>'));
+
+// SEC-A3, în proces: cât randează un randator „pagina”, $_SESSION e un tablou gol desprins de sesiune; după, la loc întocmai (și lipsa lui).
+$ctxS = static fn (string $id): ContextRegiune => (new ContextRegiune($db, 'proba', '/x/', [], 'GET'))->pentru($id, 0, Regiuni::cache($id));
+$_SESSION = ['proba_seif' => 'in-proces', 'alt' => [1, 2]];
+$vazutDirect = Regiuni::randeaza('proba:direct', $ctxS('proba:direct'));
+$sesiuneDupa = $_SESSION;
+$eroareScrie = '';
+try {
+    Regiuni::randeaza('proba:scrie', $ctxS('proba:scrie'));
+} catch (\App\Support\CadruCapturat\EroareJeton $e) {
+    $eroareScrie = $e->getMessage();
+}
+$sesiuneDupaScrie = $_SESSION;
+unset($_SESSION);
+$vazutFara = Regiuni::randeaza('proba:direct', $ctxS('proba:direct'));
+$existaDupa = array_key_exists('_SESSION', $GLOBALS);
+$verifica('SEC-A3: un randator „pagina” vede un $_SESSION gol (sesiunea pusă la loc întocmai după el, și lipsa ei); o scriere în el: EroareJeton, sesiunea neatinsă',
+    $vazutDirect === '<p class="proba-direct">Nimic.</p>' && $sesiuneDupa === ['proba_seif' => 'in-proces', 'alt' => [1, 2]] && str_contains($eroareScrie, 'a scris în sesiune')
+    && $sesiuneDupaScrie === $sesiuneDupa && $vazutFara === '<p class="proba-direct">Nimic.</p>' && !$existaDupa,
+    json_encode([$vazutDirect, $sesiuneDupa, $eroareScrie, $sesiuneDupaScrie, $existaDupa], JSON_UNESCAPED_UNICODE));
+// N6, în proces: calea și query-ul randatorilor dintr-o singură citire a adresei, ca cheia cache-ului de pagini.
+$verifica('N6: CadruCapturat::cerereCitita dă calea și query-ul adresei; o adresă fără cale citită de parse_url (/x:1/…) sau cu o gazdă fără schemă (//cos/…): '
+    . 'calea dată, niciun parametru',
+    CadruCapturat::cerereCitita('/lista/?lista=1&b[]=2', '/x/') === ['/lista/', ['lista' => '1', 'b' => ['2']]]
+    && CadruCapturat::cerereCitita('/x:1/?lista=1', '/') === ['/', []] && CadruCapturat::cerereCitita('/x:1/', '/') === ['/', []]
+    && CadruCapturat::cerereCitita('//cos/?lista=1', '/') === ['/', []] && CadruCapturat::cerereCitita('http://127.0.0.1/lista/?a=1', '/x/') === ['/lista/', ['a' => '1']]
+    && CadruCapturat::cerereCitita('/lista/', '/x/') === ['/lista/', []] && CadruCapturat::cerereCitita('', '/') === ['/', []]);
 
 // ---------------------------------------------------------------------------------------------------------------------
 $scrie('');
@@ -586,6 +628,63 @@ try {
 }
 $verifica('ContextRegiune: o clasă a corpului din afara listei închise e refuzată; sesiunea e refuzată unei regiuni „pagina”',
     $exceptieClasa !== null && $exceptieSesiune !== null && (new ContextRegiune(null, 'x', '/'))->pentru('proba:cos', 0, 'sesiune')->sesiune() === []);
+
+// SEC-A3: un randator „pagina” care citește direct din $_SESSION (contractul încălcat, ca de un randator scris greșit) nu vede sesiunea,
+// iar documentul cu regiuni randat lângă o sesiune pornită pleacă no-store, private, oricare ar fi Cache-Control-ul capturat (aici
+// „max-age=0, public”): secretul unui vizitator nu ajunge nici în pagina lui, nici, prin cache-ul de pagini, la altcineva.
+$rSeif = $cerere($port, '/seif-proba/?pune=1');
+$cookieSesiune = preg_match('/^([A-Za-z0-9_-]+=[A-Za-z0-9,-]+)/', (string) ($rSeif['antete']['set-cookie'] ?? ''), $mc) === 1 ? $mc[1] : '';
+$rSeifVazut = $cerere($port, '/seif-proba/', 'GET', ['Cookie: ' . $cookieSesiune]);
+$numarInainte = count($fisiereCache());
+$rVictima = $cerere($port, '/direct-proba/', 'GET', ['Cookie: ' . $cookieSesiune]);
+$numarDupaVictima = count($fisiereCache());
+$rAnonim = [$cerere($port, '/direct-proba/'), $cerere($port, '/direct-proba/')];
+$verifica('SEC-A3: sesiunea vizitatorului are secretul (regiunea „sesiune” îl arată); randatorul „pagina” care citește direct $_SESSION vede un tablou gol; '
+    . 'pagina lui, cu sesiunea pornită: Cache-Control: no-store, private (nu cel capturat), nicio intrare; fără cookie: MISS, apoi HIT, fără secret',
+    $rSeif['cod'] === 200 && $cookieSesiune !== '' && str_contains($rSeif['corp'], '<p class="proba-seif">Pus.</p>')
+    && str_contains($rSeifVazut['corp'], '<p class="proba-seif">' . RegiuneProbaSeif::SECRET . '</p>')
+    && $rVictima['cod'] === 200 && str_contains($rVictima['corp'], '<p class="proba-direct">Nimic.</p>') && !str_contains($rVictima['corp'], RegiuneProbaSeif::SECRET)
+    && ($rVictima['antete']['cache-control'] ?? '') === 'no-store, private' && $numarDupaVictima === $numarInainte
+    && ($rAnonim[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($rAnonim[1]['antete']['x-page-cache'] ?? '') === 'HIT'
+    && count($fisiereCache()) === $numarInainte + 1
+    && !str_contains($rAnonim[0]['corp'] . $rAnonim[1]['corp'], RegiuneProbaSeif::SECRET),
+    json_encode([$rSeif['cod'], $cookieSesiune !== '', $rVictima['cod'], $rVictima['antete']['cache-control'] ?? '-', $numarInainte, $numarDupaVictima,
+        $rAnonim[0]['antete']['x-page-cache'] ?? '-', $rAnonim[1]['antete']['x-page-cache'] ?? '-', $rAnonim[0]['antete']['cache-control'] ?? '-', count($fisiereCache()),
+        str_contains($rVictima['corp'] . $rAnonim[0]['corp'] . $rAnonim[1]['corp'], RegiuneProbaSeif::SECRET)]));
+$numarInainte = count($fisiereCache());
+$rScrie = $cerere($port, '/scrie-proba/');
+$rScrieCuSesiune = $cerere($port, '/scrie-proba/', 'GET', ['Cookie: ' . $cookieSesiune]);
+$rSeifDupa = $cerere($port, '/seif-proba/', 'GET', ['Cookie: ' . $cookieSesiune]);
+$verifica('SEC-A3: un randator „pagina” care scrie în $_SESSION: 500, nimic din pagină, nimic în cache, nicio sesiune pornită (niciun cookie); cu o sesiune '
+    . 'pornită, tot 500, iar sesiunea vizitatorului rămâne întocmai (secretul la locul lui)',
+    $rScrie['cod'] === 500 && !str_contains($rScrie['corp'], 'proba-scrie') && !isset($rScrie['antete']['set-cookie']) && $rScrieCuSesiune['cod'] === 500
+    && count($fisiereCache()) === $numarInainte && str_contains($rSeifDupa['corp'], '<p class="proba-seif">' . RegiuneProbaSeif::SECRET . '</p>'),
+    json_encode([$rScrie['cod'], $rScrie['antete']['set-cookie'] ?? null, $rScrieCuSesiune['cod'], count($fisiereCache()), $numarInainte]));
+
+// N6 (SEC-A1; docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate o cale nu e
+// prima pagină. Înainte, „/x:1/?lista=1” se randa ca prima pagină (cu $_GET-ul brut în randatori) și se scria sub cheia ei, iar
+// „/x:1/?add-to-cart=7” trecea de cheia de pe „/”. Acum: 404-ul capturat, no-store, nicio intrare; prima pagină din cache rămâne a ei.
+$rAcasa = [$cerere($port, '/'), $cerere($port, '/')];
+$numarInainte = count($fisiereCache());
+$reN6 = [];
+$corp404 = '';
+foreach (['/x:1/', '/x:1/?q=1', '/x:1/?lista=1', '/x:1/?add-to-cart=7', '/lista:1/?lista=1', '//cos?lista=1'] as $c) {
+    $r = $cerere($port, $c);
+    $corp404 = $c === '/x:1/' ? $r['corp'] : $corp404;
+    if ($r['cod'] !== 404 || !str_contains((string) ($r['antete']['cache-control'] ?? ''), 'no-store') || isset($r['antete']['x-page-cache'])
+        || !str_contains($r['corp'], 'Pagina nu a fost găsită') || str_contains($r['corp'], 'proba-lista') || count($fisiereCache()) !== $numarInainte) {
+        $reN6[] = $c . ' → ' . $r['cod'] . ' ' . ($r['antete']['cache-control'] ?? '-') . ' ' . ($r['antete']['x-page-cache'] ?? '-') . ', ' . count($fisiereCache());
+    }
+}
+$rAcasaDupa = $cerere($port, '/');
+$nonceSubsol = static fn (string $corp): string => preg_match('/name="_wpnonce-et-pb-contact-form-submitted-0" value="([^"]*)"/', $corp, $mn) === 1 ? $mn[1] : '';
+$verifica('N6: /x:1/, /x:1/?q=1, /x:1/?lista=1, /x:1/?add-to-cart=7, /lista:1/?lista=1, //cos?lista=1: 404-ul capturat, no-store, nicio intrare în cache; '
+    . 'prima pagină de după: HIT, octet cu octet cea de dinainte; formularul subsolului din 404 spre „/”, cu nonce-ul căii „/” (al primei pagini)',
+    $reN6 === [] && ($rAcasa[1]['antete']['x-page-cache'] ?? '') === 'HIT' && ($rAcasaDupa['antete']['x-page-cache'] ?? '') === 'HIT'
+    && $rAcasaDupa['corp'] === $rAcasa[0]['corp'] && str_contains($corp404, 'method="post" action="/"')
+    && $nonceSubsol($corp404) !== '' && $nonceSubsol($corp404) === $nonceSubsol($rAcasa[0]['corp']),
+    implode('; ', $reN6) . ' | ' . json_encode([$rAcasa[1]['antete']['x-page-cache'] ?? '-', $rAcasaDupa['antete']['x-page-cache'] ?? '-',
+        $nonceSubsol($corp404), $nonceSubsol($rAcasa[0]['corp'])]));
 
 // CSP: neschimbat pe căile din afara magazinului; sursele Stripe doar pe checkout și pe metodele de plată.
 $politicaSite = CspSite::politica(false, Tema::csp(), Urmarire::csp());

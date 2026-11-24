@@ -27,7 +27,9 @@ use App\Support\CadruCapturat\Regiuni;
  * verificarea salvării) octeții capturați din `regiuni_capturate`. Ieșirea se pune între bucățile rezolvate, fără să mai treacă prin
  * jetoane: un `{{ax:` din datele unui randator rămâne text. Doar regiunile declarate pentru document (rândurile lui din
  * `regiuni_capturate`); altă regiune e o EroareJeton. `{{ax:clase_body}}` și `{{ax:titlu}}`: valorile capturate, schimbate doar de
- * regiunile documentului (ContextRegiune). Un document cu o regiune `sesiune` pleacă `Cache-Control: no-store, private`.
+ * regiunile documentului (ContextRegiune). Un document cu o regiune `sesiune` pleacă `Cache-Control: no-store, private`, ca orice
+ * document cu regiuni randat cu o sesiune pornită (SEC-A3); calea și query-ul randatorilor vin din aceeași citire a adresei ca cheia
+ * cache-ului de pagini (cerereCitita, N6).
  */
 final class CadruCapturat
 {
@@ -589,14 +591,23 @@ final class CadruCapturat
             if (($cerere['statistici'] ?? null) !== null && isset($runtime['pluginuri']['statistici'])) {
                 $runtime['final'] .= $runtime['pluginuri']['statistici'];
             }
-            // Regiunile dinamice (pista A): randatorii lor, cu contextul cererii; o regiune `sesiune` face răspunsul no-store.
+            // Regiunile dinamice (pista A): randatorii lor, cu contextul cererii. O regiune `sesiune` face răspunsul no-store; la fel
+            // o sesiune pornită (cookie-ul ei): antetele limitatorului sesiunii nu le înlocuiește niciun Cache-Control capturat, deci o
+            // pagină randată lângă o sesiune nu ajunge în cache-ul de pagini (SEC-A3), oricum ar fi scris un randator „pagina”.
             $doc['regiuni'] = self::regiuniDocument($db, (string) ($doc['cheie'] ?? ''));
             if ($doc['regiuni'] !== []) {
-                $faraCache = $faraCache || self::cuRegiuniSesiune($doc['regiuni']);
-                $cerere['regiuni'] ??= new ContextRegiune($db, (string) ($doc['cheie'] ?? ''), (string) $cerere['cale'], $_GET,
-                    strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
+                $faraCache = $faraCache || self::cuRegiuniSesiune($doc['regiuni']) || session_status() === PHP_SESSION_ACTIVE;
+                if (!isset($cerere['regiuni'])) {
+                    // Calea și query-ul randatorilor din aceeași citire a adresei ca cheia cache-ului de pagini (N6): niciodată $_GET-ul
+                    // brut al unei adrese pe care parse_url n-o citește.
+                    [$caleCtx, $getCtx] = self::cerereCitita((string) ($_SERVER['REQUEST_URI'] ?? ''), (string) $cerere['cale']);
+                    $cerere['regiuni'] = new ContextRegiune($db, (string) ($doc['cheie'] ?? ''), $caleCtx, $getCtx,
+                        strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
+                }
             }
             $html = self::legaNonceFormulare(self::randeazaRand($db, $doc, $cerere, $runtime), (string) $cerere['cale']);
+            // Și o sesiune pornită cât s-a randat (de un randator `sesiune`): tot no-store.
+            $faraCache = $faraCache || ($doc['regiuni'] !== [] && session_status() === PHP_SESSION_ACTIVE);
             if ($dupa !== null) {
                 $html = $dupa($html);
             }
@@ -634,6 +645,26 @@ final class CadruCapturat
         }
         echo self::foiTarziiCaFoi($html);
         return $status;
+    }
+
+    /**
+     * Calea și query-ul cererii pentru randatorii regiunilor, dintr-o singură citire a adresei (parse_url, ca cheia cache-ului de
+     * pagini, ResponseCache::adresaCuCheie): calea ei și parametrii query-ului ei (parse_str). O adresă din care parse_url nu scoate o
+     * cale (N6, docs/SECURITATE.md: n-ajunge aici, public/index.php îi răspunde 404) primește calea dată și niciun parametru.
+     *
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    public static function cerereCitita(string $uri, string $caleImplicita): array
+    {
+        $parti = parse_url($uri);
+        if (!is_array($parti) || !is_string($parti['path'] ?? null) || (isset($parti['host']) && !isset($parti['scheme']))) {
+            return [$caleImplicita, []];
+        }
+        $get = [];
+        if (is_string($parti['query'] ?? null) && $parti['query'] !== '') {
+            parse_str($parti['query'], $get);
+        }
+        return [$parti['path'] !== '' ? $parti['path'] : $caleImplicita, $get];
     }
 
     /**

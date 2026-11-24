@@ -161,3 +161,61 @@ Formularele de contact Divi ale unui site mutat de pe WordPress primesc date de 
 - **Nimic pierdut:** mesajul se scrie în `contact_form_messages` înaintea emailului; unul care nu pleacă rămâne în admin, marcat.
 
 Testul: `tools/dev/test-formulare-wp.php` (poarta G-formulare).
+
+## Adresele din care parse_url nu scoate o cale (N6, 24 noiembrie 2026)
+
+O revizuire de securitate a găsit o otrăvire a cache-ului de pagini prin forma adresei, pe ambele linii de cod
+(`claude/etapa1-cod-comun` și `claude/pensiune`, deci și pe pista A a mutării unui site WooCommerce, care pornește din a doua).
+`parse_url()` din PHP refuză de tot o adresă ca `/x:1/?s=…`, `/x:1/y?s=…` sau `/x:1` (un „:cifre” urmat de „/” sau de sfârșitul
+căii pare portul unei gazde) și nu găsește nicio cale în `//x?s=…` („x” pare o gazdă). Routerul (`App\Http\Router::gaseste`) și
+cheia cache-ului de pagini (`App\Support\ResponseCache`) luau atunci calea „/” și query-ul gol, deci cererea se randa ca prima pagină
+și se scria în cache sub cheia primei pagini, în timp ce `$_GET` rămânea al cererii (serverul web îl ia din adresa întreagă). Cu o
+singură cerere, oricine putea înlocui prima pagină din cache cu o pagină randată pentru adresa lui, la toți vizitatorii, până la
+expirarea intrării (10 minute la cache-ul extins), și o putea reface oricând. Stratul SEO nu oprea asta: repară „/” final și „//”
+doar când calea curată e alta, iar cache-ul se scrie înaintea redirecționării lui.
+
+Ce ajungea la vizitatori depinde de site. Pe un site capturat (adoptarea WordPress) prima pagină din cache era randată cu calea
+goală, deci formularul de contact din subsolul ei avea `action=""` și nonce-ul căii goale: orice trimitere era refuzată („Te rugăm să
+reîncarci pagina”), iar mesajul nu se scria. Pe celelalte site-uri prima pagină de azi nu citește nimic din `$_GET`, deci intrarea
+avea același conținut; dar `//cos/` (pentru `parse_url` gazda „cos” cu calea „/”, pentru restul codului calea coșului, unde pozele
+nu se optimizează) punea în cache o primă pagină cu pozele fără `width`/`height`. Orice afișare care ar depinde de `$_GET` pe prima
+pagină ar fi fost pusă în cache la fel. Pe pista A (regiunile dinamice, [MAGAZIN-WC.md](MAGAZIN-WC.md)) asta era deja cazul: un
+randator al primei pagini primea `$_GET`-ul brut al adresei (`/x:1/?lista=1`: lista filtrată, pusă în cache pentru toți), iar
+`/x:1/?add-to-cart=7` trecea de dispecerul cheilor de pe „/” (`CompatWp\Interogari`) cu un 200 care se putea pune în cache.
+
+Ce s-a schimbat (același cod pe ambele linii):
+
+- `Router::caleCerere()` (nou): calea citită de `parse_url`, sau null; `Router::gaseste()` nu găsește nicio rută pentru o adresă
+  fără cale (nu mai cade pe „/”).
+- `public/index.php`, după interceptările de dinainte (mentenanța, campaniile…) și înaintea cache-ului de pagini: o adresă fără cale
+  primește răspunsul unei adrese necunoscute — la GET pagina 404 a site-ului (`SiteController::paginaNegasita`, ca ruta generală
+  pentru o pagină care nu există), altfel 404-ul routerului —, cu `Cache-Control: no-store`, fără cache-ul de pagini.
+- `ResponseCache::adresaCuCheie()` (nou), la începutul lui `beginRequest`: o adresă fără cale citită de `parse_url`, ori cu o gazdă
+  fără schemă (`//cos/`), nu citește și nu scrie cache-ul. Forma absolută (`http://gazda/cale`) își păstrează calea și cache-ul.
+- `views/layout.php`: pagina 404 a unei astfel de adrese are calea ei scrisă (până la „?”), nu „/”, deci titlul, descrierea și
+  canonicalul paginii 404, ca orice adresă necunoscută (altfel ar fi luat titlul și descrierea primei pagini).
+- `App\Support\FormularCapturat` (pe linia `claude/pensiune` și pe cele care pornesc din ea): un POST cu un formular Divi la o astfel
+  de adresă nu mai e luat drept formularul primei pagini (calea „/”); merge mai departe, la 404-ul routerului, ca la orice adresă
+  necunoscută. `App\Support\RaspunsuriInghetate`, la fel: `//cos?feed=…` (fără cale, neatinsă de stratul SEO) nu primește răspunsul
+  înghețat al lui „/?feed=…”, ci 404-ul.
+- Pe pista A: pagina 404 capturată a unei astfel de adrese se randează cu calea „/” (`SiteController::documentCapturat`,
+  `parse_url(…) ?: '/'`, ca la `//cos/`), nu cu calea goală, deci formularul subsolului (același pe toate paginile) trimite la „/”,
+  cu nonce-ul căii „/”. Calea scrisă a adresei nu se pune în pagină: ar putea fi un „//gazdă”, adică o adresă pe alt site. Calea și
+  query-ul randatorilor regiunilor vin din aceeași citire a adresei ca cheia cache-ului (`CadruCapturat::cerereCitita`), niciodată din
+  `$_GET`-ul brut.
+
+Adresele obișnuite (cu o cale citită de `parse_url`) merg exact ca înainte: aceleași rute, aceeași cheie, aceeași pagină. Singura
+excepție voită: o adresă care începe cu „//” și pe care stratul SEO n-o repară (căile excluse, de exemplu `//cos/`) își păstrează
+pagina, dar nu mai intră în cache. O cerere în forma absolută fără cale (`GET http://gazda HTTP/1.1`, pe care browserele nu o
+trimit) primește acum 404-ul, ca orice adresă fără cale.
+
+Testele: `tools/dev/test-seo.php`, A (routerul și cheia, fără server) și `tools/dev/lib/test-seo-viteza.php`, E4.2 (pe server, cu
+cache-ul extins pornit: fiecare astfel de adresă dă 404-ul site-ului cu `no-store` și nicio intrare; prima pagină rămâne octet cu
+octet a ei, fără marca din adrese; `?page=` are intrarea lui, `utm_*` și `?s=` ocolesc cache-ul, ca înainte), în poarta G-seo; pe
+site-ul capturat, `tools/dev/test-formulare-wp.php`, 7 (pe gazda din `APP_URL`, cu cache-ul pornit: 404-ul capturat cu `no-store`
+și nicio intrare, prima pagină din cache octet cu octet a ei, cu formularul subsolului spre „/” și nonce-ul căii „/”, trimis cu
+succes; același formular la `/x:1/` dă 404, nimic scris), în poarta G-formulare; pe pista A, `tools/dev/test-regiuni.php` (G-regiuni:
+`/x:1/`, `/x:1/?q=1`, `/x:1/?lista=1`, `/x:1/?add-to-cart=7`, `/lista:1/?lista=1`, `//cos?lista=1` dau 404-ul capturat cu
+`no-store` și nicio intrare, prima pagină din cache rămâne octet cu octet a ei, iar 404-ul are formularul subsolului spre „/”, cu
+nonce-ul primei pagini; `CadruCapturat::cerereCitita`, în proces). Căutarea WordPress (`/?s=`) nu ajungea în cache nici înainte: îi
+răspunde `CautareCapturata` doar pe „/” scris întocmai, fără cache.

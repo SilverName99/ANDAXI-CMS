@@ -26,7 +26,11 @@ declare(strict_types=1);
  *  4. emailul care nu pleacă: mesajul rămâne în bază cu starea `netrimis`, vizitatorul vede succesul;
  *  5. căutarea `/?s=`: rezultatele în cadrul site-ului (antetul și subsolul capturate), noindex, termenul escapat, mesajul fără
  *     rezultate, diacriticele și literele mari ca WordPress, niciodată în cache, jetoanele în termen și în titluri ca text, paginile
- *     nepublicate și cele din coș ascunse; fără `cautare_wp`, prima pagină ca înainte.
+ *     nepublicate și cele din coș ascunse; fără `cautare_wp`, prima pagină ca înainte;
+ *  7. N6 (docs/SECURITATE.md): pe gazda din APP_URL, cu cache-ul de pagini pornit, o adresă din care parse_url nu scoate o cale
+ *     (`/x:1/?s=…`, `/x:1/`, `//cos?s=…`) dă 404-ul capturat cu no-store și nicio intrare în cache; prima pagină din cache rămâne
+ *     octet cu octet a ei, cu formularul subsolului spre „/” și nonce-ul căii „/”, care se trimite; același formular la `/x:1/`: 404;
+ *     un răspuns înghețat pe `/?feed=…` se dă la adresa lui, dar nu și la `//cos?feed=…` (404-ul capturat, no-store).
  *
  *   tools/dev/php.sh tools/dev/test-formulare-wp.php
  *
@@ -642,6 +646,71 @@ $portF = $port + 1;
 $verifica('serverul fără cautare_wp pornește', $pornesteServer($portF, $lucru . '/pachet-fara', $lucru . '/site-fara'));
 $rF = $cerere($portF, '/?s=camera');
 $verifica('fără cautare_wp: /?s= dă prima pagină, ca înainte', $rF['cod'] === 200 && !str_contains($rF['corp'], 'Rezultatele căutării') && str_contains($rF['corp'], '<h1>Acasă</h1>'));
+
+// ---------------------------------------------------------------------------------------------------------------------
+$scrie('');
+$scrie('== 7. N6: adresele din care parse_url nu scoate o cale, cu cache-ul de pagini pornit (docs/SECURITATE.md)');
+// Pe gazda din APP_URL: altfel cache-ul de pagini nu citește și nu scrie nimic (N4). „/x:1/?s=…” (un „:cifre” urmat de „/” pare un
+// port) era prima pagină pentru router și pentru cheia cache-ului, randată cu calea goală: formularul subsolului din pagina pusă în
+// cache avea action="" și nonce-ul căii goale, deci fiecare vizitator al primei pagini primea un formular refuzat.
+$gazda = 'Host: pensiune-proba.example.test';
+$db->exec("INSERT INTO settings (`key`, `value`) VALUES ('cache_pagini_extins', '1'), ('sesiune_doar_la_nevoie', '1') ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
+$intrari = static fn (): int => count(glob(\App\Support\ResponseCache::cacheDirectory() . '/*.json') ?: []);
+$marca = 'axSondaN6' . bin2hex(random_bytes(3));
+\App\Support\ResponseCache::purgePageCache();
+$acasa = [$cerere($port, '/', [$gazda]), $cerere($port, '/', [$gazda])];
+$intrariAcasa = $intrari();
+\App\Support\ResponseCache::purgePageCache();
+$gresite = [];
+foreach (['/x:1/?s=' . $marca, '/lista:1/?s=' . $marca, '/x:1?s=' . $marca, '/x:1/', '//cos?s=' . $marca] as $adresa) {
+    $r = $cerere($port, $adresa, [$gazda]);
+    if ($r['cod'] !== 404 || !str_contains((string) ($r['antete']['cache-control'] ?? ''), 'no-store') || isset($r['antete']['x-page-cache'])
+        || str_contains($r['corp'], $marca) || !str_contains($r['corp'], 'et-l--footer') || $intrari() !== 0) {
+        $gresite[] = $adresa . ' → ' . $r['cod'] . ' ' . ($r['antete']['cache-control'] ?? '-') . ' ' . ($r['antete']['x-page-cache'] ?? '-') . ', ' . $intrari() . ' intrări';
+    }
+}
+$dupa = [$cerere($port, '/', [$gazda]), $cerere($port, '/', [$gazda])];
+$fAcasa = $formular($dupa[1]['corp'], 0);
+$verifica('/x:1/?s=…, /lista:1/?s=…, /x:1?s=…, /x:1/, //cos?s=…: 404-ul capturat, no-store, nicio intrare în cache; prima pagină de după: MISS, apoi '
+    . 'HIT, octet cu octet cea de dinainte, fără marcă, cu formularul subsolului spre „/” și nonce-ul căii /',
+    $gresite === [] && ($acasa[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($acasa[1]['antete']['x-page-cache'] ?? '') === 'HIT' && $intrariAcasa === 1
+    && ($dupa[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($dupa[1]['antete']['x-page-cache'] ?? '') === 'HIT'
+    && $dupa[0]['corp'] === $acasa[0]['corp'] && $dupa[1]['corp'] === $acasa[0]['corp'] && !str_contains($dupa[1]['corp'], $marca)
+    && str_contains($dupa[1]['corp'], 'method="post" action="/"') && ($fAcasa['nonce'] ?? '') === CadruCapturat::nonceFormular('/', 0),
+    implode('; ', $gresite) . ' | ' . json_encode([$acasa[0]['antete']['x-page-cache'] ?? '', $acasa[1]['antete']['x-page-cache'] ?? '', $intrariAcasa,
+        $dupa[0]['antete']['x-page-cache'] ?? '', $dupa[1]['antete']['x-page-cache'] ?? '', $fAcasa['nonce'] ?? '']));
+// Formularul din pagina servită din cache se trimite; același formular, la o adresă din care parse_url nu scoate o cale, nu mai e
+// luat drept formularul primei pagini (404, nimic scris).
+$inainteN6 = count($mesaje());
+$rBun = $trimite('/', 0, ['name' => 'Vizitator N6', 'email' => 'n6@exemplu.ro', 'mesaj' => 'din pagina din cache'], array_merge([$gazda], $vizitator()),
+    (string) ($fAcasa['nonce'] ?? ''));
+$dupaBun = count($mesaje());
+$rRau = $trimite('/x:1/', 0, ['name' => 'Fara cale N6', 'email' => 'n6b@exemplu.ro', 'mesaj' => 'adresa fara cale'], array_merge([$gazda], $vizitator()),
+    (string) ($fAcasa['nonce'] ?? ''));
+$verifica('formularul subsolului din prima pagină din cache se trimite (un mesaj); trimis la /x:1/: 404, niciun mesaj',
+    $rBun['cod'] === 200 && ($formular($rBun['corp'], 0)['are_form'] ?? true) === false && $dupaBun === $inainteN6 + 1
+    && $rRau['cod'] === 404 && count($mesaje()) === $dupaBun, $rBun['cod'] . ' ' . $rRau['cod'] . ' ' . $inainteN6 . ' → ' . $dupaBun . ' → ' . count($mesaje()));
+// Un răspuns înghețat pe „/” cu query (aici un flux inventat, ca `/?feed=rss2`) e al adresei „/?feed=…”. „//cos?feed=…” n-are cale
+// pentru parse_url, iar stratul SEO n-o repară („/cos” e o cale exclusă): primea răspunsul înghețat al lui „/”, acum 404-ul.
+$rInghetat = ['metoda' => 'GET', 'cale' => '/', 'query' => 'feed=' . $marca, 'status' => 200,
+    'antete' => (string) json_encode([['content-type', 'application/rss+xml; charset=UTF-8']]),
+    'corp' => '<rss version="2.0"><channel><title>' . $marca . '-flux</title></channel></rss>'];
+$cheieInghetat = ScriereCapturata::cheieRaspuns('GET', '/', $rInghetat['query']);
+$db->prepare('INSERT INTO raspunsuri_inghetate (cheie, metoda, cale, query, status, antete, corp, sha256, sursa, hash_import, importat_la)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())')->execute([$cheieInghetat, $rInghetat['metoda'], $rInghetat['cale'], $rInghetat['query'],
+    $rInghetat['status'], $rInghetat['antete'], $rInghetat['corp'], hash('sha256', $rInghetat['corp']), 'test-n6',
+    ScriereCapturata::hash($rInghetat, ScriereCapturata::COLOANE_RASPUNS)]);
+$intrariInainte = $intrari();
+$rFlux = $cerere($port, '/?feed=' . $marca, [$gazda]);
+$rFluxFaraCale = $cerere($port, '//cos?feed=' . $marca, [$gazda]);
+$db->prepare('DELETE FROM raspunsuri_inghetate WHERE cheie = ?')->execute([$cheieInghetat]);
+$verifica('un răspuns înghețat pe /?feed=… se dă la adresa lui; la //cos?feed=… (fără cale, neatinsă de stratul SEO): 404-ul capturat, '
+    . 'no-store, fără corpul înghețat, nicio intrare nouă în cache',
+    $rFlux['cod'] === 200 && $rFlux['corp'] === $rInghetat['corp'] && $rFluxFaraCale['cod'] === 404
+    && !str_contains($rFluxFaraCale['corp'], $marca . '-flux') && str_contains($rFluxFaraCale['corp'], 'et-l--footer')
+    && str_contains((string) ($rFluxFaraCale['antete']['cache-control'] ?? ''), 'no-store') && $intrari() === $intrariInainte,
+    $rFlux['cod'] . ' ' . $rFluxFaraCale['cod'] . ' ' . ($rFluxFaraCale['antete']['cache-control'] ?? '-') . ' ' . $intrariInainte . ' → ' . $intrari());
+\App\Support\ResponseCache::purgePageCache();
 
 $scrie('');
 $scrie('Rezultat: ' . $trecute . ' verificări trecute, ' . $esuate . ' eșuate.');

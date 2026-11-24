@@ -106,15 +106,31 @@ final class Router
     }
 
     /**
+     * Calea pe care routerul o citește din adresa cererii (parse_url), sau null când parse_url nu scoate una: adresa e
+     * refuzată de tot („/x:1/?s=…”: un „:cifre” urmat de „/” pare un port) sau n-are cale („//x?s=…”: „x” pare o gazdă).
+     * N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o astfel de adresă nu e prima pagină;
+     * public/index.php îi răspunde ca unei adrese necunoscute, iar gaseste() nu-i găsește nicio rută.
+     */
+    public static function caleCerere(string $uri): ?string
+    {
+        $path = parse_url($uri, PHP_URL_PATH);
+        return is_string($path) ? $path : null;
+    }
+
+    /**
      * Prima rută care se potrivește cu metoda și adresa (ordinea înregistrării
-     * contează: ruta generală `/{slug*}` e ultima), cu parametrii ei.
+     * contează: ruta generală `/{slug*}` e ultima), cu parametrii ei. O adresă
+     * din care parse_url nu scoate o cale nu are nicio rută (N6, caleCerere()).
      *
      * @return array{handler: callable|array, tipar: string, parametri: array<string, string>}|null
      */
     public function gaseste(string $method, string $uri): ?array
     {
-        $path = parse_url($uri, PHP_URL_PATH);
-        if (!is_string($path) || $path === '') {
+        $path = self::caleCerere($uri);
+        if ($path === null) {
+            return null;
+        }
+        if ($path === '') {
             $path = '/';
         }
         if ($path !== '/') {

@@ -1204,9 +1204,14 @@ foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de artico
   client rămâne text. O valoare de atribut cu ghilimele, `<` sau un `&` care nu e o referință, un jeton de regiune nedeclarat
   pentru document, un randator lipsă: 500 și nimic din pagină. La P1, la previzualizare și la verificarea salvării din editor se pun
   octeții capturați (niciun randator nu rulează); o regiune nedeclarată pentru pagină e refuzată la salvare.
-- **Cache-ul**: fiecare randator e `pagina` (documentul poate sta în cache-ul de pagini; randatorul nu citește sesiunea:
-  `ContextRegiune::sesiune` aruncă, deci 500 și nimic în cache) sau `sesiune` (documentul cu o asemenea regiune pleacă
-  `Cache-Control: no-store, private` și nu se scrie în cache-ul de pagini: `X-Page-Cache: BYPASS`).
+- **Cache-ul**: fiecare randator e `pagina` sau `sesiune`. Un document cu o regiune `sesiune` pleacă `Cache-Control: no-store,
+  private` și nu se scrie în cache-ul de pagini (`X-Page-Cache: BYPASS`). Un randator `pagina` (documentul lui poate sta în cache)
+  nu vede sesiunea: `ContextRegiune::sesiune` aruncă, iar cât randează, `Regiuni::randeaza` îi dă un `$_SESSION` gol, desprins de
+  sesiune, pus apoi la loc întocmai; o scriere în el, o sesiune pornită sau închisă de el sunt 500 și nimic în cache. Plasa, pentru
+  un randator scris greșit: orice document cu regiuni randat cu o sesiune pornită (un vizitator cu cookie-ul ei) pleacă tot `no-store,
+  private`, deci antetele de cache capturate (`Cache-Control`, `Expires`) nu le înlocuiesc pe ale limitatorului sesiunii și nimic de-al
+  unui vizitator nu ajunge în cache-ul de pagini; fără sesiune, documentul se pune în cache ca înainte. Calea și query-ul randatorilor
+  vin din aceeași citire a adresei ca cheia cache-ului (`CadruCapturat::cerereCitita`; N6 din [SECURITATE.md](SECURITATE.md)).
 - **Clasele corpului și titlul**: `{{ax:clase_body}}` dă clasele capturate, neschimbate, cât nicio regiune nu cere altceva; o regiune
   poate adăuga sau scoate doar clase din lista închisă `SchemaDivi4::CLASE_BODY` (`logged-in`, `woocommerce-account`,
   `woocommerce-<endpoint>`…), puse la sfârșit. `{{ax:titlu}}` dă titlul capturat sau pe cel cerut de o regiune, ca text scăpat.

@@ -49,7 +49,8 @@ poate ajunge pe server cu o regiune înghețată în starea capturii.
 
 O clasă care servește mai multe id-uri sau ambele moduri ale unui id le deosebește prin `ContextRegiune::regiune()`, `mod()` și
 `atribut()`. Contractul unui randator (`Randator`): își scapă singur datele (`Regiuni::html`, `Regiuni::attr`, `Regiuni::jsonAttr`;
-ieșirea nu mai trece prin jetoane), un randator `pagina` nu citește sesiunea (`ContextRegiune::sesiune` aruncă), iar
+ieșirea nu mai trece prin jetoane), un randator `pagina` nu citește sesiunea (`ContextRegiune::sesiune` aruncă, iar `$_SESSION` e
+un tablou gol cât randează; o scriere în el = 500; docs/DEPLOY.md, „Cache-ul”), iar
 `normalizeaza()` declară câmpurile volatile (nonce-urile, cheile rândurilor coșului, id-urile `quantity_<uniqid>`) pentru dovadă.
 Clasele corpului pe care le poate cere o regiune sunt lista închisă `SchemaDivi4::CLASE_BODY` (`logged-in`,
 `woocommerce-account`, `woocommerce-cart`, `woocommerce-checkout`, `woocommerce-order-received`, `woocommerce-order-pay` și cele

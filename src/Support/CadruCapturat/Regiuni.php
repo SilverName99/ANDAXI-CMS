@@ -309,6 +309,12 @@ final class Regiuni
      * Ieșirea randatorului unei regiuni, la o cerere. Un randator necunoscut sau încă neconstruit e o EroareJeton (cadrul răspunde 500,
      * nicio pagină pe jumătate).
      *
+     * Un randator `pagina` nu vede sesiunea (contractul Randator, aplicat aici, nu doar cerut; SEC-A3): cât randează, `$_SESSION` e un
+     * tablou gol, desprins de sesiune (modulul sesiunii își păstrează datele, deci nici o închidere a ei nu le pierde), apoi se leagă la
+     * loc întocmai (și lipsa lui). Ce ar citi direct din `$_SESSION` e deci nimic, iar o scriere în el, ca și o sesiune pornită sau
+     * închisă de el, e o EroareJeton (500): documentul lui poate sta în cache-ul de pagini, unde nimic de-al unui vizitator nu are voie
+     * să ajungă.
+     *
      * @throws EroareJeton
      */
     public static function randeaza(string $id, ContextRegiune $ctx): string
@@ -317,7 +323,30 @@ final class Regiuni
         if ($r === null) {
             throw new EroareJeton('regiunea „' . $id . '” n-are un randator construit');
         }
-        return $r->randeaza($ctx);
+        if (self::cache($id) !== 'pagina') {
+            return $r->randeaza($ctx);
+        }
+        $stareInainte = session_status();
+        $existaSesiunea = array_key_exists('_SESSION', $GLOBALS);
+        if ($existaSesiunea) {
+            $legatura = &$_SESSION; // aceeași referință pe care o ține modulul sesiunii, când sesiunea e pornită
+        }
+        unset($_SESSION);
+        $_SESSION = [];
+        try {
+            $iesire = $r->randeaza($ctx);
+            $scris = $_SESSION !== [];
+            $schimbata = session_status() !== $stareInainte;
+        } finally {
+            unset($_SESSION);
+            if ($existaSesiunea) {
+                $_SESSION = &$legatura;
+            }
+        }
+        if ($scris || $schimbata) {
+            throw new EroareJeton('regiunea „' . $id . '” are cache „pagina”, dar ' . ($schimbata ? 'a pornit sau a închis sesiunea' : 'a scris în sesiune'));
+        }
+        return $iesire;
     }
 
     /**

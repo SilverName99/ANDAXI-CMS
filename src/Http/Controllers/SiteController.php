@@ -5742,7 +5742,9 @@ final class SiteController
             return false;
         }
         $seo = \App\Support\CadruCapturat::seoPagina($db, $pagina);
-        $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/');
+        // O adresă din care parse_url nu scoate o cale („/x:1/”: false, nu null) primește 404-ul capturat cu calea „/” (N6,
+        // docs/SECURITATE.md): formularul subsolului trimite atunci la „/”, cu nonce-ul lui, nu la `action=""` cu nonce-ul căii goale.
+        $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/');
         \App\Support\CadruCapturat::raspunde($db, $doc, ['cale' => $cale, 'nonce' => \App\Support\CadruCapturat::nonceZi(), 'an' => date('Y'), 'seo' => $seo], $status);
         return true;
     }

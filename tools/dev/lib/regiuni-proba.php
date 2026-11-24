@@ -20,7 +20,14 @@ declare(strict_types=1);
  *  - proba:cont (cache „sesiune”, interior): contul; cu `?endpoint=orders` adaugă clasele corpului `logged-in` și
  *    `woocommerce-orders` și titlul „Comenzi <&>” (scăpat);
  *  - proba:indiscret (cache „pagina”, interior): la dovadă dă octeții capturați, la o cerere citește sesiunea (interzis pentru o
- *    regiune „pagina”: cadrul răspunde 500 și nimic nu intră în cache).
+ *    regiune „pagina”: cadrul răspunde 500 și nimic nu intră în cache);
+ *  - proba:seif (cache „sesiune”, interior): cu `?pune=1` scrie în `$_SESSION` un secret inventat (SECRET; plasa SesiuneLaNevoie
+ *    pornește sesiunea și trimite cookie-ul ei), ca un vizitator cu ceva al lui în sesiune; altfel arată secretul din sesiune
+ *    (ContextRegiune::sesiune), dovada că sesiunea vizitatorului chiar îl are;
+ *  - proba:direct (cache „pagina”, interior): încalcă contractul, ca un randator scris greșit: citește secretul direct din
+ *    `$_SESSION` (nu prin ContextRegiune::sesiune). Cadrul îi dă un `$_SESSION` gol, iar documentul cu regiuni randat lângă o
+ *    sesiune pornită pleacă no-store, oricare ar fi Cache-Control-ul capturat (SEC-A3);
+ *  - proba:scrie (cache „pagina”, interior): la o cerere scrie în `$_SESSION` (interzis: 500, nimic în cache, nicio sesiune).
  */
 
 use App\Support\CadruCapturat\ContextRegiune;
@@ -139,9 +146,60 @@ final class RegiuneProbaIndiscret implements Randator
     }
 }
 
+final class RegiuneProbaSeif implements Randator
+{
+    public const SECRET = 'secret-de-proba-al-vizitatorului';
+
+    public function randeaza(ContextRegiune $ctx): string
+    {
+        if (!$ctx->laDovada() && (string) ($ctx->get['pune'] ?? '') === '1') {
+            $_SESSION['proba_seif'] = self::SECRET;
+            return '<p class="proba-seif">Pus.</p>';
+        }
+        return '<p class="proba-seif">' . Regiuni::html((string) ($ctx->sesiune()['proba_seif'] ?? 'Nimic.')) . '</p>';
+    }
+
+    public function normalizeaza(string $html): string
+    {
+        return $html;
+    }
+}
+
+final class RegiuneProbaDirect implements Randator
+{
+    public function randeaza(ContextRegiune $ctx): string
+    {
+        return '<p class="proba-direct">' . Regiuni::html((string) ($_SESSION['proba_seif'] ?? 'Nimic.')) . '</p>';
+    }
+
+    public function normalizeaza(string $html): string
+    {
+        return $html;
+    }
+}
+
+final class RegiuneProbaScrie implements Randator
+{
+    public function randeaza(ContextRegiune $ctx): string
+    {
+        if (!$ctx->laDovada()) {
+            $_SESSION['proba_scris'] = 1;
+        }
+        return '<p class="proba-scrie">Nimic.</p>';
+    }
+
+    public function normalizeaza(string $html): string
+    {
+        return $html;
+    }
+}
+
 Regiuni::inregistreazaProba('proba:lista', 'pagina', ['interior'], [], new RegiuneProbaLista());
 Regiuni::inregistreazaProba('proba:cos', 'sesiune', ['interior', 'atribut'], ['class'], new RegiuneProbaCos());
 Regiuni::inregistreazaProba('proba:evenimente', 'pagina', ['atribut'], ['data-events'], new RegiuneProbaEvenimente());
 Regiuni::inregistreazaProba('proba:ecou', 'sesiune', ['interior'], [], new RegiuneProbaEcou());
 Regiuni::inregistreazaProba('proba:cont', 'sesiune', ['interior'], [], new RegiuneProbaCont());
 Regiuni::inregistreazaProba('proba:indiscret', 'pagina', ['interior'], [], new RegiuneProbaIndiscret());
+Regiuni::inregistreazaProba('proba:seif', 'sesiune', ['interior'], [], new RegiuneProbaSeif());
+Regiuni::inregistreazaProba('proba:direct', 'pagina', ['interior'], [], new RegiuneProbaDirect());
+Regiuni::inregistreazaProba('proba:scrie', 'pagina', ['interior'], [], new RegiuneProbaScrie());

@@ -12,8 +12,10 @@ namespace App\Support\CadruCapturat;
  *  - ieșirea e HTML gata de pus în pagină: randatorul își scapă singur datele (Regiuni::html, Regiuni::attr, Regiuni::jsonAttr), iar
  *    cadrul n-o mai trece prin jetoane (un `{{ax:` din date rămâne text). Politica HTML-ului capturat (HtmlCapturat) o verifică pe
  *    ieșire dovada de la import și G-regiuni, nu fiecare cerere;
- *  - pe o regiune cu `cache` = `pagina` randatorul nu citește nimic din sesiune (ContextRegiune::sesiune refuză), deci documentul
- *    poate sta în cache; pe una cu `sesiune`, documentul pleacă cu `Cache-Control: no-store, private`;
+ *  - pe o regiune cu `cache` = `pagina` randatorul nu citește nimic din sesiune, deci documentul poate sta în cache: ContextRegiune::sesiune
+ *    refuză, iar cât randează, Regiuni::randeaza îi dă un `$_SESSION` gol, desprins de sesiune (o scriere în el, o sesiune pornită sau
+ *    închisă = EroareJeton, 500); pe una cu `sesiune`, documentul pleacă cu `Cache-Control: no-store, private`, ca orice document cu
+ *    regiuni randat cu o sesiune pornită (CadruCapturat::raspunde);
  *  - dovada (la import și în teste): cu starea capturii (ContextRegiune::stare), ieșirea normalizată (normalizeaza) trebuie să fie
  *    octeții capturați normalizați la fel; altfel NU, cu primul octet diferit.
  */

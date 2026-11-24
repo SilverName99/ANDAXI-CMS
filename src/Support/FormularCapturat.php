@@ -110,7 +110,12 @@ final class FormularCapturat
         if ($n === null) {
             return false;
         }
-        $cale = (string) (parse_url($uri, PHP_URL_PATH) ?? '/');
+        // N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate o cale
+        // („/x:1/”, „//x”) nu e formularul primei pagini; merge mai departe, la 404-ul routerului, ca orice adresă necunoscută.
+        $cale = \App\Http\Router::caleCerere($uri);
+        if ($cale === null) {
+            return false;
+        }
         $cale = $cale === '' ? '/' : $cale;
         if (GardaOrigine::caleAdmin($cale) || preg_match('#^/(api|_andaxi|webhook|checkout|cont|contul-meu)(/|$)#i', rawurldecode($cale)) === 1) {
             return false;
