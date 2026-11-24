@@ -1544,6 +1544,21 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   ttclid (t), q: are ?q=, t: felul paginii, i: id-ul produsului}`; la ascunderea filei sau la plecare, `{e:"l", p, d: secundele active}`.
   Nimic altceva din adresă (niciun alt parametru, niciun email din adresă). Pe o pagină de eroare (404, 410, 503) scriptul nu se pune,
   deci o adresă care nu există nu ajunge în statistici; nici pentru administratorul logat.
+- **Pe un site capturat** (adoptat de pe WordPress, `tema.json` → `cadru` = `capturat`; docs/DEPLOY.md, „Cadrul capturat”): paginile
+  capturate nu au layout-ul nucleului, iar politica lor CSP nu permite niciun script inline, deci scriptul de mai sus stă în runtime-ul
+  compat, ca fișier: `public/assets/compat/comun/v1/statistici.js` (din manifestul runtime-ului, `divi4/v1/sloturi.json` → `pluginuri`).
+  Cu pluginul pornit, cadrul îl pune la sfârșitul slotului final, cu configurația în `ax-date` → `ax_statistici`
+  (`Statistici::dateCapturat`: felul paginii, setarea DNT, parametrul căutării: `s` pe căutarea WordPress), doar pe un răspuns web
+  reușit (nu pe 404); nici pentru administratorul logat (ca în layout). Trimite exact aceleași corpuri, cu cheile în aceeași ordine,
+  la același `POST /api/statistici` (pe aceeași origine: `connect-src 'self'`), fără cookie-uri și fără stocare în browser; nimic de la
+  un browser automatizat, cu DNT/GPC (cu setarea) sau dintr-un cadru izolat (previzualizarea din admin, unde oricum nu se pune).
+  Roboții, administratorii, plafoanele și „Acum pe site” sunt ale punctului de primire, ca pentru nucleu. Căutarea WordPress (`/?s=`,
+  `CautareCapturata`) se notează pe server ca a nucleului (`Statistici::cautare`, cu numărul rezultatelor); formularele de contact nu
+  se notează (nici în nucleu). **Cu pluginul oprit, paginile ies octet cu octet ca înainte.** Pornit, P1 (`verifica-randare.php
+  --capturat`) dă aceleași amprente: scriptul și cheia vin doar la răspunsul web, ca trackerele, deci nu trebuie `--aproba-toate`
+  (dacă vreodată o amprentă diferă după o actualizare a runtime-ului: `$PHP ~/platforma/bin/platforma --site=<domeniu>
+  scripts/verifica-randare.php --capturat --aproba-toate`, după ce ai văzut paginile). Porțile: G-compat (modulul, pe pagini
+  inventate), G-capturat (secțiunea 13: același corp ca scriptul nucleului în Chromium, amprentele, căutarea).
 - **Punctul de primire** `POST /api/statistici` (`Statistici::intercepteaza`, din `public/index.php`, după citirea setărilor și înaintea
   sesiunii: niciun cookie, niciun fișier de sesiune, nicio redirecționare SEO; ruta e și în router, a pluginului, pentru gardă): `Origin`
   al site-ului (fără el, `Sec-Fetch-Site: same-origin` sau un Referer al site-ului), altfel 403; corpul cel mult 2 KB (413), JSON validat

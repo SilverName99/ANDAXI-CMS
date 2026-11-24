@@ -26,6 +26,8 @@
 //  - DOM-ul de după scripturi = DOM-ul fără JS plus exact mutațiile așteptate; nicio încălcare CSP (și doi martori: un script
 //    inline e blocat; speculationrules fără 'inline-speculation-rules' e blocat); totul și în previzualizarea din admin (iframe
 //    sandbox="allow-scripts", cu adresă și srcdoc, origine opacă);
+//  - statistici (pluginul „Statistici site”, scriptul din manifest → pluginuri): pagina văzută cu exact corpul scriptului nucleului,
+//    timpul activ la ascunderea filei, nimic la webdriver, cu GPC și setarea DNT, fără configurație sau în previzualizarea izolată;
 //  - idempotența: fiecare fișier inclus de două ori și fiecare piesă rulată din nou nu schimbă nimic (și un clic pe un toggle cu
 //    runtime-ul inclus de două ori = o singură animație);
 //  - spațiul global: pe toate paginile cu module, singura proprietate proprie nouă a lui window e `axCompat`.
@@ -121,6 +123,7 @@ const spreAdresa = (cale) => {
 };
 const capImplicit = () => (Array.isArray(manifest.cap) ? manifest.cap.map(spreAdresa) : []);
 const finalImplicit = () => (Array.isArray(manifest.final) ? manifest.final.map(spreAdresa) : []).concat(['/fixturi/module-proba.js']);
+const finalStatistici = () => finalImplicit().concat([spreAdresa((manifest.pluginuri || {}).statistici || 'comun/v1/statistici.js')]);
 
 const DATE_IMPLICITE = { file: ['/fixturi/css/late.css'], et_pb_custom: { page_id: '7', ignore_waypoints: 'no' },
   proba: { lista: [1, 2, 3], text: '<b> & </script>' }, ax_structura: { 'et-last-child': ['#sectiune-speciala > .et_pb_row'] } };
@@ -591,6 +594,11 @@ const PAGINI = {
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
+  // Pluginul statistici: scriptul lui la sfârșitul slotului final (cum îl pune cadrul cu pluginul pornit), configurația în ax-date.
+  statistici: { final: finalStatistici(), date: Object.assign({}, DATE_IMPLICITE, { ax_statistici: { t: 'pagina', n: true, q: 's' } }) },
+  'statistici-fara-dnt': { final: finalStatistici(), date: Object.assign({}, DATE_IMPLICITE, { ax_statistici: { t: 'pagina', n: false, q: 'q' } }) },
+  'statistici-fara-date': { final: finalStatistici() },
+  'statistici-dublu': { final: finalStatistici().concat(finalStatistici()), date: Object.assign({}, DATE_IMPLICITE, { ax_statistici: { t: 'acasa', n: true, q: 's' } }) },
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -675,10 +683,23 @@ function formularProba(req, res) {
   });
 }
 
+// Punctul de primire al statisticilor (contractul POST /api/statistici): fiecare corp, cu antetele lui, în statisticiPrimite; 204.
+const statisticiPrimite = [];
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1');
   if (req.method === 'POST' && u.pathname === '/pagina/formular') {
     return formularProba(req, res);
+  }
+  if (req.method === 'POST' && u.pathname === '/api/statistici') {
+    const bucati = [];
+    req.on('data', (b) => bucati.push(b));
+    req.on('end', () => {
+      statisticiPrimite.push({ corp: Buffer.concat(bucati).toString('utf8'), tip: String(req.headers['content-type'] || ''), origine: req.headers.origin || null,
+        cookie: req.headers.cookie || null });
+      res.writeHead(204, { 'Cache-Control': 'no-store' });
+      res.end();
+    });
+    return undefined;
   }
   if (req.method !== 'GET') {
     return trimite(res, 405, 'text/plain; charset=utf-8', 'doar GET');
@@ -853,7 +874,10 @@ function primaDiferenta(a, b) {
 // ---------------------------------------------------------------------------------------------------------------------
 function verificaManifestul() {
   scrie('== Manifestul sloturilor (divi4/v1/sloturi.json) și fișierele runtime-ului');
-  const cai = [].concat(manifest.cap || [], manifest.final || []);
+  const pluginuri = manifest.pluginuri && typeof manifest.pluginuri === 'object' ? manifest.pluginuri : {};
+  const cai = [].concat(manifest.cap || [], manifest.final || [], Object.values(pluginuri));
+  verifica('pluginuri: scriptul pluginului statistici (comun/v1/statistici.js), nu și în sloturi (îl adaugă cadrul doar cu pluginul pornit)',
+    egal(pluginuri, { statistici: 'comun/v1/statistici.js' }) && !(manifest.final || []).includes('comun/v1/statistici.js'), manifest.pluginuri);
   verifica('sloturi.json: format 1, runtime divi4@1, cap și final liste nevide de căi', manifest.format === 1 && manifest.runtime === 'divi4@1'
     && Array.isArray(manifest.cap) && Array.isArray(manifest.final) && manifest.cap.length > 0 && cai.every((c) => typeof c === 'string'), manifest);
   const rele = cai.filter((c) => !/^(comun|divi4)\/v[0-9]+\/[a-z0-9-]+\.js$/.test(c) || !fisierSub(COMPAT, c));
@@ -2175,6 +2199,66 @@ async function verificaToggle(browser) {
 
 // Runtime-ul nu lasă nimic în spațiul global în afara lui `window.axCompat` (fixtura își are `__axProba`), pe toate paginile cu
 // module, după interacțiuni (derulare, resize, clic), inclusiv cu fișierele incluse de două ori.
+async function verificaStatisticile(browser) {
+  scrie('== statistici (pluginul „Statistici site” pe paginile capturate: pagina văzută și timpul activ, ca scriptul nucleului)');
+  const omul = () => Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false });
+  const asteapta = async (page, n, ms) => {
+    for (let t = 0; t < ms && statisticiPrimite.length < n; t += 50) {
+      await page.waitForTimeout(50);
+    }
+  };
+  // 1. Un vizitator: pagina văzută, cu exact câmpurile scriptului nucleului, în aceeași ordine; apoi timpul activ la ascunderea filei.
+  statisticiPrimite.length = 0;
+  const cale = '/pagina/statistici?utm_source=TikTok&utm_campaign=video-viral&gclid=proba&fbclid=proba&s=camere&alt=1';
+  const p = await deschide(browser, { cale, init: omul });
+  await asteapta(p.page, 1, 3000);
+  const s = await stare(p.page.mainFrame());
+  const vazuta = statisticiPrimite.slice();
+  const urme = await p.page.evaluate(() => ({ cookie: document.cookie, local: localStorage.length, sesiune: sessionStorage.length }));
+  verifica('pagina văzută: un POST /api/statistici, text/plain, de pe aceeași origine, fără cookie, cu {e,p,r,w,u,c,q,t,i} ca scriptul nucleului '
+    + '(calea fără parametri, utm-urile date, gclid → g, fbclid → f, ?s= → q:1 pe căutarea WordPress, felul din ax-date, i: 0); nimic scris în browser; '
+    + 'fără erori și încălcări CSP (connect-src \'self\')', vazuta.length === 1 && vazuta[0].corp === JSON.stringify({ e: 'v', p: '/pagina/statistici', r: '', w: 1440,
+      u: { source: 'TikTok', campaign: 'video-viral' }, c: 'gf', q: 1, t: 'pagina', i: 0 }) && /^text\/plain/.test(vazuta[0].tip) && vazuta[0].origine === BAZA
+      && vazuta[0].cookie === null && egal(urme, { cookie: '', local: 0, sesiune: 0 }) && curate(p.ev, s), { vazuta, urme, ev: detaliiCurate(p.ev, s) });
+  await p.page.waitForTimeout(1200);
+  await p.page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await asteapta(p.page, 2, 2000);
+  const plecare = statisticiPrimite[1] ? JSON.parse(statisticiPrimite[1].corp) : null;
+  verifica('fila ascunsă: {e:"l", p, d: secundele active}', statisticiPrimite.length === 2 && plecare && egal(Object.keys(plecare), ['e', 'p', 'd'])
+    && plecare.e === 'l' && plecare.p === '/pagina/statistici' && plecare.d >= 1 && plecare.d <= 5, statisticiPrimite);
+  await p.context.close();
+  // 2. Nimic: un browser automatizat (webdriver), GPC cu setarea DNT, fără configurație, în previzualizarea izolată din admin.
+  const nimic = {};
+  for (const [nume, o] of [['webdriver', { cale: '/pagina/statistici' }],
+    ['gpc', { cale: '/pagina/statistici', init: () => { Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }); Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true }); } }],
+    ['fara-date', { cale: '/pagina/statistici-fara-date', init: omul }],
+    ['previzualizare', { cale: '/gazda/statistici', cadre: ['cu-adresa', 'srcdoc'], init: omul }]]) {
+    statisticiPrimite.length = 0;
+    const q = await deschide(browser, o);
+    await q.page.waitForTimeout(700);
+    nimic[nume] = statisticiPrimite.length;
+    await q.context.close();
+  }
+  verifica('nimic trimis: browser automatizat (navigator.webdriver), Global Privacy Control cu setarea DNT, fără ax_statistici, în cadrele izolate '
+    + 'ale previzualizării (origine opacă)', egal(nimic, { webdriver: 0, gpc: 0, 'fara-date': 0, previzualizare: 0 }), nimic);
+  // 3. GPC fără setarea DNT (n: false): se numără; ?q= cu q: "q"; scriptul inclus de două ori: o singură pagină văzută.
+  statisticiPrimite.length = 0;
+  const r = await deschide(browser, { cale: '/pagina/statistici-fara-dnt?q=camere', init: () => { Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }); Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true }); } });
+  await asteapta(r.page, 1, 3000);
+  const faraDnt = statisticiPrimite.slice();
+  await r.context.close();
+  statisticiPrimite.length = 0;
+  const dd = await deschide(browser, { cale: '/pagina/statistici-dublu', init: omul });
+  await dd.page.waitForTimeout(700);
+  const dublu = statisticiPrimite.slice();
+  await dd.context.close();
+  verifica('GPC fără setarea DNT: pagina văzută (cu ?q= → q:1); scriptul inclus de două ori: o singură pagină văzută',
+    faraDnt.length === 1 && JSON.parse(faraDnt[0].corp).q === 1 && dublu.length === 1 && JSON.parse(dublu[0].corp).t === 'acasa', { faraDnt, dublu });
+}
+
 async function verificaGlobalele(browser) {
   scrie('== spațiul global: doar window.axCompat');
   const noi = (f) => f.evaluate(() => {
@@ -2185,7 +2269,7 @@ async function verificaGlobalele(browser) {
   const rez = {};
   for (const [nume, o] of [['baza', {}], ['dublu', {}], ['meniu', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }],
     ['consimtamant', {}], ['urmarire', {}], ['carusel', {}], ['galerie', {}], ['divimenus', {}], ['video', {}], ['toggle-dublu', {}],
-    ['multiview', { viewport: { width: 820, height: 1180 } }], ['derulare', {}], ['derulare', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }]]) {
+    ['multiview', { viewport: { width: 820, height: 1180 } }], ['statistici', {}], ['derulare', {}], ['derulare', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }]]) {
     const { context, page } = await deschide(browser, Object.assign({ cale: '/pagina/' + nume }, o));
     const f = page.mainFrame();
     await f.evaluate(async () => {
@@ -3132,6 +3216,7 @@ async function main() {
     await verificaSticky(browser);
     await verificaSusSiAncorele(browser);
     await verificaClaseleUa(browser);
+    await verificaStatisticile(browser);
     await verificaGlobalele(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);

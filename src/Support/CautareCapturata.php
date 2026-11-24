@@ -61,6 +61,11 @@ final class CautareCapturata
         $semn = "\u{E000}ax-cautare-" . bin2hex(random_bytes(8)) . "\u{E000}";
         $doc['continut'] = $semn;
         $continut = self::continut($termen, $rezultate);
+        // Pluginul statistici: căutarea pe site și câte rezultate a avut, ca la căutarea nucleului (/api/search/products); nimic
+        // cu pluginul oprit, pentru roboți, administratori sau DNT (Statistici::cautare).
+        if (strtoupper($metoda) === 'GET') {
+            Statistici::cautare($termen, count($rezultate), $db);
+        }
         $titlu = 'Rezultatele căutării pentru „' . $termen . '” – ' . Brand::numeSite(Settings::all($db));
         header('X-Robots-Tag: noindex, follow');
         CadruCapturat::raspunde($db, $doc, ['cale' => '/', 'nonce' => CadruCapturat::nonceZi(), 'an' => date('Y')], 200,

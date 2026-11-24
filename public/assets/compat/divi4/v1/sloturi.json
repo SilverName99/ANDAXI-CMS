@@ -1,7 +1,7 @@
 {
     "format": 1,
     "runtime": "divi4@1",
-    "descriere": "Scripturile runtime-ului pe sloturile paginii capturate: fiecare cale (față de /assets/compat/) devine <script src=\"/assets/compat/<cale>\"></script>, sincron (fără async și defer), în ordinea listei, la poziția slotului. cap = {{ax:runtime:cap}} (în head, înaintea lui ax-date); final = {{ax:runtime:final}} (în corp, unde stătea ultimul script scos). incarcare.js e primul în cap.",
+    "descriere": "Scripturile runtime-ului pe sloturile paginii capturate: fiecare cale (față de /assets/compat/) devine <script src=\"/assets/compat/<cale>\"></script>, sincron (fără async și defer), în ordinea listei, la poziția slotului. cap = {{ax:runtime:cap}} (în head, înaintea lui ax-date); final = {{ax:runtime:final}} (în corp, unde stătea ultimul script scos). incarcare.js e primul în cap. pluginuri = scriptul unui plugin al nucleului pe paginile capturate, adăugat la sfârșitul slotului final doar pe răspunsul web cu pluginul pornit (statistici: Statistici::dateCapturat), deci fără el paginile, P1 și amprentele rămân aceleași.",
     "cap": [
         "comun/v1/incarcare.js",
         "comun/v1/tarziu.js"
@@ -27,5 +27,8 @@
         "divi4/v1/legaturi.js",
         "comun/v1/urmarire.js",
         "comun/v1/consimtamant.js"
-    ]
+    ],
+    "pluginuri": {
+        "statistici": "comun/v1/statistici.js"
+    }
 }

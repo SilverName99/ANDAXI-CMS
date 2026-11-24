@@ -18,8 +18,10 @@ use Throwable;
  * **Colectarea**: un script mic (`scriptPagina`, sub 2 KB, agățat de `layout.final_body`) trimite, cu `navigator.sendBeacon` (sau
  * `fetch` cu `keepalive`), pagina văzută și, la ieșire, timpul activ, la `POST /api/statistici` (`intercepteaza`, din
  * public/index.php, înaintea sesiunii: niciun cookie, niciun fișier de sesiune). Scriptul e în HTML, deci merge și pe paginile
- * servite din cache sau dintr-un CDN. Coșul, începutul comenzii, comanda și căutările pe site se notează pe server
- * (`laCos`, `laCheckout`, `laComanda`, `cautare`), cu același hash, calculat din cererea lor.
+ * servite din cache sau dintr-un CDN. Pe paginile capturate (cadrul capturat, fără layout-ul nucleului și fără scripturi inline)
+ * același cod e un fișier al runtime-ului compat (public/assets/compat/comun/v1/statistici.js), cu configurația din `dateCapturat`.
+ * Coșul, începutul comenzii, comanda și căutările pe site (și căutarea WordPress a unui site capturat, CautareCapturata) se notează
+ * pe server (`laCos`, `laCheckout`, `laComanda`, `cautare`), cu același hash, calculat din cererea lor.
  *
  * **Nu se numără**: administratorii logați, roboții (`Campanii::eRobot`), preîncărcările (scriptul așteaptă ca pagina să fie
  * văzută), browserele cu „Do Not Track” sau „Global Privacy Control” (setarea `statistici_respecta_dnt`, implicit da).
@@ -560,6 +562,31 @@ final class Statistici
             return '<script data-ax-st>' . self::codScript(self::respectaDnt(self::setari()), $tip, $produs) . '</script>';
         } catch (Throwable) {
             return '';
+        }
+    }
+
+    /** Cheia configurației scriptului în `ax-date` al unei pagini capturate (dateCapturat). */
+    public const CHEIE_DATE = 'ax_statistici';
+
+    /**
+     * Configurația scriptului pe o pagină capturată (cadrul capturat, pe răspunsul web: ax-date → `ax_statistici`, citită de
+     * runtime-ul compat, public/assets/compat/comun/v1/statistici.js: același cod ca scriptPagina, ca fișier, fiindcă politica CSP a
+     * paginilor capturate nu permite scripturi inline): `t` felul paginii, `n` dacă se respectă DNT/GPC, `q` numele parametrului
+     * căutării pe site (`s` pe căutarea WordPress, wp-compat.json → cautare_wp; altfel `q`). Null cu pluginul oprit sau pentru
+     * administratorul logat (ca scriptPagina).
+     *
+     * @return array{t: string, n: bool, q: string}|null
+     */
+    public static function dateCapturat(string $cale): ?array
+    {
+        try {
+            if (!Plugins::vizibil('statistici') || self::eAdminInPagina()) {
+                return null;
+            }
+            return ['t' => self::tipPagina((string) (parse_url($cale, PHP_URL_PATH) ?? '/')), 'n' => self::respectaDnt(self::setari()),
+                'q' => WpCompat::cautareWp() ? 's' : 'q'];
+        } catch (Throwable) {
+            return null;
         }
     }
 

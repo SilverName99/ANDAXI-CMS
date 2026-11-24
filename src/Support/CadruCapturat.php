@@ -44,7 +44,7 @@ final class CadruCapturat
      *   (obiect: partea paginii din `ax-date`), `date_reteta` (rețeta ordinii), `meniu` (clasele și aria-current ale elementelor
      *   de meniu care diferă pe pagina aceasta de cele ale fragmentului), `valori_import` (cale, an, seo: valorile de la import)
      * @param array<string, array{html: string, date?: mixed, meniu?: array<string, array{0: string, 1: string}>}> $fragmente fel → fragmentul ales
-     * @param array{cale: string, nonce: string, an: string, runtime?: array{cap?: string, final?: string}, seo?: array<string, string>, sablon_cmplz?: string, urmarire?: list<array<string, mixed>>|null} $cerere
+     * @param array{cale: string, nonce: string, an: string, runtime?: array{cap?: string, final?: string}, seo?: array<string, string>, sablon_cmplz?: string, urmarire?: list<array<string, mixed>>|null, statistici?: array<string, mixed>|null} $cerere
      * @throws EroareJeton
      */
     public static function randeaza(array $doc, string $continut, array $fragmente, array $cerere): string
@@ -83,6 +83,10 @@ final class CadruCapturat
                 $u = $cerere['urmarire'] ?? Urmarire::date();
                 if ($u !== null && $u !== []) {
                     $d[Urmarire::CHEIE_DATE] = $u;
+                }
+                // Pluginul statistici: configurația scriptului, doar când răspunsul web l-a pus (raspunde).
+                if (is_array($cerere['statistici'] ?? null)) {
+                    $d[Statistici::CHEIE_DATE] = $cerere['statistici'];
                 }
                 return self::json(self::cuNonce($d, $nonce));
             }
@@ -268,8 +272,10 @@ final class CadruCapturat
      * (`public/assets/compat/<dialect>/v<n>/sloturi.json`), fiecare cale din `cap` și `final` ca
      * `<script src="/assets/compat/<cale>?v=<12 hex din sha256-ul fișierului>"></script>`, sincron, în ordinea listei. Fără runtime
      * (`""`), nimic. Un manifest sau un fișier lipsă (o versiune copiată pe jumătate) e o eroare: pagina nu iese fără runtime.
+     * `pluginuri` (opțional): scriptul unui plugin al nucleului pe paginile capturate (`statistici`), pus la sfârșitul slotului
+     * final doar de răspunsul web (raspunde), cu pluginul pornit.
      *
-     * @return array{cap: string, final: string}
+     * @return array{cap: string, final: string, pluginuri?: array<string, string>}
      * @throws \RuntimeException
      */
     public static function scripturiRuntime(string $runtime): array
@@ -300,6 +306,17 @@ final class CadruCapturat
                 }
                 $rez[$slot] .= '<script src="/assets/compat/' . $cale . '?v=' . substr((string) hash_file('sha256', $fisier), 0, 12) . '"></script>';
             }
+        }
+        foreach (is_array($date['pluginuri'] ?? null) ? $date['pluginuri'] : [] as $plugin => $cale) {
+            if (!is_string($plugin) || preg_match('/^[a-z_]{2,40}$/D', $plugin) !== 1 || !is_string($cale)
+                || preg_match('#^[a-z0-9]{2,20}/v[1-9][0-9]{0,2}/[a-z0-9-]{1,60}\.js$#D', $cale) !== 1) {
+                throw new \RuntimeException('manifestul runtime-ului: un script de plugin nepermis');
+            }
+            $fisier = Paths::public('assets/compat/' . $cale);
+            if (!is_file($fisier)) {
+                throw new \RuntimeException('runtime-ul compat: lipsește ' . $cale);
+            }
+            $rez['pluginuri'][$plugin] = '<script src="/assets/compat/' . $cale . '?v=' . substr((string) hash_file('sha256', $fisier), 0, 12) . '"></script>';
         }
         return self::$runtime[$runtime] = $rez;
     }
@@ -440,7 +457,16 @@ final class CadruCapturat
     public static function raspunde(\PDO $db, array $doc, array $cerere, int $status, ?callable $dupa = null, bool $faraCache = false): int
     {
         try {
-            $html = self::legaNonceFormulare(self::randeazaRand($db, $doc, $cerere, self::scripturiRuntime(Tema::runtime())), (string) $cerere['cale']);
+            $runtime = self::scripturiRuntime(Tema::runtime());
+            // Pluginul statistici (Statistici::dateCapturat): pagina văzută, ca scriptul nucleului, doar pe un răspuns web reușit;
+            // P1, previzualizarea și verificarea la salvare nu trec pe aici, deci nici amprentele nu se schimbă.
+            if (!array_key_exists('statistici', $cerere)) {
+                $cerere['statistici'] = $status < 400 && isset($runtime['pluginuri']['statistici']) ? Statistici::dateCapturat((string) $cerere['cale']) : null;
+            }
+            if (($cerere['statistici'] ?? null) !== null && isset($runtime['pluginuri']['statistici'])) {
+                $runtime['final'] .= $runtime['pluginuri']['statistici'];
+            }
+            $html = self::legaNonceFormulare(self::randeazaRand($db, $doc, $cerere, $runtime), (string) $cerere['cale']);
             if ($dupa !== null) {
                 $html = $dupa($html);
             }

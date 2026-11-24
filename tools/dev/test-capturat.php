@@ -21,11 +21,16 @@ declare(strict_types=1);
  *  7. răspunsurile înghețate (robots, sitemap-ul) din captură, octet cu octet, cu antetele lor, la GET și HEAD; fără cadru, ale
  *     nucleului;
  *  6. P1 după import (scripts/verifica-randare.php --capturat): la fel cu amprenta aprobată, o editare dă 1 până la --aproba, un
- *     script nepermis în ieșire e NU; `/health` are rândul `capturat:` doar pe cadrul capturat.
+ *     script nepermis în ieșire e NU; `/health` are rândul `capturat:` doar pe cadrul capturat;
+ * 12. editorul unei pagini capturate: politica HTML-ului la salvare (CadruCapturat::problemeContinut), previzualizarea = pagina
+ *     publică cu ciorna (POST /admin/pages/{id}/previzualizare, cu jetonul), refuzul salvării (422), „Antet, subsol și meniu”, și
+ *     în Chromium (tools/dev/capturat-editor.cjs; capturile de ecran la 1440 cu CMS_DEV_POZE=<dosar>);
+ * 13. pluginul statistici pornit: scriptul runtime-ului și ax_statistici doar la răspunsul web, aceleași amprente P1, același corp
+ *     ca scriptul nucleului în Chromium (tools/dev/capturat-statistici.cjs), căutarea WordPress notată (serverul +34).
  *
  *   tools/dev/php.sh tools/dev/test-capturat.php
  *
- * Baza (cms_capt), serverele (CMS_DEV_PORT+31…+33) și dosarul $CMS_DEV_DIR/test-capturat/ se șterg la final. Raport:
+ * Baza (cms_capt), serverele (CMS_DEV_PORT+31…+34) și dosarul $CMS_DEV_DIR/test-capturat/ se șterg la final. Raport:
  * $CMS_DEV_DIR/test-capturat-raport.txt; cod 0 doar dacă totul a trecut.
  */
 
@@ -1038,6 +1043,95 @@ $scrie('== 12. Editorul unei pagini capturate: previzualizarea = pagina de pe si
         ($n['design']['status'] ?? 0) === 200 && ($n['design']['nota'] ?? false) && ($n['design']['sandbox'] ?? '') === 'allow-scripts' && ($cd['antet'] ?? false)
         && ($cd['subsol'] ?? false) && ($cd['loc'] ?? false) && (!$foiNoi || ($cd['fundalAntet'] ?? '') === 'rgb(31, 77, 58)') && ($cd['incalcari'] ?? ['?']) === [],
         json_encode($n['design'] ?? null, JSON_UNESCAPED_UNICODE));
+}
+
+$scrie('');
+$scrie('== 13. Pluginul „Statistici site” pe paginile capturate: pagina văzută ca scriptul nucleului (runtime-ul, fără script inline), căutarea; amprentele neschimbate');
+{
+    // Amprentele aprobate cu pluginul oprit (pagina 102 a fost salvată din editor la secțiunea 12), apoi pluginul pornit în licența serverelor.
+    [$cA] = $p1(['--aproba-toate']);
+    $faraPlugin = $cerere($port, '/camere/');
+    $licentaSt = static function (string ...$arg) use ($radacina, $lucru): int {
+        exec('env CMS_DEV_LICENTA_DOSAR=' . escapeshellarg($lucru . '/licenta') . ' ' . escapeshellarg($radacina . '/tools/dev/php.sh') . ' '
+            . escapeshellarg($radacina . '/tools/dev/licenta.php') . ' ' . implode(' ', array_map('escapeshellarg', $arg)) . ' 2>&1', $o, $c);
+        return $c;
+    };
+    $codLicenta = $licentaSt('lista', 'statistici=pornit');
+    $cuPlugin = ['corp' => ''];
+    for ($i = 0; $i < 50 && !str_contains($cuPlugin['corp'], 'statistici.js'); $i++) {
+        $cuPlugin = $cerere($port, '/camere/');
+        usleep(100000);
+    }
+    [$cB, $oB] = $p1([]);
+    $scriptSt = (string) ($runtime['pluginuri']['statistici'] ?? '?');
+    $dateSt = '"ax_statistici":{"t":"pagina","n":true,"q":"q"}';
+    // Fără cele două adaosuri (scriptul la sfârșitul slotului final și cheia din ax-date), pagina e cea de cu pluginul oprit.
+    $scos = str_replace([$scriptSt, ',' . $dateSt], '', $cuPlugin['corp']);
+    $dSt = $egale($scos, $faraPlugin['corp']);
+    $verifica('pluginul oprit: nimic (nici scriptul, nici cheia); pornit: scriptul runtime-ului (comun/v1/statistici.js, din manifest → pluginuri) la sfârșitul '
+        . 'slotului final și ax_statistici în ax-date (felul paginii, DNT, parametrul căutării), altfel pagina octet cu octet aceeași; aceeași politică CSP',
+        $cA === 0 && $codLicenta === 0 && str_starts_with($scriptSt, '<script src="/assets/compat/comun/v1/statistici.js?v=') && !str_contains($faraPlugin['corp'], 'statistici.js') && !str_contains($faraPlugin['corp'], 'ax_statistici')
+        && substr_count($cuPlugin['corp'], $scriptSt) === 1 && str_contains($cuPlugin['corp'], '/assets/compat/comun/v1/consimtamant.js?v=' . substr((string) hash_file('sha256',
+            $radacina . '/public/assets/compat/comun/v1/consimtamant.js'), 0, 12) . '"></script>' . $scriptSt) && substr_count($cuPlugin['corp'], $dateSt) === 1 && $dSt === null
+        && ($cuPlugin['antete']['content-security-policy'] ?? '') === ($faraPlugin['antete']['content-security-policy'] ?? 'x'),
+        $cA . ' ' . $codLicenta . ' ' . $scriptSt . ' dif ' . ($dSt ?? '-') . ': „' . substr($norm->document($scos), max(0, (int) $dSt - 80), 200) . '”');
+    $verifica('pornit: P1 după import (verifica-randare.php --capturat) dă aceleași amprente (fără --aproba): scriptul și cheia vin doar la răspunsul web',
+        $cB === 0 && substr_count($oB, 'la fel') === 5, $oB);
+    $r404St = $cerere($port, '/nu-exista/');
+    $pSt = $previz($salvatCamere, $jetonP);
+    $dSt2 = $http('GET', '/admin/design/previzualizare');
+    $verifica('pornit: nimic pe 404, în previzualizarea editorului și în cea a antetului (nicio vizită numărată din admin)',
+        $r404St['cod'] === 404 && $pSt['cod'] === 200 && $dSt2['cod'] === 200 && array_filter([$r404St['corp'], $pSt['corp'], $dSt2['corp']],
+            static fn (string $c): bool => str_contains($c, 'statistici.js') || str_contains($c, 'ax_statistici')) === [], $r404St['cod'] . ' ' . $pSt['cod'] . ' ' . $dSt2['cod']);
+
+    // În Chromium: aceeași adresă cu aceiași parametri pe pagina capturată și pe pagina nucleului (serverul fără cadru, aceeași bază):
+    // aceleași corpuri, primite (204), scrise la fel; „Acum pe site” le vede.
+    $db->exec('DELETE FROM statistici_evenimente');
+    $envNode = ['CMS_DEV_URL=http://127.0.0.1:' . $port, 'CMS_DEV_URL_NUCLEU=http://127.0.0.1:' . $portF, 'CMS_DEV_CALE=/camere/',
+        'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers'), 'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'),
+        'NO_PROXY=*', 'no_proxy=*'];
+    $iesireSt = [];
+    exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy ' . implode(' ', array_map('escapeshellarg', $envNode))
+        . ' node ' . escapeshellarg(__DIR__ . '/capturat-statistici.cjs') . ' 2>&1', $iesireSt);
+    $st = json_decode((string) end($iesireSt), true);
+    $st = is_array($st) ? $st : [];
+    $vC = $st['capturat']['trimise'][0]['corp'] ?? '?';
+    $vN = $st['nucleu']['trimise'][0]['corp'] ?? '!';
+    $lC = json_decode((string) ($st['capturat']['trimise'][1]['corp'] ?? ''), true);
+    $lN = json_decode((string) ($st['nucleu']['trimise'][1]['corp'] ?? ''), true);
+    $verifica('Chromium: pagina capturată (runtime-ul, fără script inline) și pagina nucleului (scriptul layout-ului) trimit același corp la pagina văzută, '
+        . 'octet cu octet, și aceleași chei la plecare; amândouă primite (204), fără cookie, fără încălcări CSP',
+        $vC === $vN && str_starts_with($vC, '{"e":"v","p":"/camere/","r":"","w":1366,"u":{"source":"TikTok","campaign":"video-viral"},"c":"g","q":0,"t":"pagina","i":0}')
+        && is_array($lC) && is_array($lN) && array_keys($lC) === ['e', 'p', 'd'] && array_keys($lN) === ['e', 'p', 'd'] && $lC['e'] === 'l'
+        && ($st['capturat']['statusuri'] ?? []) === [204, 204] && ($st['nucleu']['statusuri'] ?? []) === [204, 204]
+        && array_key_exists('cookie', $st['capturat']['trimise'][0] ?? []) && $st['capturat']['trimise'][0]['cookie'] === null && ($st['capturat']['incalcari'] ?? ['?']) === []
+        && ($st['capturat']['scriptRuntime'] ?? false) && !($st['capturat']['scriptInline'] ?? true) && ($st['nucleu']['scriptInline'] ?? false),
+        json_encode($st, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $randuriSt = $db->query('SELECT tip, cale, tip_pagina, sursa, utm_sursa, utm_campanie FROM statistici_evenimente ORDER BY id')->fetchAll();
+    $acumSt = \App\Support\StatisticiRaport::acum($db);
+    $verifica('scrise la fel (pagina văzută și plecarea, calea, felul paginii, sursa din utm, campania), pentru amândouă; „Acum pe site” are pagina și sursa',
+        count($randuriSt) === 4 && $randuriSt[0] === $randuriSt[2] && $randuriSt[1] === $randuriSt[3] && (int) $randuriSt[0]['tip'] === 1
+        && $randuriSt[0]['cale'] === '/camere/' && $randuriSt[0]['tip_pagina'] === 'pagina' && $randuriSt[0]['utm_sursa'] === 'tiktok' && (int) $randuriSt[1]['tip'] === 2
+        && in_array('/camere/', array_column($acumSt['pagini'], 'cale'), true) && $acumSt['vizitatori'] >= 1,
+        json_encode([$randuriSt, $acumSt], JSON_UNESCAPED_UNICODE));
+
+    // Căutarea WordPress (/?s=, wp-compat.json → cautare_wp) pe un server al ei (același site, aceeași bază): notată ca la căutarea
+    // nucleului (Statistici::cautare), iar pagina rezultatelor are q = "s" (pagina văzută intră la „cautare”).
+    exec('cp -r ' . escapeshellarg($lucru . '/pachet') . ' ' . escapeshellarg($lucru . '/pachet-cautare'));
+    @mkdir($lucru . '/site-cautare/storage', 0770, true);
+    file_put_contents($lucru . '/pachet-cautare/wp-compat.json', '{"slash_final": true, "majuscule": "200", "antete_404": "wordpress", "ghicire": true, "cautare_wp": true}');
+    $portC = $port + 3;
+    $pornitC = $pornesteServer($portC, $lucru . '/pachet-cautare', $lucru . '/site-cautare');
+    $db->exec('DELETE FROM statistici_evenimente');
+    $uaOm = 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    $rCaut = $cerere($portC, '/?s=Camere', [$uaOm]);
+    $rRobot = $cerere($portC, '/?s=Contact', ['User-Agent: Googlebot/2.1 (+http://www.google.com/bot.html)']);
+    $cautari = $db->query('SELECT tip, cautare, rezultate FROM statistici_evenimente ORDER BY id')->fetchAll();
+    $verifica('căutarea WordPress cu pluginul pornit: notată pe server ca a nucleului (o căutare, termenul normalizat, numărul rezultatelor; nimic de la un robot); '
+        . 'pagina rezultatelor are scriptul și q = "s"', $pornitC && $rCaut['cod'] === 200 && $rRobot['cod'] === 200 && count($cautari) === 1 && (int) $cautari[0]['tip'] === 6
+        && $cautari[0]['cautare'] === 'camere' && (int) $cautari[0]['rezultate'] >= 1 && str_contains($rCaut['corp'], '"ax_statistici":{"t":"acasa","n":true,"q":"s"}')
+        && str_contains($rCaut['corp'], $scriptSt), json_encode([$rCaut['cod'], $cautari], JSON_UNESCAPED_UNICODE));
+    $licentaSt('fara');
 }
 
 $scrie('');
