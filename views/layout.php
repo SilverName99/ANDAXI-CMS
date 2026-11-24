@@ -206,10 +206,16 @@ if ($siteFaviconUrl === '') {
     $siteFaviconUrl = '/assets/img/product-placeholder.svg';
 }
 $requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
-$requestPath = is_string($requestPath) ? $requestPath : '/';
-$requestPath = rtrim($requestPath, '/');
-if ($requestPath === '') {
-    $requestPath = '/';
+if (is_string($requestPath)) {
+    $requestPath = rtrim($requestPath, '/');
+    if ($requestPath === '') {
+        $requestPath = '/';
+    }
+} else {
+    // N6 (docs/SECURITATE.md): o adresă din care parse_url nu scoate o cale primește pagina 404 a site-ului
+    // (public/index.php), cu calea ei scrisă (până la „?”), ca orice adresă necunoscută; nu „/”, altfel pagina 404 ar lua
+    // titlul, descrierea și canonicalul primei pagini.
+    $requestPath = explode('?', (string) ($_SERVER['REQUEST_URI'] ?? ''), 2)[0];
 }
 // Titlul, descrierea, canonicalul, robots și og:type ale paginii: App\Support\Seo::rezolva (WP-37), aceeași regulă ca
 // până acum. Numele magazinului din titluri: Admin → Setări magazin → SEO Google; gol = seo.json → organizatie.nume

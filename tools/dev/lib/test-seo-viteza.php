@@ -12,7 +12,9 @@ declare(strict_types=1);
  *     cerută fără cookie nu face niciun fișier de sesiune și nu trimite cookie; un produs pus în coș (POST) pornește
  *     sesiunea, iar coșul rămâne la pagina următoare; cu comutatorul oprit, fiecare pagină pornește sesiunea, ca înainte.
  *  2. B6 cache-ul de pagini extins: a doua cerere a unei pagini publice e din cache (X-Page-Cache: HIT); cine are coș nu
- *     primește pagina din cache; oprit, nimic din cache.
+ *     primește pagina din cache; oprit, nimic din cache. N6 (docs/SECURITATE.md): o adresă din care parse_url nu scoate o cale
+ *     („/x:1/?s=…”, „/a/b:1/c?s=…”, „//cos”) primește 404-ul site-ului cu no-store și nu scrie nicio intrare, „//cos/” nu
+ *     intră în cache, iar prima pagină rămâne octet cu octet a ei; parametrii primei pagini (?page=, utm_*, ?s=), ca înainte.
  *  3. B6 CSS/JS: cu comutatorul, pagina leagă fișierele minificate (la zi față de sursele lor; fiecare răspunde 200, cu
  *     Cache-Control-ul lui) și nu mai are blocurile în ea; oprit, blocurile sunt în pagină octet cu octet ca sursele lor.
  *  4. B6 fonturile din nucleu: aceleași familii și greutăți ca cererea spre Google Fonts; nicio legătură spre Google pe un
@@ -137,6 +139,60 @@ try {
     }
     $verifica('parametrii adresei: ?sort= din cache (HIT); utm_*, fbclid, un parametru necunoscut, un tablou: niciodată din cache, nicio intrare nouă',
         ($sortat['antete']['x-page-cache'] ?? '') === 'HIT' && $gunoi === [] && $fisiereCache() === $inainteGunoi, implode(', ', $gunoi));
+    // N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate o cale nu mai
+    // e citită ca prima pagină, deci nu-i scrie pagina din cache (înainte, cu parametrii ei în $_GET, dar în afara cheii): 404-ul
+    // site-ului (titlul paginii 404, ca o adresă necunoscută), Cache-Control: no-store, nicio intrare. „//cos/” (gazda „cos” și
+    // calea „/” pentru parse_url) e tot prima pagină, dar fără cache. Prima pagină de după e cea de dinainte, octet cu octet.
+    $marcaN6 = 'axSondaN6' . bin2hex(random_bytes(3));
+    $titlu = static fn (string $corp): string => preg_match('#<title>(.*?)</title>#s', $corp, $m) === 1 ? trim($m[1]) : '';
+    \App\Support\ResponseCache::purgePageCache();
+    $acasaN6 = [$cerere($port, 'GET', '/'), $cerere($port, 'GET', '/')];
+    $intrariAcasa = $fisiereCache();
+    $nuExista = $cerere($port, 'GET', '/n6-pagina-care-nu-exista');
+    \App\Support\ResponseCache::purgePageCache();
+    $adreseN6 = ['/x:1/?s=' . $marcaN6, '/lista:1/?s=' . $marcaN6, '/x:1/y?s=' . $marcaN6, '/a/b:1/c?s=' . $marcaN6, '/a/b:1/c/?s=' . $marcaN6,
+        '/x:99999/?s=' . $marcaN6, '/x:1', '//cos', '//cos?s=' . $marcaN6];
+    $gresite = [];
+    foreach ($adreseN6 as $adresa) {
+        $r = $cerere($port, 'GET', $adresa);
+        // no-store; sau, când stratul SEO a făcut deja din ea o adresă citită de parse_url („/x:1/” → „/x:1”, pe un site fără „/”
+        // final), antetele unei adrese necunoscute, ca înainte.
+        $cc = (string) ($r['antete']['cache-control'] ?? '');
+        if ($r['cod'] !== 404 || (!str_contains($cc, 'no-store') && $cc !== (string) ($nuExista['antete']['cache-control'] ?? '')) || isset($r['antete']['x-page-cache'])
+            || str_contains($r['corp'], $marcaN6) || $titlu($r['corp']) !== $titlu($nuExista['corp']) || $fisiereCache() !== 0) {
+            $gresite[] = $adresa . ' → ' . $r['cod'] . ' ' . ($r['antete']['cache-control'] ?? '-') . ' ' . ($r['antete']['x-page-cache'] ?? '-') . ' „'
+                . $titlu($r['corp']) . '”, ' . $fisiereCache() . ' intrări';
+        }
+    }
+    $gazdaCos = $cerere($port, 'GET', '//cos/');
+    $intrariCos = $fisiereCache();
+    $acasaDupa = [$cerere($port, 'GET', '/'), $cerere($port, 'GET', '/')];
+    $verifica('N6: ' . count($adreseN6) . ' adrese din care parse_url nu scoate o cale („/x:1/?s=…”, „/a/b:1/c?s=…”, „/x:1”, „//cos”…): 404-ul '
+        . 'site-ului, cu titlul paginii 404, Cache-Control: no-store (sau al unei adrese necunoscute, după „/” final reparat), nicio intrare; '
+        . '„//cos/” e tot prima pagină, fără cache; prima pagină de '
+        . 'după: MISS, apoi HIT, octet cu octet cea de dinainte, fără marcă',
+        $gresite === [] && $nuExista['cod'] === 404 && $titlu($nuExista['corp']) !== $titlu($acasaN6[0]['corp'])
+        && ($acasaN6[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($acasaN6[1]['antete']['x-page-cache'] ?? '') === 'HIT' && $intrariAcasa === 1
+        && $gazdaCos['cod'] === 200 && !isset($gazdaCos['antete']['x-page-cache']) && $intrariCos === 0
+        && ($acasaDupa[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($acasaDupa[1]['antete']['x-page-cache'] ?? '') === 'HIT'
+        && $acasaDupa[0]['corp'] === $acasaN6[0]['corp'] && $acasaDupa[1]['corp'] === $acasaN6[0]['corp'] && !str_contains($acasaDupa[1]['corp'], $marcaN6),
+        implode('; ', $gresite) . ' | //cos/: ' . $gazdaCos['cod'] . ' ' . ($gazdaCos['antete']['x-page-cache'] ?? '-') . ', ' . $intrariCos . ' intrări | /: '
+        . ($acasaDupa[0]['antete']['x-page-cache'] ?? '-') . ' ' . ($acasaDupa[1]['antete']['x-page-cache'] ?? '-'));
+    // Și parametrii primei pagini, ca înainte: ?page= (din lista permisă) are intrarea lui; utm_* și ?s= ocolesc cache-ul.
+    \App\Support\ResponseCache::purgePageCache();
+    $pagina2 = [$cerere($port, 'GET', '/?page=2'), $cerere($port, 'GET', '/?page=2')];
+    $intrariPagina2 = $fisiereCache();
+    $ocolite = [];
+    foreach (['/?utm_source=n6', '/?s=' . $marcaN6] as $adresa) {
+        $cerere($port, 'GET', $adresa);
+        if (($cerere($port, 'GET', $adresa)['antete']['x-page-cache'] ?? '') === 'HIT') {
+            $ocolite[] = $adresa;
+        }
+    }
+    $verifica('N6: parametrii primei pagini, ca înainte: /?page=2 MISS, apoi HIT (o intrare); /?utm_source= și /?s= niciodată din cache, nicio intrare',
+        ($pagina2[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($pagina2[1]['antete']['x-page-cache'] ?? '') === 'HIT' && $intrariPagina2 === 1
+        && $ocolite === [] && $fisiereCache() === 1, json_encode([$pagina2[0]['antete']['x-page-cache'] ?? '', $pagina2[1]['antete']['x-page-cache'] ?? '',
+            $intrariPagina2, $ocolite, $fisiereCache()]));
     // Plafonul și curățenia: intrările expirate pleacă, apoi cele mai vechi peste plafon.
     $dirCache = \App\Support\ResponseCache::cacheDirectory();
     foreach (range(1, 6) as $k) {

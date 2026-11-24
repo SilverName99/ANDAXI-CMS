@@ -245,6 +245,18 @@ if (\App\Support\WpCompat::intercepteaza($cacheDb, (string) ($_SERVER['REQUEST_M
 if (\App\Support\Campanii::intercepteaza($cacheDb)) {
     return;
 }
+// N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate o cale
+// („/x:1/?s=…”: un „:cifre” urmat de „/” pare un port; „//x?s=…”: „x” pare o gazdă) nu e prima pagină. Routerul și cache-ul de
+// pagini o citeau ca „/”, cu parametrii ei ($_GET) în afara cheii, deci o singură cerere schimba pagina primei pagini din cache.
+// Acum primește răspunsul unei adrese necunoscute, fără cache-ul de pagini: la GET pagina 404 a site-ului (ca ruta generală pentru
+// o pagină care nu există), altfel 404-ul routerului; cu Cache-Control: no-store.
+if (Router::caleCerere((string) ($_SERVER['REQUEST_URI'] ?? '/')) === null) {
+    header('Cache-Control: no-store', true);
+    if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'GET') {
+        (new \App\Http\Controllers\SiteController())->paginaNegasita();
+        return;
+    }
+}
 $pageCacheContext = ResponseCache::beginRequest(
     (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
     (string) ($_SERVER['REQUEST_URI'] ?? '/'),
