@@ -16,6 +16,8 @@ declare(strict_types=1);
  * `storage/import-wordpress/statice.json`. Cu `stiluri_comune` în `import-wordpress.json` al pachetului (`{"_tb_footer": "/"}`), regulile
  * subsolului (antetului) Theme Builder rămase vechi în foile `et-cache` ale unor pagini se iau din cele ale paginii numite
  * (StiluriComune); planul spune ce pagini s-ar schimba. O pagină care diferă doar prin `<style>`-ul din HTML (nerescris) e ATENȚIE.
+ * Cu `stiluri_dupa_model` (`{"/cale/": [{"et_pb_blurb_14": "et_pb_blurb_10", …}]}`), modulele unei secțiuni rămase cu regulile vechi
+ * în foaia `et-cache` a paginii primesc regulile modulelor-model (StiluriComune::dupaModelSite).
  *
  * Coduri de ieșire: 0 fără NU; 1 măcar un NU (nimic nu se copiază peste o coliziune; o copie cu alt sha256 decât în captură se scoate);
  * 2 folosire greșită.
@@ -58,19 +60,21 @@ $scrie = static function (string $fel, string $text): void {
 echo '== Fișierele statice ale paginilor capturate' . ($o['aplica'] ? '' : ' — PLAN') . "\n";
 $scrie('  ..', 'captura: ' . $captura . ' (raport-captura.json: sha256 ' . ($sha !== '' ? substr($sha, 0, 12) : '?') . ')');
 $scrie('  ..', 'de pe discul WordPress ' . $o['wp'] . ' (doar citit), în ' . $docroot);
-// Stilurile comune ale pachetului (import-wordpress.json → stiluri_comune): doar o regulă validă (altfel NU, ca importul).
+// Stilurile pachetului (import-wordpress.json → stiluri_comune, stiluri_dupa_model): doar reguli valide (altfel NU, ca importul).
 $reguli = ImportWordPress::reguli();
 $stiluri = $reguli['stiluri_comune'] ?? [];
-$problemeStiluri = array_key_exists('stiluri_comune', $reguli) ? StiluriComune::valideaza($stiluri) : [];
+$model = $reguli['stiluri_dupa_model'] ?? [];
+$problemeStiluri = array_merge(array_key_exists('stiluri_comune', $reguli) ? StiluriComune::valideaza($stiluri) : [],
+    array_key_exists('stiluri_dupa_model', $reguli) ? StiluriComune::valideazaModel($model) : []);
 if ($problemeStiluri !== []) {
     fwrite(STDERR, 'NU: import-wordpress.json: ' . implode('; ', $problemeStiluri) . "\n");
     exit(1);
 }
-$r = Statice::publica((string) $o['wp'], $captura, $sha, (string) $o['url'], $docroot, (bool) $o['aplica'], $stiluri);
+$r = Statice::publica((string) $o['wp'], $captura, $sha, (string) $o['url'], $docroot, (bool) $o['aplica'], $stiluri, $model);
 foreach ($r['necopiate'] as $n) {
     $scrie('  ATENȚIE', 'necopiat (refuzat de verificări): ' . $n['cale'] . ': ' . $n['motiv']);
 }
-foreach ($r['stiluri']['atentii'] as $a) {
+foreach (array_merge($r['stiluri']['atentii'], $r['model']['atentii']) as $a) {
     $scrie('  ATENȚIE', $a);
 }
 foreach ($r['probleme'] as $p) {
@@ -80,6 +84,12 @@ if ($stiluri !== [] && $r['probleme'] === []) {
     $scrie('  ..', 'stilurile comune (' . implode(', ', array_keys($stiluri)) . ' din ' . implode(', ', array_unique(array_values($stiluri))) . '): '
         . ($r['stiluri']['pagini'] === [] ? 'toate paginile au deja regulile paginii-sursă'
             : implode(', ', $r['stiluri']['pagini']) . ' (' . count($r['stiluri']['foi']) . ($o['aplica'] ? ' foi rescrise)' : ' foi de rescris)')));
+}
+if ($model !== [] && $r['probleme'] === []) {
+    foreach ($r['model']['pagini'] as $cale => $n) {
+        $scrie('  ..', 'stilurile după model (' . $cale . '): ' . $n['seturi'] . ' seturi de module, ' . $n['adaugate'] . ' selectori adăugați, ' . $n['scoase'] . ' scoși');
+    }
+    $scrie('  ..', 'stilurile după model: ' . count($r['model']['foi']) . ($o['aplica'] ? ' foi rescrise' : ' foi de rescris'));
 }
 $scrie('  ..', ($o['aplica'] ? 'copiate: ' : 'de copiat: ') . $r['copiate'] . ' fișiere statice (' . number_format($r['octeti'] / 1048576, 1, ',', '') . ' MB), fonturi Google: '
     . $r['fonturi'] . ', necopiate: ' . count($r['necopiate']));

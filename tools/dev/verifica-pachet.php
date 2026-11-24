@@ -717,6 +717,14 @@ if ($autotest) {
     $caz('import-wordpress.json cu stiluri_comune din pagina „/”: trece', $importWp(['continut' => 'capturat', 'dialect' => 'divi4', 'stiluri_comune' => ['_tb_footer' => '/']]), null);
     $caz('import-wordpress.json cu stiluri_comune pe un marcaj necunoscut', $importWp(['continut' => 'capturat', 'dialect' => 'divi4', 'stiluri_comune' => ['body' => '/']]), 'stiluri_comune.body');
     $caz('import-wordpress.json cu stiluri_comune spre o adresă care nu e o cale', $importWp(['continut' => 'capturat', 'dialect' => 'divi4', 'stiluri_comune' => ['_tb_footer' => 'https://x/']]), 'stiluri_comune._tb_footer');
+    $caz('import-wordpress.json cu stiluri_dupa_model (o secțiune după alta): trece', $importWp(['continut' => 'capturat', 'dialect' => 'divi4',
+        'stiluri_dupa_model' => ['/obiective/' => [['et_pb_blurb_14' => 'et_pb_blurb_10', 'et_pb_row_inner_15' => 'et_pb_row_inner_11']]]]), null);
+    $caz('import-wordpress.json cu stiluri_dupa_model între feluri diferite de module', $importWp(['continut' => 'capturat', 'dialect' => 'divi4',
+        'stiluri_dupa_model' => ['/obiective/' => [['et_pb_blurb_14' => 'et_pb_image_5']]]]), 'stiluri_dupa_model./obiective/[0].et_pb_blurb_14');
+    $caz('import-wordpress.json cu legaturi spre https: trece', $importWp(['continut' => 'capturat', 'dialect' => 'divi4',
+        'legaturi' => [['modul' => 'et_pb_text_8_tb_footer', 'text' => 'Powered by Proba', 'href' => 'https://proba.test']]]), null);
+    $caz('import-wordpress.json cu legaturi spre javascript:', $importWp(['continut' => 'capturat', 'dialect' => 'divi4',
+        'legaturi' => [['modul' => 'et_pb_text_8_tb_footer', 'text' => 'x', 'href' => 'javascript:alert(1)']]]), 'legaturi[0].href');
     $caz('import-wordpress.json cu o cheie necunoscută', $importWp(['altceva' => 1]), 'cheie necunoscută');
     // Stratul de adrese WordPress: exemplul din docs/SEO.md trece; o cheie necunoscută, un tip greșit sau o cale cu „..” pică.
     $wpCompat = static fn (array $date): callable => static fn (string $d) => file_put_contents($d . '/wp-compat.json',

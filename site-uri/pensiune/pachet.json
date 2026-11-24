@@ -3,8 +3,8 @@
     "site": "pensiune",
     "fisiere": {
         "README.md": "dc4b630410802f565d66ae0d4918350e6f07ed8d95c2a6dada9be71bb04a4ab1",
-        "ce-se-schimba.md": "9e68764f2deadb2c90f83abaa726582bee842b54e143d27f44ce2df655815efb",
-        "import-wordpress.json": "b4432f0b6360e5392465d7f53e8fb1ed49ff93f98326e2cbd66b61ae81c58f74",
+        "ce-se-schimba.md": "dfd75f46d75777f561e090c483e7c04da54008d85f5f688d3cc575c0c583d92b",
+        "import-wordpress.json": "2fe1c155550b96212c137340e1e3455cf360b9ca7cdb3c3f6cf6cca07259f736",
         "seo.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
         "tema/tema.json": "2055c7f8f9ed0e79a7f0c6e1be8e41a5ceaef049ef666679ae02aa8ef584b96a",
         "wp-compat.json": "e2a7d673934ea6f095a634342fe1bdedd2fea82c2e2f30a375012bcdfe0ac173"

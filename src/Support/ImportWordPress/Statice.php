@@ -28,7 +28,10 @@ use App\Support\ImportWordPress\Captura\Normalizare;
  *  - stilurile comune ale pachetului (`import-wordpress.json` → `stiluri_comune`, StiluriComune): regulile unui layout Theme
  *    Builder rămase vechi în foaia `et-cache` a unor pagini se înlocuiesc cu cele ale paginii-sursă, în copiile publicate (sha256-ul
  *    copiei din manifest e al foii rescrise); `stiluri` din rezultat spune ce pagini și ce foi; o pagină care diferă doar prin
- *    `<style>`-ul din HTML e ATENȚIE (`stiluri.atentii`), o foaie care nu se poate citi e NU.
+ *    `<style>`-ul din HTML e ATENȚIE (`stiluri.atentii`), o foaie care nu se poate citi e NU;
+ *  - stilurile după model (`stiluri_dupa_model`, StiluriComune::dupaModelSite): pe o pagină numită, modulele unei secțiuni rămase
+ *    cu regulile vechi în foaia `et-cache` primesc regulile modulelor unei secțiuni-model, în aceleași locuri; `model` din
+ *    rezultat spune paginile, foile și ce nu s-a putut reface.
  * Manifestul, cu sha256-ul sursei și al copiei: `storage/import-wordpress/statice.json` (îl citesc `diagnostic.php --capturat` și
  * verificarea adoptării, CadruCapturat::verificaFisiereManifest).
  */
@@ -42,12 +45,16 @@ final class Statice
 
     /**
      * @param array<string, string> $stiluriComune `import-wordpress.json` → `stiluri_comune` (marcaj → calea paginii-sursă), validat
+     * @param array<string, list<array<string, string>>> $stiluriDupaModel `import-wordpress.json` → `stiluri_dupa_model`, validat
      * @return array{copiate: int, octeti: int, necopiate: list<array{cale: string, motiv: string}>, probleme: list<string>, fonturi: int,
-     *   manifest: array<string, mixed>, stiluri: array{pagini: list<string>, foi: list<string>, atentii: list<string>}}
+     *   manifest: array<string, mixed>, stiluri: array{pagini: list<string>, foi: list<string>, atentii: list<string>},
+     *   model: array{pagini: array<string, array{seturi: int, adaugate: int, scoase: int}>, foi: list<string>, atentii: list<string>}}
      */
-    public static function publica(string $dosarWp, string $dosarCaptura, string $shaRaport, string $url, string $docroot, bool $aplica, array $stiluriComune = []): array
+    public static function publica(string $dosarWp, string $dosarCaptura, string $shaRaport, string $url, string $docroot, bool $aplica, array $stiluriComune = [],
+        array $stiluriDupaModel = []): array
     {
-        $rez = ['copiate' => 0, 'octeti' => 0, 'necopiate' => [], 'probleme' => [], 'fonturi' => 0, 'manifest' => [], 'stiluri' => ['pagini' => [], 'foi' => [], 'atentii' => []]];
+        $rez = ['copiate' => 0, 'octeti' => 0, 'necopiate' => [], 'probleme' => [], 'fonturi' => 0, 'manifest' => [], 'stiluri' => ['pagini' => [], 'foi' => [], 'atentii' => []],
+            'model' => ['pagini' => [], 'foi' => [], 'atentii' => []]];
         try {
             $dosar = DosarCapturi::deschideVerificat($dosarCaptura, $shaRaport, $url);
         } catch (EroareCaptura $e) {
@@ -113,7 +120,7 @@ final class Statice
             $rez['copiate']++;
             $rez['octeti'] += $copie['marime'];
         }
-        if ($stiluriComune !== [] && $rez['probleme'] === []) {
+        if (($stiluriComune !== [] || $stiluriDupaModel !== []) && $rez['probleme'] === []) {
             // Foile et-cache: la copiere, copiile abia scrise; la plan, textul pe care copierea l-ar scrie (de pe discul WordPress).
             $foiCss = [];
             foreach ($aplica ? $fisiere : array_map(static fn (string $c): array => ['cale' => $c], $planFoi) as $f) {
@@ -124,18 +131,18 @@ final class Statice
                 try {
                     $text = $aplica ? @file_get_contents(rtrim($docroot, '/') . $f['publicat']) : CopiereStatica::continut($dosarWp, $cale, $normalizare);
                 } catch (EroareCaptura $e) {
-                    $rez['probleme'][] = 'stiluri_comune: foaia ' . $cale . ' nu se poate citi: ' . $e->getMessage();
+                    $rez['probleme'][] = 'stilurile pachetului: foaia ' . $cale . ' nu se poate citi: ' . $e->getMessage();
                     continue;
                 }
                 if (!is_string($text)) {
-                    $rez['probleme'][] = 'stiluri_comune: copia foii ' . $cale . ' nu se poate citi';
+                    $rez['probleme'][] = 'stilurile pachetului: copia foii ' . $cale . ' nu se poate citi';
                     continue;
                 }
                 $foiCss[$cale] = $text;
             }
             // `<style>`-urile paginilor trec prin același drum ca foile copiate (adresele proprii relative), apoi prin aceeași comparație.
             if ($rez['probleme'] === []) {
-                $fisiere = self::stiluriComune($dosar, $fisiere, $foiCss, $docroot, $aplica, $stiluriComune, $rez,
+                $fisiere = self::stiluriPachet($dosar, $fisiere, $foiCss, $docroot, $aplica, $stiluriComune, $stiluriDupaModel, $rez,
                     static fn (string $css): string => CopiereStatica::textCss($css, $normalizare));
             }
         }
@@ -168,19 +175,21 @@ final class Statice
     }
 
     /**
-     * Stilurile comune (StiluriComune::unifica): paginile HTML ale capturii și foile `et-cache` (`$foi`, calea → textul copiei). La
-     * copiere, o foaie rescrisă se scrie atomic, iar intrarea ei din manifest primește sha256-ul și mărimea noi; la plan, doar se
-     * spune ce pagini și ce foi s-ar schimba și ce probleme ar fi. Paginile care diferă doar prin `<style>`-ul din HTML ies în
-     * `stiluri.atentii` (ATENȚIE, nu NU).
+     * Stilurile pachetului pe foile `et-cache` (`$foi`, calea → textul copiei), cu paginile HTML ale capturii: întâi cele comune
+     * (StiluriComune::unifica), apoi cele după model (StiluriComune::dupaModelSite), peste rezultat. La copiere, o foaie rescrisă se
+     * scrie atomic, iar intrarea ei din manifest primește sha256-ul și mărimea noi; la plan, doar se spune ce s-ar schimba și ce
+     * probleme ar fi. Ce nu se poate reface (reguli doar în `<style>`-ul din HTML) iese în `atentii` (ATENȚIE, nu NU).
      *
      * @param list<array<string, mixed>> $fisiere
      * @param array<string, string> $foi
-     * @param array<string, string> $config
+     * @param array<string, string> $comune
+     * @param array<string, list<array<string, string>>> $model
      * @param array<string, mixed> $rez
      * @param callable(string): string $css drumul CSS-ului din `<style>`-urile paginilor (CopiereStatica::textCss)
      * @return list<array<string, mixed>>
      */
-    private static function stiluriComune(DosarCapturi $dosar, array $fisiere, array $foi, string $docroot, bool $aplica, array $config, array &$rez, callable $css): array
+    private static function stiluriPachet(DosarCapturi $dosar, array $fisiere, array $foi, string $docroot, bool $aplica, array $comune, array $model, array &$rez,
+        callable $css): array
     {
         $pagini = [];
         foreach ($dosar->toate() as $url => $i) {
@@ -196,29 +205,37 @@ final class Statice
                 }
             }
         }
-        $u = StiluriComune::unifica($pagini, $foi, $config, $css);
-        foreach ($u['probleme'] as $p) {
-            $rez['probleme'][] = $p;
+        $scrise = [];
+        if ($comune !== []) {
+            $u = StiluriComune::unifica($pagini, $foi, $comune, $css);
+            array_push($rez['probleme'], ...$u['probleme']);
+            $rez['stiluri'] = ['pagini' => $u['pagini'], 'foi' => array_keys($u['foi']), 'atentii' => $u['atentii']];
+            $scrise = $u['foi'];
         }
-        $rez['stiluri'] = ['pagini' => $u['pagini'], 'foi' => array_keys($u['foi']), 'atentii' => $u['atentii']];
-        if (!$aplica) {
+        if ($model !== []) {
+            $u = StiluriComune::dupaModelSite($pagini, array_merge($foi, $scrise), $model, $css);
+            array_push($rez['probleme'], ...$u['probleme']);
+            $rez['model'] = ['pagini' => $u['pagini'], 'foi' => array_keys($u['foi']), 'atentii' => $u['atentii']];
+            $scrise = array_merge($scrise, $u['foi']);
+        }
+        if (!$aplica || $rez['probleme'] !== []) {
             return $fisiere;
         }
         foreach ($fisiere as $k => $f) {
             $cale = (string) ($f['cale'] ?? '');
-            if (!isset($u['foi'][$cale], $f['publicat'])) {
+            if (!isset($scrise[$cale], $f['publicat'])) {
                 continue;
             }
             $tinta = rtrim($docroot, '/') . $f['publicat'];
             $tmp = dirname($tinta) . '/.copie-' . bin2hex(random_bytes(8));
-            if (@file_put_contents($tmp, $u['foi'][$cale], LOCK_EX) !== strlen($u['foi'][$cale]) || !@chmod($tmp, 0644) || !@rename($tmp, $tinta)) {
+            if (@file_put_contents($tmp, $scrise[$cale], LOCK_EX) !== strlen($scrise[$cale]) || !@chmod($tmp, 0644) || !@rename($tmp, $tinta)) {
                 @unlink($tmp);
-                $rez['probleme'][] = 'stiluri_comune: foaia ' . $cale . ' nu s-a putut rescrie';
+                $rez['probleme'][] = 'stilurile pachetului: foaia ' . $cale . ' nu s-a putut rescrie';
                 continue;
             }
-            $fisiere[$k]['sha256_publicat'] = hash('sha256', $u['foi'][$cale]);
-            $rez['octeti'] += strlen($u['foi'][$cale]) - (int) ($f['marime'] ?? 0);
-            $fisiere[$k]['marime'] = strlen($u['foi'][$cale]);
+            $fisiere[$k]['sha256_publicat'] = hash('sha256', $scrise[$cale]);
+            $rez['octeti'] += strlen($scrise[$cale]) - (int) ($f['marime'] ?? 0);
+            $fisiere[$k]['marime'] = strlen($scrise[$cale]);
         }
         return $fisiere;
     }

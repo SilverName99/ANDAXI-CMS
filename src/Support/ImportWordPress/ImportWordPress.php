@@ -42,9 +42,15 @@ final class ImportWordPress
      *    spații și „>”).
      *  - `stiluri_comune`: pe drumul capturat, `{"_tb_footer": "/"}`: regulile layout-ului Theme Builder (subsolul, antetul) se iau
      *    din foile paginii numite, pe toate paginile unde au rămas vechi (StiluriComune, la publicarea fișierelor statice);
+     *  - `stiluri_dupa_model`: pe drumul capturat, `{"/cale/": [{"et_pb_blurb_14": "et_pb_blurb_10", …}, …]}`: modulele unei secțiuni
+     *    rămase cu regulile vechi în foaia `et-cache` a paginii primesc regulile modulelor-model (StiluriComune::dupaModelSite, la
+     *    publicarea fișierelor statice);
+     *  - `legaturi`: pe drumul capturat, `[{"modul": "et_pb_text_8_tb_footer", "text": "…", "href": "https://…"}]`: textul exact din
+     *    modulul numit devine o legătură `<a href>` (Divi4, la import; legătura Divi a modulului, prin script, se scoate);
      * Pachetul e public: niciun literal de email, nicio adresă de destinatar.
      */
-    public const REGULI = ['_despre', 'pagini', 'articole', 'redirecturi', 'setari', 'continut', 'dialect', 'scripturi_aruncate', 'captura', 'stiluri_comune'];
+    public const REGULI = ['_despre', 'pagini', 'articole', 'redirecturi', 'setari', 'continut', 'dialect', 'scripturi_aruncate', 'captura', 'stiluri_comune',
+        'stiluri_dupa_model', 'legaturi'];
 
     /** Valoarea lui `continut` pentru drumul capturat. */
     public const CONTINUT_CAPTURAT = 'capturat';
@@ -199,6 +205,12 @@ final class ImportWordPress
         }
         if (array_key_exists('stiluri_comune', $r)) {
             $p = array_merge($p, StiluriComune::valideaza($r['stiluri_comune']));
+        }
+        if (array_key_exists('stiluri_dupa_model', $r)) {
+            $p = array_merge($p, StiluriComune::valideazaModel($r['stiluri_dupa_model']));
+        }
+        if (array_key_exists('legaturi', $r)) {
+            $p = array_merge($p, \App\Support\ImportWordPress\Continut\Divi4::valideazaLegaturi($r['legaturi']));
         }
         foreach ((array) ($r['redirecturi'] ?? []) as $i => $regula) {
             if (!is_array($regula) || !is_string($regula[0] ?? null) || !str_starts_with((string) $regula[0], '/')

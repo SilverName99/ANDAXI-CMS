@@ -897,6 +897,16 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
   `$PHP ~/platforma/bin/platforma --site=<domeniu> scripts/publica-statice.php --wp=$HOME/domains/<domeniu>/public_html.vechi --url=https://<domeniu> --aplica`.
   Foile au aceeași adresă (`?ver=` neschimbat) și 7 zile de cache: un browser care o are deja vede subsolul vechi până expiră sau
   până la o reîncărcare forțată (Ctrl+F5).
+  **Stilurile după model** (`import-wordpress.json` → `stiluri_dupa_model`, `StiluriComune::dupaModelSite`): aceeași problemă la
+  modulele din conținut, când foaia `et-cache` a unei pagini a rămas de dinaintea unor secțiuni (pe `pensiune`, Obiective turistice:
+  „Vârful Penteleu” și „Rezervația Valea Zimbrilor” aveau timpii aliniați la stânga, poza fără ramă, Zimbrii mai înguști). Pachetul
+  dă doar perechile de clase, pe pagină, în seturi (`{"/cale/": [{"et_pb_blurb_14": "et_pb_blurb_10", …}, …]}`: un set = o secțiune
+  refăcută după o secțiune-model cu același aspect; fiecare țintă o singură dată, același fel de modul, nicio clasă și țintă, și
+  model). La copiere, în foile `et-cache` ale paginii, fiecare selector cu o clasă-țintă se scoate, iar lângă fiecare selector cu
+  clasele-model ale unui set se adaugă, în aceeași regulă (și în același `@media`), același selector cu țintele: ținta are exact
+  regulile modelului, în aceleași locuri din cascadă; restul foii octet cu octet, de două ori la rând același text. NU: pagina sau
+  o clasă care nu e în captură, o foaie de rescris folosită și de altă pagină; ATENȚIE: reguli ale țintelor sau modelelor doar în
+  `<style>`-ul din HTML, modele fără nicio regulă. Se aplică după stilurile comune, pe același rând de publicare.
 - **Arborii copiați** (`wp-content/`, `wp-includes/`, `capturat/`) primesc la comutare `.htaccess`-urile din git
   (`deploy/stub/wp-content.htaccess`, `wp-includes.htaccess`, `capturat.htaccess`): nimic nu se execută (`Require all
   denied` pe PHP și scripturi, `Options -ExecCGI -Indexes`, niciun `.js` servit), cache de 7 zile cu `Expires`, ca pe
@@ -910,7 +920,8 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
 `bin/platforma --public=public_html.nou`):
 
 - regulile site-ului stau în pachet, `import-wordpress.json` (`pagini`, `articole`, `redirecturi`, `setari`, `continut`,
-  `dialect`, `scripturi_aruncate`, `captura`, `stiluri_comune`: al ei e la fișierele statice, mai sus), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
+  `dialect`, `scripturi_aruncate`, `captura`, `stiluri_comune` și `stiluri_dupa_model`: ale lor sunt la fișierele statice, mai sus;
+  `legaturi`: a dialectului, mai jos), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
 - slug-ul fiecărei pagini e `post_name`-ul WordPress, păstrat exact: decodat în `pages.slug` (și Unicode), în forma
   percent-encoded a WordPress în adrese; căile păstrează „/” final cum îl pune structura permalinkurilor. Două slug-uri care
   diferă doar printr-un accent se bat cap în cap pe cheia UNIQUE a bazei (colația `utf8mb4_unicode_ci`), deși sunt distincte ca
@@ -1008,7 +1019,12 @@ observate pe un document fără o regulă care să reiasă din DOM) devine, pe d
 `ax_structura`, pe care runtime-ul o aplică la încărcare; clasele sunt din lista închisă, selectorii doar taguri, `#id`,
 `.clasă`, spații și „>”, iar cheile de sus ale lui `ax-date` sunt și ele închise (configurațiile știute, `file`,
 `ax_structura`): altceva e NU. Un script necunoscut e NU (cu sha256-ul lui, de revizuit
-și trecut pe listă); un handler sau un `data-*` necunoscut îl refuză politica. Rezultatul dă și lista editărilor (în afara lor,
+și trecut pe listă); un handler sau un `data-*` necunoscut îl refuză politica. Tot din pachet, `import-wordpress.json` → `legaturi`
+(`[{"modul": "et_pb_text_8_tb_footer", "text": "…", "href": "https://…"}]`, `legatura-pachet`): în modulul numit (o singură apariție;
+un document fără el, ca un card embed, rămâne neatins), textul exact devine `<a href="…" style="line-height:inherit">text</a>` (culoarea și
+fontul, din regulile Divi ale legăturilor modulului; înălțimea rândului rămâne a textului), iar modulul pierde legătura Divi
+prin script (`et_clickable`, intrarea lui din `et_link_options_data`); un text care nu mai e în modul e NU, unul deja într-o legătură
+rămâne, cu un avertisment. Pe un site deja importat, schimbarea vine cu un reimport. Rezultatul dă și lista editărilor (în afara lor,
 octeții capturii) și pozițiile scripturilor runtime-ului. Poarta: **G-wp** (`tools/dev/test-import-wordpress.php`, secțiunea 5a).
 
 **Tăierea** (`Continut\Divi4Taiere`, peste rezultatul dialectului; `Continut\Taiere`) face, tot pe intervale de octeți:

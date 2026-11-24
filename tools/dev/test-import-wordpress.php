@@ -1054,6 +1054,31 @@ foreach ([
     }
 }
 $verifica('M2: adresele din ax-date (javascript:, //gazdă) și poluarea prototipului: NU în politica pe T', $neprinse === [], implode('; ', $neprinse));
+// Legăturile pachetului (import-wordpress.json → legaturi): textul exact din modulul numit devine <a href>, iar legătura Divi a
+// modulului prin script (et_clickable, intrarea din et_link_options_data) se scoate; textul lipsă e NU, modulul lipsă nu schimbă nimic.
+$credit = static fn (string $interior): string => str_replace('var et_link_options_data = [', 'var et_link_options_data = [{"class":"et_pb_text_8_tb_footer",'
+    . '"url":"https:\/\/andaxi.ro\/despre\/","target":"_blank"},', $camere('<div class="et_pb_module et_pb_text et_pb_text_8_tb_footer et_clickable  et_pb_text_align_center">'
+    . '<div class="et_pb_text_inner"><p>' . $interior . '</p></div></div>'));
+$regulaL = ['legaturi' => [['modul' => 'et_pb_text_8_tb_footer', 'text' => 'Powered by Andaxi Web Solutions', 'href' => 'https://andaxi.ro']]];
+$cuL = static fn (string $html, array $reg = []) => (new Divi4())->transforma($html, WP_PROBA_URL, $reguli5a + ($reg ?: $regulaL));
+$rL = $cuL($credit(' Powered by Andaxi Web Solutions '));
+preg_match('#<script type="application/json" id="ax-date">(.*?)</script>#s', $rL->html, $mL);
+$clase = array_column((array) (json_decode($mL[1] ?? 'null', true)['et_link_options_data'] ?? []), 'class');
+$verifica('legaturi: textul din modul devine <a href="https://andaxi.ro"> (spațiile rămân afară), modulul fără et_clickable și fără intrarea lui din '
+    . 'et_link_options_data (celelalte rămân), două editări legatura-pachet, politica pe T fără nimic', $rL->probleme === []
+    && str_contains($rL->html, '<div class="et_pb_module et_pb_text et_pb_text_8_tb_footer  et_pb_text_align_center"><div class="et_pb_text_inner"><p> <a href="https://andaxi.ro" style="line-height:inherit">Powered by Andaxi Web Solutions</a> </p>')
+    && $clase === ['et_pb_text_0_tb_footer', 'et_pb_text_2'] && ($rL->numarPeFel()['legatura-pachet'] ?? 0) === 2 && \App\Support\HtmlCapturat::verifica($rL->html) === [],
+    json_encode([$rL->probleme, $clase, $rL->numarPeFel()], JSON_UNESCAPED_UNICODE));
+$faraModul = $cuL($camere());
+$altText = $cuL($credit('Făcut de altcineva'));
+$dejaLegat = $cuL($credit('<a href="/x/">Powered by Andaxi Web Solutions</a>'));
+$rea = $cuL($camere(), ['legaturi' => [['modul' => 'et_pb_text_8_tb_footer', 'text' => 'x', 'href' => 'javascript:alert(1)']]]);
+$verifica('legaturi: fără modul nimic schimbat; alt text în modul = NU; textul deja într-un <a> rămâne, cu un avertisment; o regulă greșită (javascript:) = NU',
+    $faraModul->probleme === [] && $faraModul->html === $dialect($camere())->html
+    && $altText->probleme === ['legaturi (et_pb_text_8_tb_footer): textul „Powered by Andaxi Web Solutions” nu e în modul (pachetul și captura nu se mai potrivesc)']
+    && $dejaLegat->probleme === [] && $dejaLegat->avertismente === ['legaturi (et_pb_text_8_tb_footer): textul e deja într-o legătură: rămâne']
+    && str_contains($dejaLegat->html, 'et_clickable') && $rea->probleme === ['legaturi[0].href: https://gazdă[/cale] sau o cale a site-ului (/…)'],
+    json_encode([$faraModul->probleme, $altText->probleme, $dejaLegat->probleme, $dejaLegat->avertismente, $rea->probleme], JSON_UNESCAPED_UNICODE));
 $preload = static fn (string $atribute): string => '<link rel="preload" as="style" ' . $atribute . ' onload="this.onload=null;this.rel=\'stylesheet\'">' . "\n";
 $neprinse = [];
 foreach ([

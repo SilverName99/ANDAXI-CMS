@@ -789,6 +789,64 @@ $scrie('== 9. Stilurile comune (StiluriComune, import-wordpress.json → stiluri
 }
 
 $scrie('');
+$scrie('== 10. Stilurile după model (StiluriComune::dupaModel, import-wordpress.json → stiluri_dupa_model): o secțiune rămasă cu regulile vechi');
+{
+    $S = \App\Support\ImportWordPress\StiluriComune::class;
+    // Foaia inventată a unei pagini: modelul (secțiunea 1, blurbul 1, poza 1) și ținta (secțiunea 2, blurbul 2, poza 2), cu reguli
+    // de grup, din @media, una veche doar a țintei, una doar a țintei într-un @media (blocul dispare) și o clasă cu alt număr.
+    $foaie = ".et_pb_section_0{padding:1px}\n.et_pb_blurb_1.et_pb_blurb .et_pb_module_header{text-align:center;font-weight:700}\n"
+        . ".et_pb_blurb_0 .et-pb-icon,.et_pb_blurb_1 .et-pb-icon,.et_pb_blurb_2 .et-pb-icon{color:#000}\n.et_pb_image_1 .et_pb_image_wrap{border-radius:25px}\n"
+        . ".et_pb_image_2 .et_pb_image_wrap{transition:border 300ms}\n.et_pb_section_1>.et_pb_row, .et_pb_section_1.et_section_specialty>.et_pb_row{max-width:2560px}\n"
+        . "@media only screen and (max-width:980px){.et_pb_blurb_1.et_pb_blurb .et_pb_module_header{font-size:19px}.alta{color:red}}\n"
+        . "@media only screen and (max-width:767px){.et_pb_image_2{width:50%}}\n.et_pb_blurb_10{color:red}\n";
+    $set = ['et_pb_section_2' => 'et_pb_section_1', 'et_pb_blurb_2' => 'et_pb_blurb_1', 'et_pb_image_2' => 'et_pb_image_1'];
+    $r = $S::dupaModel($foaie, [$set]);
+    $asteptat = ".et_pb_section_0{padding:1px}\n.et_pb_blurb_1.et_pb_blurb .et_pb_module_header,.et_pb_blurb_2.et_pb_blurb .et_pb_module_header{text-align:center;font-weight:700}\n"
+        . ".et_pb_blurb_0 .et-pb-icon,.et_pb_blurb_1 .et-pb-icon,.et_pb_blurb_2 .et-pb-icon{color:#000}\n.et_pb_image_1 .et_pb_image_wrap,.et_pb_image_2 .et_pb_image_wrap{border-radius:25px}\n"
+        . ".et_pb_section_1>.et_pb_row,.et_pb_section_1.et_section_specialty>.et_pb_row,.et_pb_section_2>.et_pb_row,.et_pb_section_2.et_section_specialty>.et_pb_row{max-width:2560px}\n"
+        . "@media only screen and (max-width:980px){.et_pb_blurb_1.et_pb_blurb .et_pb_module_header,.et_pb_blurb_2.et_pb_blurb .et_pb_module_header{font-size:19px}.alta{color:red}}\n"
+        . ".et_pb_blurb_10{color:red}\n";
+    $verifica('ținta primește regulile modelului în aceleași reguli (și în @media), regulile ei vechi se scot (o regulă și un @media rămase goale '
+        . 'dispar), .et_pb_blurb_10 neatins, restul octet cu octet', $r['css'] === $asteptat && $r['adaugate'] === 6 && $r['scoase'] === 3, $r['css']);
+    $doi = $S::dupaModel($r['css'], [$set]);
+    $verifica('a doua trecere dă același text (idempotent)', $doi['css'] === $r['css'], $doi['css']);
+    $html = static fn (string $stil, string ...$foi): string => '<html><head>' . implode('', array_map(static fn (string $f): string => "<link rel='stylesheet' href='" . $f . "?ver=1' />", $foi))
+        . ($stil !== '' ? '<style>' . $stil . '</style>' : '') . '</head><body><div class="et_pb_section et_pb_section_1"><div class="et_pb_blurb et_pb_blurb_1"></div>'
+        . '<div class="et_pb_image et_pb_image_1"></div></div><div class="et_pb_section et_pb_section_2"><div class="et_pb_blurb et_pb_blurb_2"></div>'
+        . '<div class="et_pb_image et_pb_image_2"></div></div></body></html>';
+    $foi = ['/wp-content/et-cache/9/amanat.css' => $foaie, '/wp-content/et-cache/global/global.css' => '.et_pb_blurb{margin:0}'];
+    $pag = ['/obiective/' => $html('.et_pb_section_0{color:red}', '/wp-content/et-cache/9/amanat.css', '/wp-content/et-cache/global/global.css'),
+        '/alta/' => '<html><head><link rel="stylesheet" href="/wp-content/et-cache/global/global.css"></head><body></body></html>'];
+    $site = $S::dupaModelSite($pag, $foi, ['/obiective/' => [$set]]);
+    $verifica('pe site: doar foaia paginii (nu și cea globală) rescrisă, cu numărătorile; nicio problemă, nicio atenție',
+        array_keys($site['foi']) === ['/wp-content/et-cache/9/amanat.css'] && $site['foi']['/wp-content/et-cache/9/amanat.css'] === $asteptat
+        && $site['pagini'] === ['/obiective/' => ['seturi' => 1, 'adaugate' => 6, 'scoase' => 3]] && $site['probleme'] === [] && $site['atentii'] === [],
+        (string) json_encode($site, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $pb = static fn (array $pagini, array $cfg, array $f = []): array => $S::dupaModelSite($pagini, $f ?: $foi, $cfg);
+    $comun = $pb(['/obiective/' => $pag['/obiective/'], '/alta/' => $html('', '/wp-content/et-cache/9/amanat.css')], ['/obiective/' => [$set]]);
+    $lipsa = $pb($pag, ['/obiective/' => [['et_pb_blurb_7' => 'et_pb_blurb_1']]]);
+    $faraPagina = $pb($pag, ['/nu-e/' => [$set]]);
+    $verifica('NU: o foaie folosită și de altă pagină (acolo aceleași numere sunt alte module), o clasă care nu e pe pagină, o pagină care nu e în captură',
+        $comun['foi'] === [] && str_contains(implode(' ', $comun['probleme']), 'e și a paginilor /alta/')
+        && $lipsa['probleme'] === ['stiluri_dupa_model./obiective/: clasele et_pb_blurb_7 nu sunt pe pagină'] && $faraPagina['probleme'] === ['stiluri_dupa_model./nu-e/: pagina nu e în captură'],
+        (string) json_encode([$comun['probleme'], $lipsa['probleme'], $faraPagina['probleme']], JSON_UNESCAPED_UNICODE));
+    $inline = $pb(['/obiective/' => $html('.et_pb_blurb_1{color:blue}', '/wp-content/et-cache/9/amanat.css')], ['/obiective/' => [$set]]);
+    $faraReguli = $pb(['/obiective/' => $html('', '/wp-content/et-cache/global/global.css')], ['/obiective/' => [$set]]);
+    $verifica('ATENȚIE, nu NU: reguli ale modelului în <style>-ul din HTML (nu se refac), modele fără nicio regulă în foile paginii',
+        $inline['probleme'] === [] && count($inline['atentii']) === 1 && str_contains($inline['atentii'][0], '<style>-ul din HTML') && isset($inline['foi']['/wp-content/et-cache/9/amanat.css'])
+        && $faraReguli['probleme'] === [] && $faraReguli['atentii'] === ['stiluri_dupa_model./obiective/: modelele n-au nicio regulă în foile et-cache ale paginii: nimic de adăugat'],
+        (string) json_encode([$inline['atentii'], $faraReguli], JSON_UNESCAPED_UNICODE));
+    $v = static fn (mixed $x): array => $S::valideazaModel($x);
+    $verifica('regula pachetului: {"/cale/": [{"țintă": "model"}]}, același fel de modul, ținta o dată pe pagină și niciodată model',
+        $v(['/obiective/' => [$set, ['et_pb_row_inner_14' => 'et_pb_row_inner_10', 'et_pb_text_3_tb_footer' => 'et_pb_text_2_tb_footer']]]) === []
+        && $v(['/obiective/' => [['et_pb_blurb_2' => 'et_pb_image_1']]]) !== [] && $v(['/obiective/' => [['et_pb_blurb_2' => 'et_pb_blurb_2']]]) !== []
+        && $v(['/obiective/' => [['et_pb_blurb_2' => 'et_pb_blurb_1'], ['et_pb_blurb_2' => 'et_pb_blurb_3']]]) !== []
+        && $v(['/obiective/' => [['et_pb_blurb_2' => 'et_pb_blurb_1', 'et_pb_blurb_1' => 'et_pb_blurb_0']]]) !== []
+        && $v(['/obiective/' => [['et_pb_blurb_2' => 'et_pb_blurb_1', 'et_pb_blurb_3' => 'et_pb_blurb_1']]]) !== []
+        && $v(['https://x/' => [$set]]) !== [] && $v(['/obiective/' => []]) !== [] && $v(['/obiective/' => [['x' => 'y']]]) !== [] && $v([$set]) !== []);
+}
+
+$scrie('');
 $scrie('== 5. Tema::valideaza pe cheile cadrului capturat');
 [$v, $pb] = Tema::valideaza(['cadru' => 'capturat', 'runtime' => 'divi4@1', 'csp' => ['mod' => 'raport', 'img-src' => ['https://poze.example.test/p/']],
     'previzualizare' => [390, 1440]], $lucru . '/pachet');

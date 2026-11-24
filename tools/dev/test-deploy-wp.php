@@ -209,13 +209,16 @@ try {
         if ($pg['stare'] === 'publish' && !$pg['parola']) {
             $paginiProba[] = ['cale' => $id === $prima ? '/' : (string) ($pg['cale_wp'] ?? $pg['cale']), 'titlu' => (string) $pg['titlu'], 'id' => (int) $id,
                 'formular' => $pg['slug'] === 'contact', 'seoTitlu' => (string) ($i->seo[$id]['titlu'] ?? ''), 'descriere' => (string) ($i->seo[$id]['descriere'] ?? ''),
-                'stil' => $stilInline[$pg['slug']] ?? ''];
+                'stil' => $stilInline[$pg['slug']] ?? '',
+                // Pe Camere, două module text: modelul (et_pb_text_1) și ținta (et_pb_text_2, rămasă cu regulile vechi în foaie; mai jos).
+                'inCorp' => $pg['slug'] === 'camere' ? '<div class="et_pb_module et_pb_text et_pb_text_1"><div class="et_pb_text_inner"><p>45 min</p></div></div>'
+                    . '<div class="et_pb_module et_pb_text et_pb_text_2"><div class="et_pb_text_inner"><p>1h 18min</p></div></div>' : ''];
         }
     }
     $captura = $site . '/capturat';
     capturaDiviProba($captura, $paginiProba, ['url' => $url, 'nonce' => 'dddd777777', 'ua' => 'windows', 'an' => date('Y'), 'antet' => $ids['tb_antet'],
         'subsol' => $ids['tb_subsol'], 'corp404' => $ids['tb_corp404'], 'meniu' => [['/', 'Acasă'], ['/camere/', 'Camere'], ['/contact/', 'Contact']],
-        'cale404' => '/x1-inexistent/']);
+        'cale404' => '/x1-inexistent/', 'credit' => true]);
     // Manifestul capturii: fișierele cerute de pagini (ca la o captură făcută pe server cu --wp: sursa „disc”), fonturile Google.
     $fisiere = [];
     $cere = static function (string $cale, string $fel) use (&$fisiere, $public, $url, $paginiProba): void {
@@ -234,7 +237,9 @@ try {
         $late = '/wp-content/et-cache/' . $pg['id'] . '/et-proba-late.css';
         @mkdir(dirname($public . $late), 0775, true);
         $foiLate[$pg['cale']] = [$late, '.et_pb_section_' . $pg['id'] . '{padding:1px}' . ($pg['cale'] === '/camere/'
-            ? "\n.et_pb_section_0_tb_footer{padding:9px}\n@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:11px}.et_pb_section_" . $pg['id'] . '{margin:0}}'
+            ? "\n.et_pb_text_1.et_pb_text{color:#123456}\n.et_pb_text_2.et_pb_text{color:#999}\n.et_pb_text_0,.et_pb_text_1,.et_pb_text_2{padding:2px}"
+                . "\n.et_pb_section_0_tb_footer{padding:9px}\n@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:11px}.et_pb_section_" . $pg['id']
+                . '{margin:0}.et_pb_text_1{text-align:center}}'
             : ($pg['stil'] !== '' ? '' : $subsolNou)) . "\n"];
         file_put_contents($public . $late, $foiLate[$pg['cale']][1]);
         $cere($late, 'foaie');
@@ -285,6 +290,10 @@ try {
     }
     $tintaPachet = $repo . '/site-uri/' . $slug;
     exec('cp -a ' . escapeshellarg($radacina . '/site-uri/pensiune') . ' ' . escapeshellarg($tintaPachet) . ' && rm -rf ' . escapeshellarg($tintaPachet . '/privat'));
+    // Stilurile după model ale pachetului sunt ale paginilor site-ului real: aici, regula pentru modulele inventate de pe Camere.
+    $regPachet = json_decode((string) file_get_contents($tintaPachet . '/import-wordpress.json'), true);
+    $regPachet['stiluri_dupa_model'] = ['/camere/' => [['et_pb_text_2' => 'et_pb_text_1']]];
+    file_put_contents($tintaPachet . '/import-wordpress.json', json_encode($regPachet, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
     $manifestP = json_decode((string) file_get_contents($tintaPachet . '/pachet.json'), true);
     $manifestP['site'] = $slug;
     $manifestP['fisiere'] = [];
@@ -406,15 +415,19 @@ PHP);
     // rescrise (diagnostic --capturat îl verifică).
     [$foaieCamere, $sursaCamere] = $foiLate['/camere/'];
     $idCamere = (string) preg_replace('#^/wp-content/et-cache/(\d+)/.*$#', '$1', $foaieCamere);
-    $asteptatCamere = '.et_pb_section_' . $idCamere . "{padding:1px}\n@media only screen and (max-width:980px){.et_pb_section_" . $idCamere . "{margin:0}}\n"
-        . str_replace($url, '', $subsolNou) . "\n";
+    // Întâi stilurile comune (subsolul), apoi după model (et_pb_text_2 după et_pb_text_1: regula ei veche scoasă, ale modelului împărțite).
+    $asteptatCamere = '.et_pb_section_' . $idCamere . "{padding:1px}\n.et_pb_text_1.et_pb_text,.et_pb_text_2.et_pb_text{color:#123456}\n"
+        . ".et_pb_text_0,.et_pb_text_1,.et_pb_text_2{padding:2px}\n@media only screen and (max-width:980px){.et_pb_section_" . $idCamere
+        . "{margin:0}.et_pb_text_1,.et_pb_text_2{text-align:center}}\n" . str_replace($url, '', $subsolNou) . "\n";
     $statice = json_decode((string) file_get_contents($site . '/storage/import-wordpress/statice.json'), true);
     $intrareCamere = array_values(array_filter((array) ($statice['fisiere'] ?? []), static fn (array $f): bool => ($f['cale'] ?? '') === $foaieCamere))[0] ?? [];
     $servitCamere = $cerere($foaieCamere . '?ver=1')['corp'];
     $alteSchimbate = array_keys(array_filter($foiLate, static fn (array $x): bool => $x[0] !== $foaieCamere && $cerere($x[0] . '?ver=1')['corp'] !== str_replace($url, '', $x[1])));
     $randStiluri = str_contains($o0 . $o1, 'stilurile comune (_tb_footer din /): /camere/ (1 foi rescrise)') && str_contains($o1, '/politica-de-confidentialitate/ are alte reguli')
+        && str_contains($o1, 'stilurile după model (/camere/): 1 seturi de module, 3 selectori adăugați, 2 scoși')
         && !str_contains($o0 . $o1, '/contact/ are alte reguli');
-    $verifica('stilurile comune (subsolul din „/”): foaia et-cache a Camerelor rescrisă (regulile vechi scoase, cele de pe Acasă la sfârșit, cu adresa relativă), '
+    $verifica('stilurile comune (subsolul din „/”) și după model (et_pb_text_2 după et_pb_text_1): foaia et-cache a Camerelor rescrisă (regulile vechi ale '
+        . 'subsolului scoase, cele de pe Acasă la sfârșit, cu adresa relativă; ținta cu regulile modelului, în aceleași reguli), '
         . 'celelalte ' . (count($foiLate) - 1) . ' neschimbate, manifestul cu sha256-ul foii rescrise; Contact (același subsol doar în <style>, cu adresa absolută) '
         . 'egal, Politica (o regulă veche doar în <style>) ATENȚIE, nu NU',
         $randStiluri && $servitCamere === $asteptatCamere && $alteSchimbate === []
@@ -445,6 +458,18 @@ PHP);
     $verifica('paginile (' . count($coduri) . '): 200, din documentele capturate (antetul, subsolul, runtime-ul compat), fără WordPress', array_values(array_unique($coduri)) === [200]
         && str_contains($acasaNou['corp'], 'et-l--header') && str_contains($acasaNou['corp'], '/assets/compat/') && !str_contains($acasaNou['corp'], 'WORDPRESS PROBA')
         && isset($acasaNou['antete']['content-security-policy']), json_encode($coduri) . ' ' . json_encode($acasaNou['antete']) . ' ' . substr($acasaNou['corp'], 0, 600));
+    // Legătura pachetului (import-wordpress.json → legaturi) în subsolul fiecărei pagini și al 404-ului: <a href> pe textul agenției,
+    // fără legătura Divi prin script (et_clickable, intrarea din et_link_options_data).
+    $subsoluri = [];
+    foreach (['/', '/camere/', '/x1-inexistent/'] as $c) {
+        $corp = $cerere($c)['corp'];
+        preg_match('#<script type="application/json" id="ax-date">(.*?)</script>#s', $corp, $mAx);
+        $subsoluri[$c] = str_contains($corp, '<div class="et_pb_module et_pb_text et_pb_text_8_tb_footer  et_pb_text_align_center et_pb_bg_layout_light">')
+            && str_contains($corp, '<p><a href="https://andaxi.ro" style="line-height:inherit">Powered by Andaxi Web Solutions</a></p>') && !str_contains($mAx[1] ?? '', 'et_pb_text_8_tb_footer')
+            && str_contains($mAx[1] ?? '', 'et_pb_text_0_tb_footer');
+    }
+    $verifica('subsolul (pe Acasă, Camere și 404): „Powered by Andaxi Web Solutions” e legătura <a href="https://andaxi.ro">, modulul fără legătura Divi prin script',
+        array_values(array_unique($subsoluri)) === [true], json_encode($subsoluri));
     $foaie = $cerere('/wp-content/themes/Divi/style.css');
     $font = $cerere('/capturat/fonturi/' . $cheieFont . '.css');
     $verifica('fișierele statice: foaia temei cu adresa proprie relativă, fontul temei, foaia fontului Google, scriptul temei nepublicat',

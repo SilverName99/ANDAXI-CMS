@@ -50,6 +50,12 @@ use InvalidArgumentException;
  *    `dns-prefetch`) spre o gazdă străină (adresă absolută http(s) sau protocol-relativă, și cu `\`) se scoate: site-ul nou nu
  *    pregătește nicio conexiune spre terți. Unul spre site rămâne (relativ după normalizare); politica refuză unul rămas spre
  *    altă gazdă;
+ *  - **legăturile pachetului** (`legatura-pachet`; `import-wordpress.json` → `legaturi`, ce-se-schimba.md): în modulul numit (o
+ *    singură apariție în document; un document fără el rămâne neatins), textul exact dat devine
+ *    `<a href="…" style="line-height:inherit">text</a>` (spațiile din jur rămân în afară; culoarea și fontul, din regulile Divi ale
+ *    legăturilor modulului; înălțimea rândului, a textului); modulul pierde legătura Divi prin script (clasa `et_clickable` și intrarea lui din
+ *    `et_link_options_data`), ca să aibă o singură legătură. Un text care nu e în modul e NU (pachetul și captura nu se mai
+ *    potrivesc); unul deja într-un `<a>` rămâne, cu un avertisment;
  *  - **normalizările capturii** (Normalizare: `nonce`, `clasa-ua`, `adresa-proprie`). Secretul aleator al cardului embed nu
  *    intră în T: T păstrează varianta capturată (decizia D7), iar comparațiile (captura, P1, P2) îl normalizează; la fel
  *    celelalte variații aleatoare (Normalizare::FELURI_COMPARATIE).
@@ -63,7 +69,7 @@ final class Divi4 implements Convertor, Dialect
 {
     /** Felurile editărilor dialectului (în plus față de Normalizare::FELURI). */
     public const FELURI = ['script-aruncat', 'noscript-aruncat', 'config', 'ax-date', 'handler-tarziu', 'handler-media', 'link-wp',
-        'dns-prefetch', 'fonturi-locale', 'indiciu-tert'];
+        'dns-prefetch', 'fonturi-locale', 'indiciu-tert', 'legatura-pachet'];
 
     /** Literalele JSON din scripturile-șablon aruncate care trec în `ax-date` (`var file = […]`: foile „late”). */
     public const DATE_INCORPORATE = SchemaDivi4::DATE_INCORPORATE;
@@ -386,6 +392,16 @@ final class Divi4 implements Convertor, Dialect
                 $ops[] = ['fel' => $fel, 'zona' => [$s, $e], 'fa' => static fn (Editare $ed) => $ed->inlocuieste($s, $e, $text)];
             }
         }
+        // Legăturile pachetului (import-wordpress.json → legaturi): textul exact din modulul numit devine <a href>, iar legătura Divi
+        // a modulului (prin script) se scoate.
+        $pbL = self::valideazaLegaturi($reguli['legaturi'] ?? []);
+        if ($pbL !== []) {
+            array_push($probleme, ...$pbL);
+        } else {
+            foreach ((array) ($reguli['legaturi'] ?? []) as $leg) {
+                $this->legatura($html, $tokeni, $leg, $ops, $date, $probleme, $avertismente);
+            }
+        }
         // ax_structura: clasele de structură ale documentului, din pachet (captura.structura; runtime-ul structura.js), ultimele în
         // ax-date și ale paginii; verificate și aici: una nepermisă e NU, nu o scoatere în tăcere.
         $structura = self::structuraDocument($reguli, $document);
@@ -473,6 +489,116 @@ final class Divi4 implements Convertor, Dialect
             $probleme[] = (count($ops) - count($folosite)) . ' operații ale dialectului n-au dat nicio înlocuire (eroare internă)';
         }
         return new RezultatDialect($nou, $editari, $date, $proprietari, $aruncate, $necunoscute, ['cap' => $cap, 'final' => $final], $probleme, $avertismente);
+    }
+
+    /**
+     * Regula pachetului `legaturi` validă? O listă de `{"modul": "et_pb_text_8_tb_footer", "text": "…", "href": "https://…"}`:
+     * modulul, o clasă numerotată Divi (o singură dată în listă); textul, 1–200 de caractere fără `<`, `>`, `&` și fără spații la
+     * capete (se compară cu textul decodat al modulului); adresa, `https://gazdă[/cale]` sau o cale a site-ului, fără ghilimele,
+     * spații sau `<>`.
+     *
+     * @return list<string> problemele
+     */
+    public static function valideazaLegaturi(mixed $v): array
+    {
+        if ($v === []) {
+            return [];
+        }
+        if (!is_array($v) || !array_is_list($v)) {
+            return ['legaturi: o listă de {"modul": "et_pb_text_<n>…", "text": "…", "href": "https://…"}'];
+        }
+        $p = [];
+        $module = [];
+        foreach ($v as $i => $l) {
+            $e = 'legaturi[' . $i . ']';
+            if (!is_array($l) || array_keys($l) !== ['modul', 'text', 'href']) {
+                $p[] = $e . ': exact cheile modul, text, href, în ordinea asta';
+                continue;
+            }
+            [$modul, $text, $href] = [$l['modul'], $l['text'], $l['href']];
+            if (!is_string($modul) || preg_match(\App\Support\ImportWordPress\StiluriComune::CLASA_MODUL, $modul) !== 1 || isset($module[$modul])) {
+                $p[] = $e . '.modul: o clasă numerotată de modul Divi (et_pb_text_8_tb_footer), o singură dată în listă';
+            }
+            if (!is_string($text) || $text === '' || mb_strlen($text) > 200 || trim($text) !== $text || strpbrk($text, '<>&') !== false) {
+                $p[] = $e . '.text: 1–200 de caractere, fără <, >, & și fără spații la capete';
+            }
+            if (!is_string($href) || preg_match('#^(?:https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?:/[^\s"\'<>\\\\]*)?|/[^\s"\'<>\\\\/][^\s"\'<>\\\\]*|/)$#', $href) !== 1) {
+                $p[] = $e . '.href: https://gazdă[/cale] sau o cale a site-ului (/…)';
+            }
+            $module[(string) (is_string($modul) ? $modul : '')] = true;
+        }
+        return $p;
+    }
+
+    /**
+     * O legătură a pachetului pe document (valideazaLegaturi a trecut): operațiile ei (textul, clasa modulului) și intrarea scoasă
+     * din `et_link_options_data`.
+     *
+     * @param list<Token> $tokeni
+     * @param array{modul: string, text: string, href: string} $leg
+     * @param list<array{fel: string, zona: array{0: int, 1: int}, fa: callable(Editare): void}> $ops
+     * @param array<string, mixed> $date
+     * @param list<string> $probleme
+     * @param list<string> $avertismente
+     */
+    private function legatura(string $html, array $tokeni, array $leg, array &$ops, array &$date, array &$probleme, array &$avertismente): void
+    {
+        $gasite = [];
+        foreach ($tokeni as $k => $t) {
+            if ($t->tip === Token::DESCHIDERE && !$t->ignorat && in_array($leg['modul'], $t->clase($html), true)) {
+                $gasite[] = $k;
+            }
+        }
+        if ($gasite === []) {
+            return;
+        }
+        $e = 'legaturi (' . $leg['modul'] . '): ';
+        if (count($gasite) > 1) {
+            $probleme[] = $e . 'modulul apare de ' . count($gasite) . ' ori în document';
+            return;
+        }
+        $k = $gasite[0];
+        $p = Tokenizer::pereche($tokeni, $k);
+        if ($p === null) {
+            $probleme[] = $e . 'modulul nu se închide';
+            return;
+        }
+        $deschise = [];
+        for ($j = $k + 1; $j < $p; $j++) {
+            $x = $tokeni[$j];
+            if ($x->tip === Token::DESCHIDERE && $x->nume === 'a' && !$x->ignorat) {
+                $deschise[] = Tokenizer::pereche($tokeni, $j) ?? $p;
+            }
+            if ($x->tip !== Token::TEXT || trim(html_entity_decode($x->octeti($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')) !== $leg['text']) {
+                continue;
+            }
+            if (array_filter($deschise, static fn (int $inchis): bool => $inchis > $j) !== []) {
+                $avertismente[] = $e . 'textul e deja într-o legătură: rămâne';
+                return;
+            }
+            $brut = $x->octeti($html);
+            preg_match('/^(\s*)(.*?)(\s*)$/s', $brut, $m);
+            // Culoarea, fontul și hover-ul vin din regulile Divi pentru legăturile modulului; înălțimea rândului rămâne a textului
+            // (Divi le dă adesea un line-height propriu, care ar înălța rândul față de textul de azi).
+            $nou = $m[1] . '<a href="' . Editare::scapa($leg['href']) . '" style="line-height:inherit">' . $m[2] . '</a>' . $m[3];
+            [$s, $f] = [$x->start, $x->end];
+            $ops[] = ['fel' => 'legatura-pachet', 'zona' => [$s, $f], 'fa' => static fn (Editare $ed) => $ed->inlocuieste($s, $f, $nou)];
+            $t = $tokeni[$k];
+            $clasa = $t->valoare($html, 'class');
+            if ($clasa !== null && in_array('et_clickable', $t->clase($html), true)) {
+                $faraClic = trim((string) preg_replace('/(?:^|[\t\n\f\r ]+)et_clickable(?=[\t\n\f\r ]|$)/', '', $clasa));
+                $ops[] = ['fel' => 'legatura-pachet', 'zona' => [$t->start, $t->end], 'fa' => static fn (Editare $ed) => $ed->valoareAtribut($k, 'class', $faraClic)];
+            }
+            if (is_array($date['et_link_options_data'] ?? null)) {
+                $date['et_link_options_data'] = array_values(array_filter($date['et_link_options_data'],
+                    static fn (mixed $o): bool => !($o instanceof \stdClass && ($o->class ?? null) === $leg['modul'])));
+                if ($date['et_link_options_data'] === []) {
+                    unset($date['et_link_options_data']);
+                }
+            }
+            return;
+        }
+        $probleme[] = $e . 'textul „' . $leg['text'] . '” nu e în modul (pachetul și captura nu se mai potrivesc)';
     }
 
     /**

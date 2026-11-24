@@ -30,7 +30,8 @@ if (!defined('WP_PROBA_SITE')) {
  *   `seoTitlu`, `descriere`: valorile SEO ale paginii (AIOSEO, din inventar), scrise în head cu escaparea locului lor (ca jetoanele);
  *   `stil`: CSS-ul critic al paginii, în `<style id="et-critical-inline-css">` (Divi pune acolo și regulile subsolului unor pagini)
  * @param array{url: string, nonce: string, ua: string, an: string, antet: int, subsol: int, corp404?: int, meniu: list<array{0: string, 1: string}>,
- *   tip?: string, cale404?: string} $o
+ *   tip?: string, cale404?: string, credit?: bool} $o
+ *   `credit`: în subsol și modulul agenției („Powered by Andaxi Web Solutions”, `et_pb_text_8_tb_footer`, cu legătura Divi prin script)
  */
 function paginaDiviProba(array $pg, array $o): string
 {
@@ -93,6 +94,8 @@ function paginaDiviProba(array $pg, array $o): string
         . "<div class=\"et_pb_row et_pb_row_0_tb_footer\"><div class=\"et_pb_column et_pb_column_4_4 et_pb_column_0_tb_footer et-last-child\">\n"
         . "<div class=\"et_pb_module et_pb_text et_pb_text_0_tb_footer et_pb_text_align_left\"><div class=\"et_pb_text_inner\"><p>© " . $o['an'] . ' ' . WP_PROBA_SITE . "</p></div></div>\n"
         . formularDiviProba($nrSubsol, '_tb_footer', $cerut, $nonce, $u, 'Scrie-ne', 'Trimite')
+        . (($o['credit'] ?? false) ? "<div class=\"et_pb_module et_pb_text et_pb_text_8_tb_footer et_clickable  et_pb_text_align_center et_pb_bg_layout_light\">\n"
+            . "<div class=\"et_pb_text_inner\"><p>Powered by Andaxi Web Solutions</p></div>\n</div>\n" : '')
         . "</div></div>\n</div></div>\n</footer>";
     $banner = "<div id=\"cmplz-cookiebanner-container\"><div class=\"cmplz-cookiebanner cmplz-hidden banner-1 optin cmplz-bottom-right\" aria-modal=\"true\" role=\"dialog\">"
         . "<div class=\"cmplz-message\"><p>Folosim cookie-uri pentru statistici.</p></div><div class=\"cmplz-buttons\"><button class=\"cmplz-btn cmplz-accept\">Accept</button>"
@@ -101,7 +104,8 @@ function paginaDiviProba(array $pg, array $o): string
         . "<div id=\"page-container\">\n<div id=\"et-boc\" class=\"et-boc\">\n" . $antet . "\n" . $continut . $subsol . "\n</div>\n</div>\n</div>\n" . $banner . "\n"
         . "<script type=\"speculationrules\">{\"prefetch\":[{\"source\":\"document\",\"where\":{\"href_matches\":\"/*\"},\"eagerness\":\"conservative\"}]}</script>\n"
         . "<script type=\"text/javascript\">\n\t\t\t\tvar et_link_options_data = [{\"class\":\"et_pb_text_0_tb_footer\",\"url\":\"{$j}\\/contact\\/\",\"target\":\"_self\"},"
-        . "{\"class\":\"et_pb_text_0\",\"url\":\"{$j}\\/\",\"target\":\"_self\"}];\n\t\t\t</script>\n"
+        . "{\"class\":\"et_pb_text_0\",\"url\":\"{$j}\\/\",\"target\":\"_self\"}" . (($o['credit'] ?? false)
+            ? ",{\"class\":\"et_pb_text_8_tb_footer\",\"url\":\"https:\\/\\/andaxi.ro\\/despre-noi\\/\",\"target\":\"_blank\"}" : '') . "];\n\t\t\t</script>\n"
         . "<script id=\"proba-tema-js-extra\">\nvar DIVI = {\"item_count\":\"%d bucăți\"};\nvar et_pb_custom = {\"ajaxurl\":\"{$j}\\/wp-admin\\/admin-ajax.php\","
         . "\"et_frontend_nonce\":\"{$nonce}\",\"page_id\":\"{$id}\"};\nvar et_pb_box_shadow_elements = [];\n//# sourceURL=proba-tema-js-extra\n</script>\n"
         . "<script id=\"proba-tema-js\" src=\"{$u}/wp-content/themes/Divi/js/proba.min.js?ver=9.9.9\"></script>\n"

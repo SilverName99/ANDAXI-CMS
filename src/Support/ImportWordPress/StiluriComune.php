@@ -25,6 +25,9 @@ final class StiluriComune
     /** Marcajele permise (selectorii layout-urilor Theme Builder). */
     public const MARCAJE = ['_tb_footer', '_tb_header'];
 
+    /** O clasă numerotată de modul Divi (`et_pb_blurb_14`, `et_pb_row_inner_2`, `et_pb_text_3_tb_footer`); grupul 1 e felul modulului. */
+    public const CLASA_MODUL = '/^(et_pb_[a-z]+(?:_[a-z]+)*)_[0-9]+(?:_tb_(?:header|footer|body))?$/';
+
     /**
      * Regula pachetului validă? `{"_tb_footer": "/"}`: un marcaj din MARCAJE → calea paginii-sursă.
      *
@@ -256,6 +259,233 @@ final class StiluriComune
             . (mb_strlen($prima) > 80 ? mb_substr($prima, 0, 79) . '…' : $prima);
     }
 
+    /**
+     * Regula pachetului `stiluri_dupa_model` validă? `{"/cale/": [{"et_pb_blurb_14": "et_pb_blurb_10", …}, …]}`: pe fiecare pagină,
+     * seturi de perechi clasă-țintă → clasă-model (un set = o secțiune refăcută după alta), același fel de modul de ambele părți,
+     * fiecare țintă o singură dată pe pagină și niciodată model, modelele unui set distincte.
+     *
+     * @return list<string> problemele
+     */
+    public static function valideazaModel(mixed $v): array
+    {
+        if (!is_array($v) || ($v !== [] && array_is_list($v))) {
+            return ['stiluri_dupa_model: un obiect {"/cale/": [{"et_pb_<modul>_<n>": "et_pb_<modul>_<m>", …}, …]}'];
+        }
+        $p = [];
+        foreach ($v as $cale => $seturi) {
+            $e = 'stiluri_dupa_model.' . $cale;
+            if (!is_string($cale) || preg_match('#^/(?:[a-z0-9-]+/)*$#', $cale) !== 1) {
+                $p[] = $e . ': cheia e o cale de pagină („/” sau „/pagina/”)';
+                continue;
+            }
+            if (!is_array($seturi) || $seturi === [] || !array_is_list($seturi)) {
+                $p[] = $e . ': o listă nevidă de seturi {"țintă": "model"}';
+                continue;
+            }
+            $tinte = [];
+            $modele = [];
+            foreach ($seturi as $i => $set) {
+                if (!is_array($set) || $set === [] || array_is_list($set)) {
+                    $p[] = $e . '[' . $i . ']: un obiect nevid {"et_pb_<modul>_<n>": "et_pb_<modul>_<m>"}';
+                    continue;
+                }
+                $vazute = [];
+                foreach ($set as $t => $m) {
+                    $ft = is_string($t) && preg_match(self::CLASA_MODUL, $t, $a) === 1 ? $a[1] : null;
+                    $fm = is_string($m) && preg_match(self::CLASA_MODUL, $m, $b) === 1 ? $b[1] : null;
+                    if ($ft === null || $fm === null || $ft !== $fm || $t === $m) {
+                        $p[] = $e . '[' . $i . '].' . $t . ': țintă și model din același fel de modul, diferite (et_pb_blurb_14 → et_pb_blurb_10)';
+                    } elseif (isset($tinte[$t]) || isset($vazute[$m])) {
+                        $p[] = $e . '[' . $i . '].' . $t . ': o țintă apare o singură dată pe pagină, iar modelele unui set sunt distincte';
+                    }
+                    $tinte[(string) $t] = true;
+                    $vazute[(string) $m] = true;
+                    $modele[(string) $m] = true;
+                }
+            }
+            foreach (array_keys(array_intersect_key($tinte, $modele)) as $x) {
+                $p[] = $e . '.' . $x . ': o clasă nu poate fi și țintă, și model';
+            }
+        }
+        return $p;
+    }
+
+    /**
+     * Stilurile după model pe site (`import-wordpress.json` → `stiluri_dupa_model`, validat): pe fiecare pagină numită, foile ei
+     * `et-cache` cu regulile țintelor sau ale modelelor se rescriu cu dupaModel(). NU: pagina lipsă din captură, o clasă (țintă
+     * sau model) care nu e pe pagină, o foaie de rescris folosită și de altă pagină (aceleași numere de modul ar fi acolo alte
+     * module). ATENȚIE: reguli ale țintelor sau modelelor în `<style>`-ul din HTML (nu se refac), niciun selector de adăugat.
+     *
+     * @param array<string, string> $pagini calea paginii → HTML-ul capturat
+     * @param array<string, string> $foi calea foii → CSS-ul publicat (cu rescrierile de dinainte)
+     * @param array<string, list<array<string, string>>> $config
+     * @param (callable(string): string)|null $css drumul CSS-ului din `<style>`-uri (ca la unifica)
+     * @return array{foi: array<string, string>, pagini: array<string, array{seturi: int, adaugate: int, scoase: int}>, probleme: list<string>, atentii: list<string>}
+     */
+    public static function dupaModelSite(array $pagini, array $foi, array $config, ?callable $css = null): array
+    {
+        $rez = ['foi' => [], 'pagini' => [], 'probleme' => [], 'atentii' => []];
+        foreach ($config as $cale => $seturi) {
+            $e = 'stiluri_dupa_model.' . $cale;
+            if (!isset($pagini[$cale])) {
+                $rez['probleme'][] = $e . ': pagina nu e în captură';
+                continue;
+            }
+            $html = $pagini[$cale];
+            $tinte = [];
+            $modele = [];
+            foreach ($seturi as $set) {
+                $tinte = array_merge($tinte, array_keys($set));
+                $modele = array_merge($modele, array_values($set));
+            }
+            $toate = array_values(array_unique(array_merge($tinte, $modele)));
+            $lipsa = array_values(array_diff($toate, array_keys(self::claseHtml($html))));
+            if ($lipsa !== []) {
+                $rez['probleme'][] = $e . ': clasele ' . implode(', ', array_slice($lipsa, 0, 5)) . (count($lipsa) > 5 ? ' …' : '') . ' nu sunt pe pagină';
+                continue;
+            }
+            $nr = ['seturi' => count($seturi), 'adaugate' => 0, 'scoase' => 0];
+            $rescrise = [];
+            foreach (self::foiPagina($html, $foi) as $f) {
+                $text = $rez['foi'][$f] ?? $foi[$f];
+                if (!self::areClase($text, $toate)) {
+                    continue;
+                }
+                $alte = [];
+                foreach ($pagini as $c => $h) {
+                    if ($c !== $cale && in_array($f, self::foiPagina($h, $foi), true)) {
+                        $alte[] = $c;
+                    }
+                }
+                if ($alte !== []) {
+                    $rez['probleme'][] = $e . ': foaia ' . $f . ' e și a paginilor ' . implode(', ', array_slice($alte, 0, 3)) . ': nu se rescrie (acolo aceleași numere sunt alte module)';
+                    continue;
+                }
+                $r = self::dupaModel($text, $seturi);
+                $nr['adaugate'] += $r['adaugate'];
+                $nr['scoase'] += $r['scoase'];
+                if ($r['css'] !== $text) {
+                    $rescrise[$f] = $r['css'];
+                }
+            }
+            if (preg_match_all('/<style\b[^>]*>(.*?)<\/style>/is', $html, $m) > 0) {
+                foreach ($m[1] as $stil) {
+                    if (self::areClase($css !== null ? $css($stil) : $stil, $toate)) {
+                        $rez['atentii'][] = $e . ': <style>-ul din HTML are reguli ale țintelor sau ale modelelor; ele nu se refac (doar foile et-cache)';
+                        break;
+                    }
+                }
+            }
+            if ($nr['adaugate'] === 0) {
+                $rez['atentii'][] = $e . ': modelele n-au nicio regulă în foile et-cache ale paginii: nimic de adăugat';
+            }
+            $rez['foi'] = array_merge($rez['foi'], $rescrise);
+            $rez['pagini'][$cale] = $nr;
+        }
+        return $rez;
+    }
+
+    /**
+     * Stilurile după model pe o foaie: fiecare selector (din listele de selectori, și din @media/@supports) cu o clasă-țintă se
+     * scoate (regulile vechi ale țintei), iar lângă fiecare selector cu clasele-model ale unui set se adaugă, în aceeași regulă,
+     * același selector cu modelele setului înlocuite de țintele lor: ținta primește exact regulile modelului, în aceleași locuri
+     * din cascadă. Regulile neatinse rămân octet cu octet; o regulă rămasă fără selectori dispare (și un @media rămas gol).
+     *
+     * @param list<array<string, string>> $seturi
+     * @return array{css: string, adaugate: int, scoase: int}
+     */
+    public static function dupaModel(string $css, array $seturi): array
+    {
+        $tinte = [];
+        foreach ($seturi as $set) {
+            $tinte = array_merge($tinte, array_keys($set));
+        }
+        $rez = ['adaugate' => 0, 'scoase' => 0];
+        $rez['css'] = self::rescrieModel($css, 0, strlen($css), self::reClase($tinte), $seturi, $rez);
+        return $rez;
+    }
+
+    /** Clasele de modul ale lui `$html` (atributele class), ca mulțime. @return array<string, true> */
+    public static function claseHtml(string $html): array
+    {
+        $rez = [];
+        if (preg_match_all('/\sclass\s*=\s*(["\'])(.*?)\1/is', $html, $m) > 0) {
+            foreach ($m[2] as $v) {
+                foreach (preg_split('/\s+/', trim($v)) ?: [] as $c) {
+                    if ($c !== '') {
+                        $rez[$c] = true;
+                    }
+                }
+            }
+        }
+        return $rez;
+    }
+
+    /** Foaia are un selector cu una din clase (`.clasă`, nu și `.clasă0`)? @param list<string> $clase */
+    public static function areClase(string $css, array $clase): bool
+    {
+        return $clase !== [] && preg_match(self::reClase($clase), $css) === 1;
+    }
+
+    /** @param list<string> $clase */
+    private static function reClase(array $clase): string
+    {
+        return '/\.(?:' . implode('|', array_map(static fn (string $c): string => preg_quote($c, '/'), $clase)) . ')(?![A-Za-z0-9_-])/';
+    }
+
+    /**
+     * @param list<array<string, string>> $seturi
+     * @param array{adaugate: int, scoase: int} $rez
+     */
+    private static function rescrieModel(string $css, int $de, int $la, string $reTinte, array $seturi, array &$rez): string
+    {
+        $out = '';
+        foreach (self::blocuri($css, $de, $la) as $b) {
+            $text = substr($css, $b['start'], $b['end'] - $b['start']);
+            if ($b['fel'] === 'grup') {
+                $interior = substr($css, $b['interior'][0], $b['interior'][1] - $b['interior'][0]);
+                $nou = self::rescrieModel($css, $b['interior'][0], $b['interior'][1], $reTinte, $seturi, $rez);
+                if ($nou === $interior) {
+                    $out .= $text;
+                } elseif (trim($nou) !== '') {
+                    $out .= substr($css, $b['start'], $b['interior'][0] - $b['start']) . $nou . substr($css, $b['interior'][1], $b['end'] - $b['interior'][1]);
+                }
+                continue;
+            }
+            if ($b['fel'] !== 'regula') {
+                $out .= $text;
+                continue;
+            }
+            $pastrate = [];
+            $adaugate = [];
+            $schimbat = false;
+            foreach (self::desparte($b['selector'], ',') as $x) {
+                if (preg_match($reTinte, $x) === 1) {
+                    $rez['scoase']++;
+                    $schimbat = true;
+                    continue;
+                }
+                $pastrate[] = $x;
+                foreach ($seturi as $set) {
+                    $re = self::reClase(array_values($set));
+                    if (preg_match($re, $x) === 1) {
+                        $invers = array_flip($set);
+                        $adaugate[] = (string) preg_replace_callback($re, static fn (array $m): string => '.' . $invers[substr($m[0], 1)], $x);
+                        $rez['adaugate']++;
+                        $schimbat = true;
+                    }
+                }
+            }
+            if (!$schimbat) {
+                $out .= $text;
+            } elseif ($pastrate !== [] || $adaugate !== []) {
+                [$s0, $acolada] = $b['acolada'];
+                $out .= substr($css, $b['start'], $s0 - $b['start']) . implode(',', array_merge($pastrate, $adaugate)) . substr($css, $acolada, $b['end'] - $acolada);
+            }
+        }
+        return $out;
+    }
+
     /** Foile et-cache ale unei pagini, în ordinea din HTML. @param array<string, string> $foi @return list<string> */
     public static function foiPagina(string $html, array $foi): array
     {
@@ -314,7 +544,8 @@ final class StiluriComune
      * Blocurile de pe un nivel: regulile (`selector{…}`), grupurile `@media`/`@supports` (cu interiorul lor), restul (alte
      * at-uri, comentarii, spații) ca „alt”. Ghilimelele și comentariile nu despart.
      *
-     * @return list<array{fel: string, start: int, end: int, selector: string, declaratii: string, cap: string, interior: array{0: int, 1: int}}>
+     * @return list<array{fel: string, start: int, end: int, selector: string, declaratii: string, cap: string, interior: array{0: int, 1: int},
+     *   acolada?: array{0: int, 1: int}}> la o regulă, `acolada`: începutul selectorului și poziția lui `{`
      */
     private static function blocuri(string $css, int $de, int $la): array
     {
@@ -352,7 +583,7 @@ final class StiluriComune
                 $rez[] = ['fel' => 'alt', 'start' => $start, 'end' => $inchis + 1, 'selector' => '', 'declaratii' => '', 'cap' => $cap, 'interior' => [0, 0]];
             } else {
                 $rez[] = ['fel' => 'regula', 'start' => $start, 'end' => $inchis + 1, 'selector' => $cap, 'declaratii' => trim(substr($css, $acolada + 1, $inchis - $acolada - 1)),
-                    'cap' => '', 'interior' => [0, 0]];
+                    'cap' => '', 'interior' => [0, 0], 'acolada' => [$i, $acolada]];
             }
             $i = $inchis + 1;
         }

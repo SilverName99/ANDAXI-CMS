@@ -1,8 +1,19 @@
 {
-    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md). Sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json; clasele de structură în privat/captura-structura.json. stiluri_comune: stilurile subsolului Theme Builder se iau de pe Acasă pe toate paginile (Camere și Obiective rămăseseră în cache-ul Divi cu subsolul vechi; ce-se-schimba.md).",
+    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md). Sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json; clasele de structură în privat/captura-structura.json. stiluri_comune: stilurile subsolului Theme Builder se iau de pe Acasă pe toate paginile (Camere și Obiective rămăseseră în cache-ul Divi cu subsolul vechi; ce-se-schimba.md). stiluri_dupa_model: pe Obiective turistice, secțiunile Vârful Penteleu (după Tabăra de sculptură Măgura) și Rezervația Valea Zimbrilor (după Muzeul Chihlimbarului), în ambele blocuri ale paginii, primesc regulile modulelor-model (foaia et-cache a paginii rămăsese de dinaintea lor). legaturi: „Powered by Andaxi Web Solutions” din subsol devine legătură spre https://andaxi.ro.",
     "continut": "capturat",
     "dialect": "divi4",
     "stiluri_comune": {"_tb_footer": "/"},
+    "stiluri_dupa_model": {
+        "/obiective-turistice/": [
+            {"et_pb_section_9": "et_pb_section_7", "et_pb_column_17": "et_pb_column_13", "et_pb_row_inner_14": "et_pb_row_inner_10", "et_pb_column_inner_21": "et_pb_column_inner_15", "et_pb_text_15": "et_pb_text_11", "et_pb_text_16": "et_pb_text_12", "et_pb_row_inner_15": "et_pb_row_inner_11", "et_pb_column_inner_22": "et_pb_column_inner_16", "et_pb_blurb_14": "et_pb_blurb_10", "et_pb_column_inner_23": "et_pb_column_inner_17", "et_pb_blurb_15": "et_pb_blurb_11", "et_pb_column_18": "et_pb_column_14", "et_pb_image_7": "et_pb_image_5"},
+            {"et_pb_section_10": "et_pb_section_8", "et_pb_column_19": "et_pb_column_15", "et_pb_image_8": "et_pb_image_6", "et_pb_column_20": "et_pb_column_16", "et_pb_row_inner_16": "et_pb_row_inner_12", "et_pb_column_inner_24": "et_pb_column_inner_18", "et_pb_text_17": "et_pb_text_13", "et_pb_text_18": "et_pb_text_14", "et_pb_row_inner_17": "et_pb_row_inner_13", "et_pb_column_inner_25": "et_pb_column_inner_19", "et_pb_blurb_16": "et_pb_blurb_12", "et_pb_column_inner_26": "et_pb_column_inner_20", "et_pb_blurb_17": "et_pb_blurb_13"},
+            {"et_pb_section_18": "et_pb_section_16", "et_pb_row_17": "et_pb_row_13", "et_pb_column_42": "et_pb_column_36", "et_pb_image_16": "et_pb_image_14", "et_pb_text_33": "et_pb_text_29", "et_pb_text_34": "et_pb_text_30", "et_pb_row_18": "et_pb_row_14", "et_pb_column_43": "et_pb_column_37", "et_pb_blurb_32": "et_pb_blurb_28", "et_pb_column_44": "et_pb_column_38", "et_pb_blurb_33": "et_pb_blurb_29"},
+            {"et_pb_section_19": "et_pb_section_17", "et_pb_row_19": "et_pb_row_15", "et_pb_column_45": "et_pb_column_39", "et_pb_image_17": "et_pb_image_15", "et_pb_text_35": "et_pb_text_31", "et_pb_text_36": "et_pb_text_32", "et_pb_row_20": "et_pb_row_16", "et_pb_column_46": "et_pb_column_40", "et_pb_blurb_34": "et_pb_blurb_30", "et_pb_column_47": "et_pb_column_41", "et_pb_blurb_35": "et_pb_blurb_31"}
+        ]
+    },
+    "legaturi": [
+        {"modul": "et_pb_text_8_tb_footer", "text": "Powered by Andaxi Web Solutions", "href": "https://andaxi.ro"}
+    ],
     "redirecturi": [
         ["/hello-world", "/", 301, "articolul pus de WordPress la instalare, scos la adoptare (VC-URL-024)"],
         ["/auto-draft", "/", 301, "o pagină goală a constructorului, scoasă la adoptare (VC-URL-024)"]
