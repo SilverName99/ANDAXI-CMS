@@ -250,6 +250,10 @@ G-deploy-wp G-plug G-cmp G-smoke G-seo G-php) și ce cer ca să ruleze (IG-06):
   `test-admin-faza-d.php` (tot din testul de fum) cere arborele codului Bioscem scos de `compara-cu-baza.sh`, deci G-cmp înaintea
   lui (ordinea din `porti.sh`); G-cmp cere valorile private ale înghețării Bioscem (`tools/inghetare/genereaza-setari.php
   --site=bioscem`, în `site-uri/bioscem/privat/`).
+- G-plug (și testele pluginurilor din G-php) citesc comenzile demo ale bazei de dezvoltare (`cms_dev`): după o rulare întreruptă
+  (un test de fum oprit la jumătate poate lăsa baza fără comenzi), baza se face din nou cu `tools/dev/instaleaza.sh` înaintea
+  porților; altfel pică „API-urile catalogului” (lista celor mai vândute e goală) și „se oprește” (comanda existentă nu se găsește),
+  fără nicio legătură cu codul.
 - Testul de fum al pachetului însuși (`SITE_DATE_DOSAR=site-uri/ateliere tools/dev/smoke.sh --pachet=ateliere --fara-capturi`) nu e
   o poartă: e scris pentru un pachet cu magazinul CMS-ului, deci pe ateliere are 32 de eșecuri așteptate (106 trecute la runda 1 de
   reparații), toate din deciziile de mai sus:
