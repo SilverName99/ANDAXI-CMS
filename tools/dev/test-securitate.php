@@ -21,7 +21,8 @@ declare(strict_types=1);
  *    o adresă IPv6 în `REMOTE_ADDR` (cu un `X-Forwarded-For` inventat) și un `X-Forwarded-For` IPv6 fără paranteze, care
  *    se termină în cifre, de la un proxy de încredere (predarea primei rulări pe Hostinger); condiția SQL a limitelor
  *    (`IpClient::conditieLimita`: IPv6 pe /64, IPv4 exact) numără la fel pe MariaDB și pe MySQL 8 (pornit și oprit aici
- *    dacă nu mergea), și pe valori scrise de codul vechi.
+ *    dacă nu mergea), și pe valori scrise de codul vechi. Cu `CMS_DEV_DOAR_MARIADB=1` (un mediu în care MySQL 8 nu are voie
+ *    să pornească), doar pe MariaDB: jumătatea MySQL 8 nu se pornește și nu se cere, iar rândul verificării o spune.
  *    Căutarea în cod: adresa vizitatorului (`REMOTE_ADDR`, `X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`,
  *    `Client-IP`, `Forwarded`) se citește doar în `IpClient` și în sonda copiei de verificare; cine s-a logat se scrie
  *    în sesiune doar în `Auth::attempt` și `CustomerAuth::login`, fiecare după id-ul nou. Căutarea pică pe un text
@@ -289,7 +290,9 @@ $conectare = static function (string $sock): ?PDO {
     }
 };
 $mysql8Pornit = false;
-if ($conectare($sockMy8) === null) {
+// CMS_DEV_DOAR_MARIADB=1: fără MySQL 8 (nici pornit, nici întrebat); restul verificării, pe MariaDB, la fel.
+$doarMariaDb = getenv('CMS_DEV_DOAR_MARIADB') === '1';
+if (!$doarMariaDb && $conectare($sockMy8) === null) {
     exec(escapeshellarg($radacina . '/tools/dev/mysql8.sh') . ' porneste 2>&1', $iesireMy8, $codMy8);
     $mysql8Pornit = $codMy8 === 0;
 }
@@ -299,7 +302,7 @@ $tabelValori = '(' . implode(' UNION ALL ', array_map(static fn ($v): string => 
 $cazuriLimita = ['2001:db8:1:2::abc' => 3, '2001:DB8:1:2:0:0:0:1' => 3, '2001:db8:1:3::ffff' => 1, '2001:db8:9::1' => 0, '198.51.100.7' => 1, '198.51.100.8' => 0,
     $adresaV6 => 3];
 $rezultateServere = [];
-foreach (['MariaDB' => $sockMaria, 'MySQL 8' => $sockMy8] as $numeServer => $sock) {
+foreach ($doarMariaDb ? ['MariaDB' => $sockMaria] : ['MariaDB' => $sockMaria, 'MySQL 8' => $sockMy8] as $numeServer => $sock) {
     $pdo = $conectare($sock);
     if ($pdo === null) {
         $rezultateServere[$numeServer] = 'nu merge';
@@ -315,8 +318,9 @@ foreach (['MariaDB' => $sockMaria, 'MySQL 8' => $sockMy8] as $numeServer => $soc
 if ($mysql8Pornit) {
     exec(escapeshellarg($radacina . '/tools/dev/mysql8.sh') . ' opreste > /dev/null 2>&1');
 }
-$verifica('IpClient::conditieLimita pe MariaDB și pe MySQL 8: IPv6 pe /64 (și scrisă altfel), IPv4 exact, valorile vechi (antet întreg, „unknown”, gol, NULL) nu se potrivesc',
-    ($rezultateServere['MariaDB'] ?? null) === $cazuriLimita && ($rezultateServere['MySQL 8'] ?? null) === $cazuriLimita, json_encode($rezultateServere));
+$verifica('IpClient::conditieLimita pe MariaDB' . ($doarMariaDb ? ' (CMS_DEV_DOAR_MARIADB=1: fără jumătatea MySQL 8)' : ' și pe MySQL 8')
+    . ': IPv6 pe /64 (și scrisă altfel), IPv4 exact, valorile vechi (antet întreg, „unknown”, gol, NULL) nu se potrivesc',
+    ($rezultateServere['MariaDB'] ?? null) === $cazuriLimita && ($doarMariaDb || ($rezultateServere['MySQL 8'] ?? null) === $cazuriLimita), json_encode($rezultateServere));
 
 // Căutarea în cod: adresa vizitatorului și scrierea logării în sesiune.
 $fisiereCod = [];

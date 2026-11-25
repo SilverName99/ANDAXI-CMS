@@ -26,7 +26,7 @@ Tot ce ține de site-ul real stă **doar** în `privat/`, ignorat de git și cop
 | `captura-structura.json` | `{"<cale>": {"et-last-child": [...]}}` | `ImportWordPress::reguli()` → `captura.structura` |
 | `urmarire.json` | identificatorii trackerelor (pista F) | `Urmarire` |
 | `paritate.json` | referința și pragurile harness-ului de paritate | `tools/dev/paritate-wp/` |
-| `lista-neagra.txt` | termenii care nu au voie în git (domeniul, numele, telefoanele, adresele) | verificarea 11b din `tools/dev/verifica-rute.php` |
+| `lista-neagra.txt` | termenii care nu au voie în git: numele în ambele ordini, domeniul și domeniile temporare, contul găzduirii, firma și înregistrarea ei, telefoanele, adresele, id-urile WordPress ale paginilor, articolelor și produselor, prefixul claselor antetului, căile și numele produselor, listele MailPoet, trackerele, cheia publică Stripe (lista canonică stă în afara repo-ului, cu rândul `# site: ateliere`, dată prin `CMS_DEV_LISTA_NEAGRA`; fără ea G-rute pică) | verificarea 11b din `tools/dev/verifica-rute.php` |
 
 Forma lui `privat/import-wordpress.json`, cu valori inventate:
 

@@ -38,9 +38,11 @@ declare(strict_types=1);
  *     scade). Lista goală = verificarea strictă din plan.
  *     11b. Termenii listei explicite (privați: `site-uri/<site>/privat/lista-neagra.txt` și
  *     fișierele din `CMS_DEV_LISTA_NEAGRA`, în afara repo-ului; tools/dev/lib/lista-neagra.php)
- *     nu apar în niciun fișier din git (`git ls-files`, nu doar în nucleu), fără clichet: numele,
+ *     nu apar în niciun fișier din git (`git ls-files`, nu doar în nucleu) și în niciun mesaj al
+ *     commiturilor încă nepublicate (`git log HEAD --not --remotes`), fără clichet: numele,
  *     domeniile, telefoanele și adresele unui client care se adoptă nu intră nici în teste,
- *     nici în documentație. Fără listă explicită (o clonă fără ea), doar un rând de informare.
+ *     nici în documentație, nici în istoric. Fail-closed: un pachet din site-uri/ al unui site
+ *     care se adoptă (oricare în afara celor cu numele public) fără lista lui pică.
  *
  * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
  *
@@ -471,6 +473,14 @@ foreach ($probaForme as $forma) {
 if (lista_neagra_gaseste('pensiunea de probă, 0700 001 111, 2026-07-00', $probaTermeni) !== []) {
     $problema('Verificarea 11b: potrivirea găsește termeni de probă unde nu sunt (lista_neagra_gaseste).');
 }
+// IG-01: fiecare pachet al unui site care se adoptă cere lista lui; fără ea, 11b pică (nu un rând de informare).
+foreach (lista_neagra_acoperire($radacina) as $pachet => $fisiereListei) {
+    if ($fisiereListei === []) {
+        $problema('Verificarea 11b: pachetul site-uri/' . $pachet . '/ n-are lista lui neagră (site-uri/' . $pachet . '/privat/lista-neagra.txt, '
+            . 'sau un fișier din CMS_DEV_LISTA_NEAGRA cu rândul „# site: ' . $pachet . '”), deci numele clientului nu se poate verifica în git; '
+            . 'pune lista canonică a site-ului, din afara repo-ului');
+    }
+}
 $explicitaGasita = [];
 if ($explicita !== []) {
     $git = static fn (string $arg): array => array_values(array_filter(explode("\0", (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' ' . $arg . ' 2>/dev/null'))));
@@ -489,6 +499,14 @@ if ($explicita !== []) {
     }
     foreach ($inIndex as $relativ) {
         $texte[] = [$relativ . ' (index)', static fn () => (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' show ' . escapeshellarg(':' . $relativ) . ' 2>/dev/null')];
+    }
+    // IG-03: și mesajele commiturilor care pleacă odată cu ramura (cele din nicio ramură de pe server), înaintea oricărui push.
+    foreach (explode("\0", (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' log -z --format=%H%n%B HEAD --not --remotes 2>/dev/null')) as $commit) {
+        $commit = ltrim($commit, "\n");
+        if (preg_match('/^([0-9a-f]{40})\n(.*)$/s', $commit, $mc) === 1) {
+            $mesaj = $mc[2];
+            $texte[] = ['mesajul commitului ' . substr($mc[1], 0, 7), static fn () => $mesaj];
+        }
     }
     // Arhivele și PDF-urile noi pe ramură (față de baza comună cu ramura principală), neurmărite sau puse în index: NU, în afara
     // listei albe (LISTA_NEAGRA_BINARE_PERMISE); un .gz se dezarhivează și se citește.
@@ -566,7 +584,7 @@ echo 'Rute: ' . count($rute) . '; declarații în catalog: ' . count(Plugins::li
     . '; cronuri: ' . count($cronuriCatalog) . '; întrebări Plugins::… în cod: ' . $intrebari
     . '; blocuri pe coloana 0 în șabloane: ' . $blocuri
     . '; nume de client în nucleu (clichetul 11): ' . array_sum($potriviriClient) . ' în ' . count($potriviriClient) . ' fișiere'
-    . '; lista neagră explicită (11b): ' . ($explicita === [] ? 'lipsă (fără privat/lista-neagra.txt și fără CMS_DEV_LISTA_NEAGRA)'
+    . '; lista neagră explicită (11b): ' . ($explicita === [] ? 'lipsă (fără privat/lista-neagra.txt și fără CMS_DEV_LISTA_NEAGRA; NU dacă un pachet o cere)'
         : count($explicita) . ' termeni, ' . array_sum($explicitaGasita) . ' potriviri în git') . "\n";
 $bucati = [];
 foreach ($numarate as $cheie => $n) {

@@ -982,6 +982,10 @@ $verifica('CSP pe checkout și pe metodele de plată: sursele documentate ale St
     implode(' | ', $difS));
 
 // Fiecare rută nouă (condiția magazin_wc) răspunde 404 cât pista ei nu e construită; sub /api/ în JSON, fără gardă (proprietarii sunt pe licență).
+// Cache-Control-ul JSON-ului scurt, exact, după pachet (IG-04): `no-store, private`, iar pe un pachet cu antete_404 = wordpress (ca
+// ateliere și ca pachetul de aici) antetele nocache ale WordPress, puse de stratul de adrese peste el.
+$wpCompatPachet = (array) json_decode((string) file_get_contents($lucru . '/pachet/wp-compat.json'), true);
+$cacheJsonAsteptat = ($wpCompatPachet['antete_404'] ?? null) === 'wordpress' ? 'no-cache, must-revalidate, max-age=0, no-store, private' : 'no-store, private';
 $ruter = new Router();
 (require $radacina . '/src/Http/rute.php')($ruter);
 $noi = array_values(array_filter($ruter->rute(), static fn (array $r): bool => $r['conditie'] === 'magazin_wc'));
@@ -996,7 +1000,7 @@ foreach ($noi as $ruta) {
     if (str_starts_with($c, '/api/') || str_starts_with($c, '/admin/')) {
         $j = json_decode($r['corp'], true);
         $bun = is_array($j) && ($j['ok'] ?? null) === false && str_starts_with($r['antete']['content-type'] ?? '', 'application/json')
-            && str_contains($r['antete']['cache-control'] ?? '', 'no-store');
+            && ($r['antete']['cache-control'] ?? '') === $cacheJsonAsteptat;
     } else {
         $bun = $egale($r['corp'], $ca404($r404, $c)) === null;
     }
@@ -1004,8 +1008,8 @@ foreach ($noi as $ruta) {
         $rele[] = $ruta['metoda'] . ' ' . $c . ' → ' . $r['cod'] . ' ' . ($r['antete']['content-type'] ?? '-') . ' ' . ($r['antete']['cache-control'] ?? '-') . ' ' . substr($r['corp'], 0, 120);
     }
 }
-$verifica(count($noi) . ' rute noi (doar cu magazin_wc): fiecare 404 cât pista ei nu e construită (pagina 404 capturată; sub /api/ și la rambursarea din admin JSON-ul scurt), '
-    . 'niciuna oprită de gardă', count($noi) === 21 && $rele === [], implode(', ', $rele));
+$verifica(count($noi) . ' rute noi (doar cu magazin_wc): fiecare 404 cât pista ei nu e construită (pagina 404 capturată; sub /api/ și la rambursarea din admin JSON-ul scurt, '
+    . 'cu Cache-Control exact „' . $cacheJsonAsteptat . '”), niciuna oprită de gardă', count($noi) === 21 && $rele === [], implode(', ', $rele));
 // SPEC-A-04: ruta abonării (condiția mailpoet) și Stripe.js-ul fals al testelor (doar cu APP_ENV=local, doar cu fișierul lui).
 $rAbonare = $cerere($port, '/_andaxi/abonare/1/', 'POST');
 $fisierStripeFals = $radacina . '/tools/dev/lib/stripe-js-fals.js';
@@ -1017,7 +1021,7 @@ if ($stripeFalsDeProba && is_file($fisierStripeFals)) {
 }
 $verifica('ruta abonării (doar cu mailpoet): 404 în JSON cât pista E nu e construită; /_dev/stripe-js-fals.js: 404 fără fișier, fișierul (text/javascript, no-store, nosniff) cu el și APP_ENV=local',
     count(array_filter($ruter->rute(), static fn (array $r): bool => $r['conditie'] === 'mailpoet')) === 1 && $rAbonare['cod'] === 404
-    && str_starts_with($rAbonare['antete']['content-type'] ?? '', 'application/json')
+    && str_starts_with($rAbonare['antete']['content-type'] ?? '', 'application/json') && ($rAbonare['antete']['cache-control'] ?? '') === $cacheJsonAsteptat
     && ($rStripeFaraFisier === null || $rStripeFaraFisier['cod'] === 404) && $rStripeFals['cod'] === 200
     && str_starts_with($rStripeFals['antete']['content-type'] ?? '', 'text/javascript') && ($rStripeFals['antete']['cache-control'] ?? '') === 'no-store'
     && ($rStripeFals['antete']['x-content-type-options'] ?? '') === 'nosniff' && (!$stripeFalsDeProba || $rStripeFals['corp'] === "/* proba G-regiuni */\n"),

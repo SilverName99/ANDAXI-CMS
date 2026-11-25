@@ -15,11 +15,21 @@ declare(strict_types=1);
  * telefoanele și adresele de email ale clienților care încă n-au pachet sau ale site-urilor care se adoptă, câte unul pe rând
  * (`#` începe un comentariu), în `site-uri/<site>/privat/lista-neagra.txt` (ignorat de git) și în fișierele din
  * `CMS_DEV_LISTA_NEAGRA` (căi în afara repo-ului, despărțite prin „:”). Termenii ei nu au voie să apară nicăieri în git
- * (verificarea 11b din tools/dev/verifica-rute.php), nu doar în nucleu.
+ * (verificarea 11b din tools/dev/verifica-rute.php), nu doar în nucleu, nici în mesajele commiturilor nepublicate.
+ *
+ * Fail-closed (IG-01): fiecare pachet din `site-uri/` al unui site care se adoptă (toate în afara celor cu numele public,
+ * LISTA_NEAGRA_PACHETE_PUBLICE) cere o listă care să-l acopere (lista_neagra_acoperire); fără ea 11b pică.
  */
 
 const LISTA_NEAGRA_FIRMA = ['bioscem', 'amalbo', 'neurocare', 'rațiu', 'ratiu', '19166493', 'j2006017724407', 'quinton', 'vivomixx',
     'siliciu organic', 'info pacienți', 'info medici', 'vitalitate și protecție', 'jurnalul bioscem'];
+
+/**
+ * Pachetele site-urilor al căror nume e public (ale proprietarului platformei, numite deja în repo: `site-uri/bioscem/`, …): nu
+ * cer o listă neagră privată. Orice alt pachet din `site-uri/` e al unui site care se adoptă, cu numele lui privat: 11b cere lista
+ * lui (`site-uri/<site>/privat/lista-neagra.txt` sau un fișier din `CMS_DEV_LISTA_NEAGRA` cu rândul `# site: <site>`).
+ */
+const LISTA_NEAGRA_PACHETE_PUBLICE = ['bioscem', 'biovitality', 'vertij', 'grafoanaytis'];
 
 /** Cheile private ale înghețării din care se iau termenii personali. */
 const LISTA_NEAGRA_CHEI_PRIVATE = ['gdpr_operator_reprezentant', 'gdpr_operator_telefon'];
@@ -73,6 +83,44 @@ function lista_neagra_fisiere_explicite(string $radacina): array
         }
     }
     return array_values(array_unique($fisiere));
+}
+
+/**
+ * Pachetele din `site-uri/` care cer o listă neagră privată (toate în afara LISTA_NEAGRA_PACHETE_PUBLICE) → fișierele listei
+ * explicite care le acoperă: un fișier acoperă pachetul X dacă stă la `…/site-uri/X/privat/lista-neagra.txt` (în clona asta sau în
+ * alta) ori are un rând de comentariu `# site: X` (mai multe pachete, despărțite prin virgulă). Un pachet cu lista goală = neacoperit.
+ *
+ * @return array<string, list<string>>
+ */
+function lista_neagra_acoperire(string $radacina): array
+{
+    $rez = [];
+    foreach (glob($radacina . '/site-uri/*', GLOB_ONLYDIR) ?: [] as $dosar) {
+        if (!in_array(basename($dosar), LISTA_NEAGRA_PACHETE_PUBLICE, true)) {
+            $rez[basename($dosar)] = [];
+        }
+    }
+    foreach (lista_neagra_fisiere_explicite($radacina) as $fisier) {
+        $pachete = [];
+        if (preg_match('#(?:^|/)site-uri/([^/]+)/privat/lista-neagra\.txt$#', $fisier, $m) === 1) {
+            $pachete[] = $m[1];
+        }
+        $text = @file_get_contents($fisier);
+        foreach (is_string($text) ? (preg_split('/\R/u', $text) ?: []) : [] as $rand) {
+            if (preg_match('/^#\s*site:\s*(.+)$/iu', trim($rand), $m) === 1) {
+                foreach (explode(',', $m[1]) as $p) {
+                    $pachete[] = trim($p);
+                }
+            }
+        }
+        foreach (array_unique($pachete) as $p) {
+            if (isset($rez[$p])) {
+                $rez[$p][] = $fisier;
+            }
+        }
+    }
+    ksort($rez, SORT_STRING);
+    return $rez;
 }
 
 /**

@@ -239,6 +239,29 @@ randatori de probă (`tools/dev/lib/regiuni-proba.php`, încărcați doar de une
 regulilor, tăierea, dovada pe octeți, randarea pe un server cu `magazin_wc` și pe unul fără, cache-ul, CSP-ul, rutele și cheile
 noi, înregistrările de mai sus.
 
+**Porțile pistei** (`tools/dev/porti.sh --wp=MAGAZIN-WC-A`: G-rute G-regiuni G-capturat G-compat G-wp G-html5 G-html-capturat
+G-deploy-wp G-plug G-cmp G-smoke G-seo G-php) și ce cer ca să ruleze (IG-06):
+
+- G-rute: verificarea 11b cere lista neagră a pachetului `ateliere` (lista canonică a site-ului, din afara repo-ului, cu rândul
+  `# site: ateliere`, dată prin `CMS_DEV_LISTA_NEAGRA`; la fel lista pachetului `pensiune`); fără ea pică, cum trebuie.
+- G-smoke și G-php: testul de fum rulează `test-securitate.php`, care pornește MySQL 8 pentru a doua jumătate a verificării
+  limitelor; într-un mediu în care MySQL 8 nu are voie să pornească, cu `CMS_DEV_DOAR_MARIADB=1` verificarea e doar pe MariaDB
+  (rândul ei o spune).
+  `test-admin-faza-d.php` (tot din testul de fum) cere arborele codului Bioscem scos de `compara-cu-baza.sh`, deci G-cmp înaintea
+  lui (ordinea din `porti.sh`); G-cmp cere valorile private ale înghețării Bioscem (`tools/inghetare/genereaza-setari.php
+  --site=bioscem`, în `site-uri/bioscem/privat/`).
+- Testul de fum al pachetului însuși (`SITE_DATE_DOSAR=site-uri/ateliere tools/dev/smoke.sh --pachet=ateliere --fara-capturi`) nu e
+  o poartă: e scris pentru un pachet cu magazinul CMS-ului, deci pe ateliere are 32 de eșecuri așteptate (106 trecute la runda 1 de
+  reparații), toate din deciziile de mai sus:
+  - rutele magazinului și ale conturilor CMS-ului închise cu `magazin_wc` (D5, 404): categoria, marca, cele patru produse (și
+    datele structurate ale produsului, adresa lui cu „/” final, produsele din sitemap), căutarea, `POST /cos/adauga/{id}` (de
+    două ori), `GET /cos`, `/api/cart/summary`, `GET` și `POST /checkout` (deci nici comanda din bază, nici emailul ei),
+    `GET /login`, `GET /register`, `POST /login`, antetul gărzii pe `POST /produs/{slug}/review` (ruta nu mai există);
+  - stratul de adrese WordPress (`slash_final`): `/magazin`, `/blog`, un articol și o pagină legală răspund 301 spre adresa cu „/”;
+  - cadrul capturat fără documente capturate (baza demo, nu un import): `/contact` și adresa veche din datele demo răspund 404-ul;
+  - `GET /contul-meu` cu un client: pagina demo cu secțiunea contului trimite la `/login` (302), care e închisă.
+  Fără `magazin_wc` (orice alt pachet) testul de fum e cel de dinainte.
+
 ### Cum aterizează o pistă
 
 1. Scrie clasele din spațiul ei de nume: randatorii numiți în catalog, metodele controllerelor de mai sus (în locul răspunsului

@@ -251,7 +251,12 @@ declare -A PORTI=(
     # înregistrările pistelor (config/plugins.php, sloturi.json, SchemaDivi4): G-regiuni (nouă), porțile cadrului și ale importului
     # pe care se sprijină (G-capturat, G-wp, G-html5, G-html-capturat, G-deploy-wp), runtime-ul ale cărui seturi le declară
     # (G-compat), testele pluginurilor (rutele noi și proprietarii lor) și cele care arată că fără magazin_wc totul e ca înainte
-    # (G-cmp, G-smoke, G-seo, G-rute).
+    # (G-cmp, G-smoke, G-seo, G-rute). Unde rulează (IG-06, docs/MAGAZIN-WC.md, „Porțile”): G-rute cere lista neagră a pachetului
+    # ateliere (CMS_DEV_LISTA_NEAGRA, 11b pică fără ea); G-smoke și G-php rulează test-securitate.php, a cărui jumătate MySQL 8
+    # pornește MySQL 8, deci într-un mediu fără MySQL 8 cer CMS_DEV_DOAR_MARIADB=1; test-admin-faza-d.php (din G-smoke) cere
+    # arborele Bioscem scos de compara-cu-baza.sh, deci G-cmp înaintea lui (ordinea de aici); G-cmp cere valorile private ale
+    # înghețării Bioscem (tools/inghetare/genereaza-setari.php --site=bioscem). Testul de fum al pachetului ateliere însuși
+    # (SITE_DATE_DOSAR=site-uri/ateliere) nu e o poartă: eșecurile lui așteptate sunt în docs/MAGAZIN-WC.md.
     [MAGAZIN-WC-A]="G-rute G-regiuni G-capturat G-compat G-wp G-html5 G-html-capturat G-deploy-wp G-plug G-cmp G-smoke G-seo G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14

@@ -591,7 +591,7 @@ Dacă refuză și de acolo („nu e codul revizuit”), codul de pe bioscem.ro n
 ### Seara, înainte (aproximativ 15 minute; site-ul nu se schimbă)
 
 ```sh
-ssh -p 65002 u742855925@<IP>
+ssh -p 65002 uXXXXXXXXX@<IP>
 export PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
 cd ~/platforma/repo && git fetch origin && git checkout --detach origin/claude/etapa1-cod-comun
 $PHP tools/inghetare/genereaza-setari.php --site=bioscem --cod-vechi=$HOME/domains/bioscem.ro/public_html
@@ -926,7 +926,8 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
 
 - regulile site-ului stau în pachet, `import-wordpress.json` (`pagini`, `articole`, `redirecturi`, `setari`, `continut`,
   `dialect`, `scripturi_aruncate`, `captura`, `stiluri_comune` și `stiluri_dupa_model`: ale lor sunt la fișierele statice, mai sus;
-  `legaturi`: a dialectului, mai jos), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
+  `legaturi`: a dialectului, mai jos; `regiuni` și `sabloane`: la „Regiunile dinamice”, mai jos, `sabloane` doar în
+  `privat/import-wordpress.json`), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
 - slug-ul fiecărei pagini e `post_name`-ul WordPress, păstrat exact: decodat în `pages.slug` (și Unicode), în forma
   percent-encoded a WordPress în adrese; căile păstrează „/” final cum îl pune structura permalinkurilor. Două slug-uri care
   diferă doar printr-un accent se bat cap în cap pe cheia UNIQUE a bazei (colația `utf8mb4_unicode_ci`), deși sunt distincte ca
