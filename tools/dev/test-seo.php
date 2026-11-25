@@ -14,7 +14,11 @@ declare(strict_types=1);
  *    plată, cont, admin, API, plus seo.json), harta (pachetul demo și pachetul
  *    Bioscem: format, ținte, lanțuri și bucle), robots, JSON-LD, etichetele din
  *    sitemap; N6: nicio rută și nicio cheie în cache-ul de pagini pentru o adresă
- *    din care parse_url nu scoate o cale (docs/SECURITATE.md).
+ *    din care parse_url nu scoate o cale (docs/SECURITATE.md); din SEC-1/SEC-2,
+ *    cheia doar pentru o adresă care e exact calea și query-ul ei (nu cu „#”, cu
+ *    octeți de control sau în forma absolută), cu query-ul serverului
+ *    (QUERY_STRING) și cu câte o pereche pentru fiecare parametru, iar stratul SEO
+ *    taie adresa ca serverul web („/magazin/#?sort=…” n-are query).
  * B. Pe serverul de dezvoltare (APP_URL pe http, deci fără regula de gazdă):
  *    „/” final, bare duble, majuscule, harta (lanț, buclă, 410, țintă pe alt
  *    site, sursă exclusă, pagină existentă, parametrii păstrați), POST și HEAD,
@@ -593,16 +597,61 @@ foreach ($rutaN6 as $adresa => $asteptat) {
 }
 $verifica('N6: nicio rută pentru o adresă din care parse_url nu scoate o cale (8 adrese: „/x:1/?s=”, „/a/b:1/c?s=”, „/x:1”, „//x?s=”…, '
     . 'niciodată „/”); celelalte au rutele de până acum („/x:1?s=” la pagina generală, „//cos/” tot la „/”)', $gresite === [], implode('; ', $gresite));
-$cheieN6 = ['/' => true, '/?page=2' => true, '/x:1?s=n6' => true, '/produs/ceai?sort=n6' => true, 'http://exemplu.test/magazin' => true,
-    '/x:1/?s=n6' => false, '/a/b:1/c?s=n6' => false, '/x:1' => false, '//x?s=n6' => false, '//cos/' => false, 'http://exemplu.test?s=n6' => false];
+// Din SEC-1/SEC-2: cheia doar pentru o adresă care e exact calea și query-ul citite de parse_url (forma linkurilor site-ului);
+// nu pentru una din care parse_url taie sau schimbă ceva (un fragment, octeți de control) și nici în forma absolută.
+$cheieN6 = [['/', true], ['/?page=2', true], ['/magazin?', true], ['/x:1?s=n6', true], ['/produs/ceai?sort=n6', true], ['/a?b?c', true],
+    ['/x:1/?s=n6', false], ['/a/b:1/c?s=n6', false], ['/x:1', false], ['//x?s=n6', false], ['//cos/', false], ['http://exemplu.test?s=n6', false],
+    ['http://exemplu.test/magazin', false], ['/magazin#?sort=n6', false], ['/#?s=n6', false], ['/magazin#', false], ["/?blog\x01page=2", false],
+    ["/magazin\x7f", false], ['', false], ['magazin', false]];
 $gresite = [];
-foreach ($cheieN6 as $adresa => $asteptat) {
-    if (ResponseCache::adresaCuCheie((string) $adresa) !== $asteptat) {
-        $gresite[] = $adresa;
+foreach ($cheieN6 as [$adresa, $asteptat]) {
+    if (ResponseCache::adresaCuCheie($adresa) !== $asteptat) {
+        $gresite[] = json_encode($adresa);
     }
 }
-$verifica('N6: cheia cache-ului de pagini doar pentru adresele din care parse_url scoate calea lor (nu „/x:1/…”, „//x”, „//cos/”, '
-    . 'forma absolută fără cale)', $gresite === [], implode('; ', $gresite));
+$verifica('N6: cheia cache-ului de pagini doar pentru o adresă care e exact calea și query-ul citite de parse_url (nu „/x:1/…”, „//x”, '
+    . '„//cos/”, forma absolută; din SEC-1/SEC-2 nici „/magazin#?sort=”, „/#?s=”, un octet de control)', $gresite === [], implode('; ', $gresite));
+// SEC-1/SEC-2: query-ul cheii trebuie să fie cel din care serverul a făcut $_GET (QUERY_STRING), oricum ar fi scris; altfel nimic din cache.
+$queryN6 = [['/magazin?sort=a&page=2', 'page=2&sort=a', true], ['/magazin?sort=price%5Fdesc', 'sort=price_desc', true], ['/', '', true],
+    ['/magazin?', '', true], ['/magazin', 'sort=price_desc', false], ['/?page=2', '', false], ['/?blog_page=2', "blog\x01page=2", false],
+    ['/magazin?sort=price_desc', 'sort=price_asc', false]];
+$gresite = [];
+foreach ($queryN6 as [$adresa, $queryServer, $asteptat]) {
+    if (ResponseCache::queryCaServerul($adresa, $queryServer) !== $asteptat) {
+        $gresite[] = json_encode([$adresa, $queryServer]);
+    }
+}
+$verifica('SEC-1/SEC-2: query-ul cheii = cel al serverului (QUERY_STRING), în orice ordine și scriere; nu „/magazin” cu sort=… (adresa rescrisă '
+    . 'de stratul SEO la un server care păstrează „#” în query), „/?page=2” cu un query gol, „blog\x01page” față de blog_page',
+    $gresite === [], implode('; ', $gresite));
+// SEC-1: fiecare pereche din query e un parametru permis, cu cheia scrisă cum o citește PHP; altfel parse_str ar lăsa deoparte o parte din
+// adresă (cheia repetată, „=…”, o cheie codată, tăiată la „%00” sau cu „.”), pe care codul care pune adresa în pagină ar fi pus-o în cache.
+$parametriN6 = [['', true], ['page=2', true], ['sort=price_asc&page=2', true], ['sort=price%5Fdesc', true], ['page=2&', true], ['&page=2', true],
+    ['categorie=ceaiuri&page=3', true], ['sort=a&sort=b', false], ['=x&sort=b', false], ['%73ort=b', false], ['sort%00x=b', false],
+    ['blog.page=2', false], ['utm_source=x', false], ['sort[]=a', false]];
+$gresite = [];
+foreach ($parametriN6 as [$query, $asteptat]) {
+    if (ResponseCache::parametriPermisi($query) !== $asteptat) {
+        $gresite[] = json_encode($query);
+    }
+}
+$verifica('SEC-1: parametrii permiși, câte o pereche pentru fiecare, cu cheia necodată (nu o cheie repetată, „=…”, „%73ort”, „sort%00x”, '
+    . '„blog.page”); ordinea, „&” în plus și valorile codate rămân permise', $gresite === [], implode('; ', $gresite));
+// SEC-1: stratul SEO taie adresa cererii ca serverul web: „#” începe fragmentul (nici calea, nici query-ul nu trec de el), iar gazda formei
+// absolute se termină la primul „/” sau „?”. Înainte „/magazin/#?sort=x” era calea „/magazin/” cu query-ul sort=x.
+$imparteN6 = new \ReflectionMethod(SeoRedirects::class, 'imparteCererea');
+$taieri = [['/magazin/#?sort=price_desc', ['/magazin/', '']], ['/magazin//#?sort=price_asc', ['/magazin//', '']], ['//#?page=2', ['//', '']],
+    ['http://exemplu.test/magazin/#?sort=x', ['/magazin/', '']], ['http://exemplu.test?sort=x&y=/magazin/', ['/', 'sort=x&y=/magazin/']],
+    ['/magazin/?sort=price_desc#x', ['/magazin/', 'sort=price_desc']], ['/magazin/?sort=price_desc', ['/magazin/', 'sort=price_desc']],
+    ['http://exemplu.test/magazin/?sort=x', ['/magazin/', 'sort=x']], ['/a?b?c', ['/a', 'b?c']], ['', ['/', '']], ['//cos/', ['//cos/', '']]];
+$gresite = [];
+foreach ($taieri as [$adresa, $asteptat]) {
+    if ($imparteN6->invoke(null, $adresa) !== $asteptat) {
+        $gresite[] = $adresa . ' → ' . json_encode($imparteN6->invoke(null, $adresa));
+    }
+}
+$verifica('SEC-1: stratul SEO taie adresa ca serverul web („/magazin/#?sort=…” = calea „/magazin/” fără query; „http://gazda?sort=x&y=/magazin/” '
+    . '= calea „/”); adresele obișnuite ca înainte', $gresite === [], implode('; ', $gresite));
 
 // =====================================================================
 // Serverul de dezvoltare și cererile

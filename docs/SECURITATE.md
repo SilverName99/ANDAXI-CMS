@@ -169,15 +169,76 @@ Ce s-a schimbat (același cod pe ambele linii):
   primește răspunsul unei adrese necunoscute — la GET pagina 404 a site-ului (`SiteController::paginaNegasita`, ca ruta generală
   pentru o pagină care nu există), altfel 404-ul routerului —, cu `Cache-Control: no-store`, fără cache-ul de pagini.
 - `ResponseCache::adresaCuCheie()` (nou), la începutul lui `beginRequest`: o adresă fără cale citită de `parse_url`, ori cu o gazdă
-  fără schemă (`//cos/`), nu citește și nu scrie cache-ul. Forma absolută (`http://gazda/cale`) își păstrează calea și cache-ul.
+  fără schemă (`//cos/`), nu citește și nu scrie cache-ul. Forma absolută (`http://gazda/cale`) își păstrează calea (din a doua
+  trecere, mai jos, fără cache).
 - `views/layout.php`: pagina 404 a unei astfel de adrese are calea ei scrisă (până la „?”), nu „/”, deci titlul, descrierea și
   canonicalul paginii 404, ca orice adresă necunoscută (altfel ar fi luat titlul și descrierea primei pagini).
 
 Adresele obișnuite (cu o cale citită de `parse_url`) merg exact ca înainte: aceleași rute, aceeași cheie, aceeași pagină. Singura
-excepție voită: o adresă care începe cu „//” și pe care stratul SEO n-o repară (căile excluse, de exemplu `//cos/`) își păstrează
-pagina, dar nu mai intră în cache. O cerere în forma absolută fără cale (`GET http://gazda HTTP/1.1`, pe care browserele nu o
+excepție voită (în afara celor din a doua trecere, mai jos): o adresă care începe cu „//” și pe care stratul SEO n-o repară (căile
+excluse, de exemplu `//cos/`) își păstrează pagina, dar nu mai intră în cache. O cerere în forma absolută fără cale (`GET http://gazda HTTP/1.1`, pe care browserele nu o
 trimit) primește acum 404-ul, ca orice adresă fără cale.
 
 Testele: `tools/dev/test-seo.php`, A (routerul și cheia, fără server) și `tools/dev/lib/test-seo-viteza.php`, E4.2 (pe server, cu
 cache-ul extins pornit: fiecare astfel de adresă dă 404-ul site-ului cu `no-store` și nicio intrare; prima pagină rămâne octet cu
 octet a ei, fără marca din adrese; `?page=` are intrarea lui, `utm_*` și `?s=` ocolesc cache-ul, ca înainte), în poarta G-seo.
+
+### A doua trecere: „#”, query-ul serverului și query-ul stricat (SEC-1–SEC-3, 25 noiembrie 2026)
+
+A doua revizuire de securitate a reparației a găsit aceeași clasă de problemă (cheia din cache diferă de ce a primit pagina) pe
+adrese pe care `parse_url` le citește, pe ambele linii, tot de dinainte (codul atins era același și înaintea lui N6):
+
+- **„#” înaintea lui „?” (SEC-1).** Stratul SEO (`SeoRedirects::imparteUri`) tăia fragmentul doar din cale, păstra textul de după
+  „#” drept query și, când repara adresa („/” final, „//”, forma absolută, „/” lipsă pe un pachet cu `slash_final`), rescria
+  `REQUEST_URI` la „calea curată?acel text”. Serverul web taie însă query-ul la „#” (php -S, Apache), deci `$_GET` era gol, iar
+  cheia (citită din adresa rescrisă) avea parametrul. Cache-ul se scrie înaintea 301-ului stratului SEO: o singură cerere
+  (`curl --request-target '/magazin/#?sort=price_desc'`) punea sub cheia lui `/magazin?sort=price_desc` lista sortată alfabetic,
+  servită apoi (HIT) oricui deschidea adresa, 10 minute, și refăcută oricând. La fel `/magazin//#?…`, `/categorie/<slug>/#?…`,
+  HEAD și `GET http://gazda/magazin/#?…`.
+- **Forma absolută cu „?” înaintea primului „/”.** La `GET http://gazda?sort=price_desc&x=/magazin/` același strat lua drept cale
+  tot ce urma după primul „/” din query, deci pe un server care primește o astfel de cerere (php -S o refuză, Apache o primește)
+  adresa rescrisă `/magazin` punea lista sortată price_desc chiar sub cheia lui `/magazin`.
+- **Un server care păstrează „#” în query** (comportamentul LiteSpeed și al CDN-ului Hostinger nu se poate verifica aici):
+  `/magazin#?sort=price_desc`, fără nicio reparație, punea lista price_desc sub cheia lui `/magazin`, iar `/#?s=…` scria cheia
+  primei pagini cu `$_GET['s']` plin, adică chiar condiția N6, pe o adresă pe care `parse_url` o citește.
+- **Octeții de control (SEC-2).** `parse_url` îi face „_”: `/?blog\x01page=2` avea cheia lui `blog_page=2`, cu `$_GET` fără
+  `blog_page`. Doar pe un server care îi lasă să treacă (php -S, Apache în modul strict și nginx de la 1.21.1 îi refuză).
+- **Un query pe care `parse_str` îl strică.** O cheie repetată (rămâne ultima valoare), o pereche fără cheie („=…”), o cheie codată
+  sau tăiată la „%00” dădeau cheia paginii obișnuite, dar codul care pune adresa întreagă în pagină (linkul „Înapoi” din bannerul
+  unei campanii, `Campanii::linkImplicitBanner`) ducea în pagina din cache textul ales de cine a trimis cererea.
+
+Ce s-a schimbat (același cod pe ambele linii):
+
+- `SeoRedirects::imparteCererea()` (nou): adresa cererii se taie cum o taie serverul web. „#” începe fragmentul oriunde ar fi, deci
+  nici calea, nici query-ul nu trec de el, iar gazda formei absolute se termină la primul „/”, „?” sau „#” (`imparteUri`).
+  `/magazin/#?sort=x` e calea `/magazin/` fără query: 301 spre `/magazin`, iar pagina randată (și intrarea ei) e `/magazin` fără
+  parametri, deci corectă. Locațiile date de aplicație se taie ca înainte.
+- `ResponseCache::adresaCuCheie()`: cheia doar pentru o adresă care e exact calea și query-ul citite de `parse_url`, scrisă ca
+  linkurile site-ului (calea de la „/”, apoi „?query”); nu pentru una cu fragment, cu octeți de control sau în forma absolută.
+- `ResponseCache::queryCaServerul()` (nou), în `beginRequest`: query-ul cheii trebuie să fie cel din care serverul a făcut `$_GET`
+  (`QUERY_STRING`), în orice ordine și scriere; altfel nimic din cache. Pentru o cerere obișnuită cele două sunt același text.
+- `ResponseCache::parametriPermisi()`: fiecare pereche din query e un parametru permis, cu cheia scrisă cum o citește PHP (fără chei
+  repetate, perechi fără cheie, chei codate, tăiate sau schimbate de `parse_str`). Linkurile site-ului (`http_build_query` din
+  `$_GET`) au mereu forma asta; adresa mai poate diferi de cheie doar prin ordinea perechilor și prin felul în care sunt codate
+  aceleași valori, adică tot aceeași adresă.
+
+Cererile obișnuite merg exact ca înainte: aceleași pagini, aceleași chei, aceleași intrări (și cu altă ordine a parametrilor, cu un
+„&” în plus sau cu valori codate). Schimbări voite, doar pe adrese pe care browserele și linkurile site-ului nu le trimit: o adresă
+cu „#” (browserul nu trimite fragmentul) primește 301-ul stratului SEO spre calea curată fără textul de după „#”, iar fără
+reparație își primește pagina, fără cache; la fel forma absolută (`http://gazda/cale`, pe care browserele o trimit doar unui
+proxy), o adresă cu octeți de control și una cu un query stricat. Sonda (cereri scrise întocmai, pe php -S și printr-un server
+simulat care păstrează „#” în query; fiecare intrare comparată cu pagina curată a cheii ei și cu `$_GET`): pe codul de dinainte, pe
+pachetul demo, 9 intrări otrăvite și 23 de chei diferite de `$_GET`, iar cu o campanie cu banner pornită 19 intrări otrăvite; pe
+codul nou 0, 0 și 0, iar fiecare adresă obișnuită se scrie și se servește din cache ca înainte.
+
+La deploy: o intrare stricată scrisă înaintea lui rămâne până la expirarea ei (10 minute la cache-ul extins, TTL-ul
+regulii la cel clasic); golirea cache-ului de pagini imediat după deploy (orice salvare reușită în admin o face,
+`public/index.php`, `ResponseCache::schimbaContinut`) le scoate pe toate.
+
+Testele: `tools/dev/test-seo.php`, A (fără server: `adresaCuCheie`, `queryCaServerul`, `parametriPermisi` și tăierea adresei de
+către stratul SEO, pe adrese cu „#”, forma absolută, octeți de control, chei repetate) și `tools/dev/lib/test-seo-viteza.php`, E4.2
+(pe server, cu adresa trimisă întocmai, `CURLOPT_REQUEST_TARGET`: fiecare „#” cu o reparație a stratului SEO, și cu HEAD, dă 301
+spre calea curată fără query și scrie doar intrarea paginii fără parametri, octet cu octet cea curată, iar
+`/magazin?sort=price_desc` rămâne MISS, sortată price_desc; „#” fără reparație, forma absolută, o cheie repetată, „=…”: pagina, fără
+cache; HEAD pe adresele fără cale: 404, nicio intrare), în poarta G-seo. Pe codul de dinainte verificările noi pică (6 din 334):
+`/magazin?sort=price_desc` venea HIT, cu lista sortată alfabetic.

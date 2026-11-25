@@ -142,7 +142,7 @@ final class SeoRedirects
         }
 
         $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
-        [$caleBruta, $query] = self::imparteUri($uri);
+        [$caleBruta, $query] = self::imparteCererea($uri);
         // Întâi lista fixă (fără să citim catalogul): cele mai multe cereri excluse se opresc aici.
         if (self::eExclusaDupa(self::CAI_EXCLUSE, $caleBruta)) {
             return;
@@ -416,7 +416,7 @@ final class SeoRedirects
             return false;
         }
         if ($query === null) {
-            [, $query] = self::imparteUri((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+            [, $query] = self::imparteCererea((string) ($_SERVER['REQUEST_URI'] ?? '/'));
         }
         self::$redirectCanonic = true;
         // Pe www, cu „/” final sau „//”, saltul final îl face termina(): acolo
@@ -1002,11 +1002,27 @@ final class SeoRedirects
         return self::adresaCompleta(self::curataCale((string) ($parti['path'] ?? '/')), $query !== '' ? $query : $queryImplicit);
     }
 
-    /** @return array{0: string, 1: string} calea brută și query-ul, fără parse_url („//x" nu e o gazdă aici) */
+    /**
+     * Calea brută și query-ul adresei cererii (REQUEST_URI), tăiate cum le taie serverul web (RFC 3986; php -S, Apache): „#”
+     * începe fragmentul oriunde ar fi, deci nici calea, nici query-ul nu trec de el. SEC-1 (docs/SECURITATE.md, N6): înainte
+     * „/magazin/#?sort=x” dădea calea „/magazin/” cu query-ul „sort=x”, iar adresa rescrisă „/magazin?sort=x” punea în cache, sub
+     * cheia lui sort=x, pagina randată cu `$_GET` gol (serverul taie query-ul la „#”). Browserul nu trimite niciodată un „#”.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function imparteCererea(string $uri): array
+    {
+        return self::imparteUri(explode('#', $uri, 2)[0]);
+    }
+
+    /**
+     * @return array{0: string, 1: string} calea brută și query-ul, fără parse_url („//x" nu e o gazdă aici); în forma absolută
+     *                                     gazda se termină la primul „/”, „?” sau „#” (SEC-1: „http://gazda?a=/x/” n-are calea „/x/”)
+     */
     private static function imparteUri(string $uri): array
     {
-        if (preg_match('#^https?://[^/]+(/.*)?$#i', $uri, $m) === 1) {
-            $uri = $m[1] ?? '/';
+        if (preg_match('#^https?://[^/?\#]*(.*)$#is', $uri, $m) === 1) {
+            $uri = $m[1];
         }
         $parti = explode('?', $uri, 2);
         $cale = (string) ($parti[0] === '' ? '/' : $parti[0]);

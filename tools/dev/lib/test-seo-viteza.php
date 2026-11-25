@@ -15,6 +15,10 @@ declare(strict_types=1);
  *     primește pagina din cache; oprit, nimic din cache. N6 (docs/SECURITATE.md): o adresă din care parse_url nu scoate o cale
  *     („/x:1/?s=…”, „/a/b:1/c?s=…”, „//cos”) primește 404-ul site-ului cu no-store și nu scrie nicio intrare, „//cos/” nu
  *     intră în cache, iar prima pagină rămâne octet cu octet a ei; parametrii primei pagini (?page=, utm_*, ?s=), ca înainte.
+ *     SEC-1/SEC-3, cu adresa trimisă întocmai (CURLOPT_REQUEST_TARGET): un „#” înaintea lui „?” cu „/” final, „//”, HEAD sau
+ *     forma absolută dă 301 spre calea curată fără query și scrie doar intrarea paginii fără parametri, octet cu octet cea curată
+ *     (/magazin?sort=price_desc rămâne MISS, sortată price_desc); „#” fără reparație, forma absolută, o cheie repetată, „=…”:
+ *     pagina fără cache; HEAD pe adresele fără cale: 404, nicio intrare; ordinea parametrilor are intrarea ei, ca înainte.
  *  3. B6 CSS/JS: cu comutatorul, pagina leagă fișierele minificate (la zi față de sursele lor; fiecare răspunde 200, cu
  *     Cache-Control-ul lui) și nu mai are blocurile în ea; oprit, blocurile sunt în pagină octet cu octet ca sursele lor.
  *  4. B6 fonturile din nucleu: aceleași familii și greutăți ca cererea spre Google Fonts; nicio legătură spre Google pe un
@@ -193,6 +197,85 @@ try {
         ($pagina2[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($pagina2[1]['antete']['x-page-cache'] ?? '') === 'HIT' && $intrariPagina2 === 1
         && $ocolite === [] && $fisiereCache() === 1, json_encode([$pagina2[0]['antete']['x-page-cache'] ?? '', $pagina2[1]['antete']['x-page-cache'] ?? '',
             $intrariPagina2, $ocolite, $fisiereCache()]));
+    // SEC-1, SEC-3 (docs/SECURITATE.md, N6): adresa cererii scrisă întocmai (CURLOPT_REQUEST_TARGET; curl taie singur un „#”, browserul nu-l
+    // trimite niciodată). Un „#” înaintea lui „?” plus o reparație a stratului SEO („/” final, „//”, forma absolută) puneau în cache, sub cheia
+    // lui sort=…, lista randată fără sort (serverul taie query-ul la „#”), pentru toți vizitatorii, 10 minute. Acum stratul SEO taie adresa
+    // ca serverul: 301 spre calea curată fără query, iar intrarea scrisă e a paginii fără parametri, cu `$_GET` gol, deci corectă.
+    $cerereBruta = static function (int $port, string $metoda, string $tinta): array {
+        $c = curl_init('http://127.0.0.1:' . $port . '/');
+        $antete = [];
+        curl_setopt_array($c, [CURLOPT_REQUEST_TARGET => $tinta, CURLOPT_CUSTOMREQUEST => $metoda, CURLOPT_NOBODY => $metoda === 'HEAD',
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 60,
+            CURLOPT_HEADERFUNCTION => static function ($c, string $linie) use (&$antete): int {
+                if (str_contains($linie, ':')) {
+                    [$nume, $valoare] = explode(':', $linie, 2);
+                    $antete[strtolower(trim($nume))] = trim($valoare);
+                }
+                return strlen($linie);
+            }]);
+        $corp = (string) curl_exec($c);
+        $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+        curl_close($c);
+        return ['cod' => $cod, 'antete' => $antete, 'corp' => $corp];
+    };
+    $intrariCache = static function (): array {
+        $chei = [];
+        foreach (glob(\App\Support\ResponseCache::cacheDirectory() . '/*.json') ?: [] as $fisier) {
+            $meta = json_decode((string) file_get_contents($fisier), true);
+            $chei[] = (string) ($meta['path'] ?? '') . '?' . (string) ($meta['query'] ?? '');
+        }
+        sort($chei);
+        return $chei;
+    };
+    $sortActiv = static fn (string $corp): string => preg_match('#sort-option is-active" href="[^"]*[?&]sort=([a-z_]+)#', $corp, $m) === 1 ? $m[1] : '';
+    $faraMomente = static fn (string $corp): string => (string) preg_replace('/(name="review_opened_at" value=")\d+(")/', '${1}T${2}', $corp);
+    \App\Support\ResponseCache::purgePageCache();
+    $tinteFragment = [['GET', '/magazin/#?sort=price_desc', '/magazin'], ['GET', '/magazin//#?sort=price_asc', '/magazin'],
+        ['GET', '/categorie/ceaiuri/#?sort=price_desc', '/categorie/ceaiuri'], ['HEAD', '/magazin/#?sort=price_desc', '/magazin'],
+        ['GET', 'http://127.0.0.1:' . $port . '/magazin/#?sort=price_desc', '/magazin'], ['GET', '//#?page=2', '/'], ['GET', '//#?sort=price_desc', '/']];
+    $gresite = [];
+    foreach ($tinteFragment as [$metoda, $tinta, $curata]) {
+        $r = $cerereBruta($port, $metoda, $tinta);
+        if ($r['cod'] !== 301 || ($r['antete']['location'] ?? '') !== $curata) {
+            $gresite[] = $metoda . ' ' . $tinta . ' → ' . $r['cod'] . ' ' . ($r['antete']['location'] ?? '-');
+        }
+    }
+    $intrariFragment = $intrariCache();
+    // Înainte, chiar adresele de mai jos veneau din cache (HIT), cu lista sortată alfabetic (alpha_asc), la oricine.
+    $sortate = [$cerere($port, 'GET', '/magazin?sort=price_desc'), $cerere($port, 'GET', '/categorie/ceaiuri?sort=price_desc')];
+    $magazinHit = $cerere($port, 'GET', '/magazin');
+    \App\Support\ResponseCache::purgePageCache();
+    $magazinCurat = $cerere($port, 'GET', '/magazin');
+    $verifica('SEC-1: „#” înaintea lui „?” cu „/” final, „//”, HEAD, forma absolută: 301 spre calea curată fără query; doar intrările paginilor fără '
+        . 'parametri (/magazin, /categorie/ceaiuri, /), octet cu octet cele curate; /magazin?sort=price_desc și categoria: MISS, sortate price_desc',
+        $gresite === [] && $intrariFragment === ['/?', '/categorie/ceaiuri?', '/magazin?']
+        && ($magazinHit['antete']['x-page-cache'] ?? '') === 'HIT' && ($magazinCurat['antete']['x-page-cache'] ?? '') === 'MISS'
+        && $faraMomente($magazinHit['corp']) === $faraMomente($magazinCurat['corp']) && $sortActiv($magazinCurat['corp']) === 'alpha_asc'
+        && ($sortate[0]['antete']['x-page-cache'] ?? '') === 'MISS' && $sortActiv($sortate[0]['corp']) === 'price_desc'
+        && ($sortate[1]['antete']['x-page-cache'] ?? '') === 'MISS' && $sortActiv($sortate[1]['corp']) === 'price_desc',
+        implode('; ', $gresite) . ' | intrări ' . json_encode($intrariFragment) . ' | ' . json_encode([$magazinHit['antete']['x-page-cache'] ?? '',
+            $sortActiv($magazinCurat['corp']), $sortate[0]['antete']['x-page-cache'] ?? '', $sortActiv($sortate[0]['corp']),
+            $sortate[1]['antete']['x-page-cache'] ?? '', $sortActiv($sortate[1]['corp'])]));
+    // Fără reparația stratului SEO, o adresă cu „#”, una în forma absolută și una cu un query pe care parse_str îl strică (cheie repetată,
+    // „=…”) își primesc pagina, dar nu citesc și nu scriu cache-ul; HEAD pe adresele fără cale (stratul SEO face din HEAD un GET când
+    // repară adresa: „/x:1/” → „/x:1”): 404, nicio intrare. Ordinea parametrilor rămâne a lor: /magazin?sort=…&page=1 are intrarea lui.
+    \App\Support\ResponseCache::purgePageCache();
+    $faraCache = [];
+    foreach ([['GET', '/magazin#?sort=price_desc', 200], ['GET', '/#?s=' . $marcaN6, 200], ['GET', 'http://127.0.0.1:' . $port . '/magazin', 200],
+        ['GET', '/magazin?sort=' . $marcaN6 . '&sort=price_desc', 200], ['GET', '/magazin?=' . $marcaN6 . '&sort=price_desc', 200],
+        ['HEAD', '/x:1/', 404], ['HEAD', '/x:1/?s=' . $marcaN6, 404], ['HEAD', '/x:1/y?s=' . $marcaN6, 404]] as [$metoda, $tinta, $cod]) {
+        $r = $cerereBruta($port, $metoda, $tinta);
+        if ($r['cod'] !== $cod || isset($r['antete']['x-page-cache']) || $intrariCache() !== []) {
+            $faraCache[] = $metoda . ' ' . $tinta . ' → ' . $r['cod'] . ' ' . ($r['antete']['x-page-cache'] ?? '-') . ' ' . json_encode($intrariCache());
+        }
+    }
+    $ordine = [$cerere($port, 'GET', '/magazin?sort=price_desc&page=1'), $cerere($port, 'GET', '/magazin?sort=price_desc&page=1')];
+    $verifica('SEC-1/SEC-3: /magazin#?sort=…, /#?s=…, forma absolută, o cheie repetată, „=…”: pagina fără cache; HEAD /x:1/, /x:1/?s=…, '
+        . '/x:1/y?s=…: 404, nicio intrare; /magazin?sort=price_desc&page=1: MISS, apoi HIT, sortată price_desc',
+        $faraCache === [] && ($ordine[0]['antete']['x-page-cache'] ?? '') === 'MISS' && ($ordine[1]['antete']['x-page-cache'] ?? '') === 'HIT'
+        && $sortActiv($ordine[1]['corp']) === 'price_desc' && $intrariCache() === ['/magazin?page=1&sort=price_desc'],
+        implode('; ', $faraCache) . ' | ' . json_encode([$ordine[0]['antete']['x-page-cache'] ?? '', $ordine[1]['antete']['x-page-cache'] ?? '',
+            $sortActiv($ordine[1]['corp']), $intrariCache()]));
     // Plafonul și curățenia: intrările expirate pleacă, apoi cele mai vechi peste plafon.
     $dirCache = \App\Support\ResponseCache::cacheDirectory();
     foreach (range(1, 6) as $k) {
