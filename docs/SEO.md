@@ -536,7 +536,10 @@ a doua parte, compară aspectul cu valorile vechi și cu cele noi). Din linia de
   (niciodată `public, max-age`, nici cu `page_cache_browser_policy = max_age`), deci un CDN nu le ține; momentul deschiderii
   formularului de recenzie (`review_opened_at`) e pus la ora cererii când pagina vine din cache. Pentru orice regulă (și din
   admin): doar parametrii `ResponseCache::PARAMETRI_PERMISI` (paginarea, sortarea, filtrele cunoscute) fac o intrare, orice
-  alt parametru (fbclid, utm_*, o căutare, gunoi) ocolește cache-ul; cel mult `MAX_INTRARI` (5.000) pagini, cu o curățenie
+  alt parametru (fbclid, utm_*, o căutare, gunoi) ocolește cache-ul; din N6 și a doua lui trecere ([SECURITATE.md](SECURITATE.md)),
+  îl ocolește și o adresă pe care `parse_url` n-o citește întocmai (fără cale, cu un „#”, cu octeți de control, în forma absolută),
+  una al cărei query nu e cel din care serverul a făcut `$_GET` (`QUERY_STRING`) și una cu o pereche care nu e un parametru (o cheie
+  repetată, „=…”, o cheie codată); cel mult `MAX_INTRARI` (5.000) pagini, cu o curățenie
   a celor expirate cam la 100 de salvări; **orice POST reușit din admin** (afară de logare) golește cache-ul și adresele
   sitemap-urilor (`public/index.php`, `ResponseCache::schimbaContinut`).
 - **CSS-ul și JavaScript-ul șablonului în fișiere** (`css_js_in_fisiere`; `SablonSite`): cele șase blocuri fixe din
@@ -767,7 +770,11 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   singur salt), mentenanța, oprirea de urgență; din livrarea 2: datele din pachet (numele,
   sufixul vechi, prefixul fluxului, returul, livrarea cu prețuri fixe, logo-ul WebP) și
   pachetul demo neutru, opririle `SEO_LIVRARE_RETUR=0` și `AVERTISMENT_PRODUSE=0`, pe fiecare
-  pachet `Allow` pentru flux, fluxul (200 sau 404) și `/magazin?category=` (301 sau 404);
+  pachet `Allow` pentru flux, fluxul (200 sau 404) și `/magazin?category=` (301 sau 404); N6 ([SECURITATE.md](SECURITATE.md)),
+  fără server: nicio rută și nicio cheie în cache-ul de pagini pentru o adresă din care `parse_url` nu scoate o cale, iar din
+  SEC-1–SEC-3 cheia doar pentru o adresă care e exact calea și query-ul ei (nu cu „#”, cu octeți de control sau în forma
+  absolută), cu query-ul serverului (`QUERY_STRING`) și cu câte o pereche pentru fiecare parametru; stratul SEO taie adresa ca
+  serverul web („/magazin/#?sort=…” n-are query);
 - `tools/dev/test-seo.php` E1 (WP-37, `tools/dev/lib/test-seo-model.php`): `Seo::rezolva` = regula veche a layout-ului;
   fiecare pagină demo fără rânduri noi e ca înainte, un rând de fiecare fel schimbă exact câmpurile lui și doar pe pagina
   lui, după ștergere totul e din nou ca la început; formularele vechi nu șterg câmpurile noi; verificările panoului (lipsă,
@@ -803,6 +810,13 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   curățenia, `review_opened_at` pe pagina din cache, golirea după o salvare din admin, fișierele tehnice fără sesiune, HSTS
   (treptele, „oprit”, `max-age=0`), versiunea de 12 hex, variantele (extensia, înlocuirea, ștergerea), acordul pentru cookie-uri,
   jetoanele JavaScript-ului minificat egale cu ale sursei (și `node --check`), `comutatoare-seo.php` (`--hsts`, sursa doar scrisă);
+  N6 ([SECURITATE.md](SECURITATE.md)), cu cache-ul extins pornit: o adresă din care `parse_url` nu scoate o cale (`/x:1/?s=…`,
+  `/a/b:1/c?s=…`, `//cos`…) dă 404-ul site-ului cu `no-store` și nicio intrare, `//cos/` nu intră în cache, prima pagină rămâne
+  octet cu octet a ei, `?page=` are intrarea lui, `utm_*` și `?s=` ocolesc cache-ul; SEC-1/SEC-3, cu adresa trimisă întocmai
+  (`CURLOPT_REQUEST_TARGET`): un „#” înaintea lui „?” cu „/” final, „//”, HEAD sau forma absolută dă 301 spre calea curată fără
+  query și scrie doar intrarea paginii fără parametri, octet cu octet cea curată (`/magazin?sort=price_desc` rămâne MISS, sortată
+  price_desc); „#” fără reparație, forma absolută, o cheie repetată, „=…”: pagina fără cache; HEAD pe adresele fără cale: 404,
+  nicio intrare;
 - `tools/dev/vizual-valori-noi.sh` (în G-vizual): stilurile calculate ale paginilor publice cu valorile vechi față de cele noi
   ale vitezei, pe codul curent, 0 diferențe;
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;

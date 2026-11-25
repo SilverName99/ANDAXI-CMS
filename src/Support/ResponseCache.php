@@ -66,9 +66,12 @@ final class ResponseCache
         if (strtoupper(trim($method)) !== 'GET') {
             return $disabled;
         }
-        // N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate calea
-        // ei nu citește și nu scrie cache-ul (adresaCuCheie); altfel ar primi cheia primei pagini.
-        if (!self::adresaCuCheie($requestUri)) {
+        // N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): cheia e calea și query-ul adresei citite de
+        // parse_url, iar pagina se randează din adresă și din $_GET, pe care serverul web îl face din QUERY_STRING. Cache-ul se
+        // citește și se scrie doar când spun același lucru: adresa e exact calea și query-ul ei (adresaCuCheie; altfel o adresă
+        // fără cale ar primi cheia primei pagini) și query-ul ei e cel al serverului (queryCaServerul; altfel, SEC-1,
+        // „/magazin/#?sort=…” rescrisă de stratul SEO ar pune sub cheia lui sort=… pagina randată fără el).
+        if (!self::adresaCuCheie($requestUri) || !self::queryCaServerul($requestUri, (string) ($_SERVER['QUERY_STRING'] ?? ''))) {
             return $disabled;
         }
 
@@ -636,18 +639,36 @@ final class ResponseCache
 
     /**
      * N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): adresa cererii poate avea o pagină în cache? Cheia
-     * e calea și query-ul citite de parse_url, deci doar dacă parse_url scoate din ea calea ei. Nu: o adresă refuzată de
-     * parse_url („/x:1/?s=…”: un „:cifre” urmat de „/” pare un port; calea și query-ul ieșeau „/” și gol, iar `$_GET` rămânea
-     * al cererii), una fără cale („//x?s=…”) și una cu o gazdă fără schemă („//cos/”: gazda „cos” și calea „/”, adică cheia
-     * primei pagini, deși restul codului vede calea „//cos/”). Forma absolută („http://gazda/cale”) își păstrează calea.
+     * e calea și query-ul citite de parse_url, deci doar o adresă care e exact ele, scrisă cum o scriu linkurile site-ului: calea,
+     * de la „/”, apoi „?query”. Nu: o adresă refuzată de parse_url („/x:1/?s=…”: un „:cifre” urmat de „/” pare un port; calea și
+     * query-ul ieșeau „/” și gol, iar `$_GET` rămânea al cererii), una fără cale („//x?s=…”), una cu o gazdă fără schemă
+     * („//cos/”: gazda „cos” și calea „/”, adică cheia primei pagini, deși restul codului vede calea „//cos/”) și, din SEC-1/SEC-2,
+     * una din care parse_url taie sau schimbă ceva: un fragment („/magazin#?sort=…”: parse_url taie „#…”, un server care păstrează
+     * „#” în query dă sort=… în `$_GET`), octeții de control (parse_url îi face „_”: „/?blog\x01page=2” ar fi avut cheia lui
+     * blog_page) și forma absolută („http://gazda/cale”: codul care citește adresa întreagă, de exemplu linkul „Înapoi” din
+     * bannerul unei campanii, ar fi pus în pagina din cache altceva decât pentru „/cale”). Browserul nu le trimite niciodată;
+     * pagina lor se randează ca înainte, doar fără cache.
      */
     public static function adresaCuCheie(string $requestUri): bool
     {
         $parti = parse_url($requestUri);
-        if (!is_array($parti) || !is_string($parti['path'] ?? null)) {
+        if (!is_array($parti) || !is_string($parti['path'] ?? null) || !str_starts_with($parti['path'], '/')) {
             return false;
         }
-        return !isset($parti['host']) || isset($parti['scheme']);
+        return $parti['path'] . (isset($parti['query']) ? '?' . $parti['query'] : '') === $requestUri;
+    }
+
+    /**
+     * SEC-1/SEC-2 (docs/SECURITATE.md, N6): query-ul adresei, cel din cheie, e cel din care serverul web a făcut `$_GET`
+     * (QUERY_STRING)? Aceiași parametri cu aceleași valori, în orice ordine și scriere (canonicalizeQueryString), ca la oricare
+     * două linkuri spre aceeași pagină. Nu, de exemplu, după ce stratul SEO a rescris adresa „/magazin/#?sort=x” la „/magazin” pe un
+     * server care taie query-ul doar la primul „?” (`$_GET` cu sort=x), ori pentru „/?blog\x01page=2” (cheia lui blog_page, dar
+     * `$_GET` fără blog_page). Pentru o cerere obișnuită cele două sunt același text.
+     */
+    public static function queryCaServerul(string $requestUri, string $queryServer): bool
+    {
+        $query = parse_url($requestUri, PHP_URL_QUERY);
+        return self::canonicalizeQueryString(is_string($query) ? $query : '') === self::canonicalizeQueryString($queryServer);
     }
 
     private static function normalizePathFromUri(string $requestUri): string
@@ -675,7 +696,15 @@ final class ResponseCache
             && !in_array($cale, ['/admin/login', '/admin/logout', '/admin/cauta'], true);
     }
 
-    /** Adresa are doar parametri care pot face o pagină din cache (PARAMETRI_PERMISI, cu valori simple)? */
+    /**
+     * Adresa are doar parametri care pot face o pagină din cache (PARAMETRI_PERMISI, cu valori simple)? Și, din SEC-1
+     * (docs/SECURITATE.md, N6), fiecare pereche „cheie=valoare” din adresă e unul dintre ei, cu cheia scrisă cum o citește PHP:
+     * altfel parse_str ar lăsa deoparte o parte din adresă (o cheie repetată, din care rămâne ultima valoare; o pereche fără cheie,
+     * „=…”; o cheie scrisă codat, tăiată la un octet nul sau cu „.” schimbat în „_”), iar codul care pune adresa întreagă în pagină
+     * (linkul „Înapoi” din bannerul unei campanii) ar fi pus în pagina din cache un text pe care cheia ei nu-l are. Linkurile
+     * site-ului (http_build_query din `$_GET`) au mereu forma asta; în rest adresa poate diferi doar prin ordinea perechilor și
+     * prin felul în care sunt codate aceleași valori.
+     */
     public static function parametriPermisi(string $query): bool
     {
         if (trim($query) === '') {
@@ -685,6 +714,15 @@ final class ResponseCache
         parse_str($query, $params);
         foreach ($params as $cheie => $valoare) {
             if (!in_array((string) $cheie, self::PARAMETRI_PERMISI, true) || !is_string($valoare) || strlen($valoare) > 200) {
+                return false;
+            }
+        }
+        $perechi = array_values(array_filter(explode('&', $query), static fn (string $pereche): bool => $pereche !== ''));
+        if (count($perechi) !== count($params)) {
+            return false;
+        }
+        foreach ($perechi as $pereche) {
+            if (!array_key_exists(explode('=', $pereche, 2)[0], $params)) {
                 return false;
             }
         }

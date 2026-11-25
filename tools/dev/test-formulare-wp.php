@@ -30,7 +30,10 @@ declare(strict_types=1);
  *  7. N6 (docs/SECURITATE.md): pe gazda din APP_URL, cu cache-ul de pagini pornit, o adresă din care parse_url nu scoate o cale
  *     (`/x:1/?s=…`, `/x:1/`, `//cos?s=…`) dă 404-ul capturat cu no-store și nicio intrare în cache; prima pagină din cache rămâne
  *     octet cu octet a ei, cu formularul subsolului spre „/” și nonce-ul căii „/”, care se trimite; același formular la `/x:1/`: 404;
- *     un răspuns înghețat pe `/?feed=…` se dă la adresa lui, dar nu și la `//cos?feed=…` (404-ul capturat, no-store).
+ *     un răspuns înghețat pe `/?feed=…` se dă la adresa lui, dar nu și la `//cos?feed=…` (404-ul capturat, no-store). SEC-1/SEC-3, cu
+ *     adresa trimisă întocmai (CURLOPT_REQUEST_TARGET): HEAD `/x:1/?s=…`, `/lista:1/?s=…`, `/x:1/` (stratul WordPress face din HEAD un GET):
+ *     404 cu no-store, nicio intrare; `//#?page=2`, `//#?s=…`: 301 spre „/” fără query, doar intrarea primei pagini, octet cu octet a ei;
+ *     `/#?s=…`: prima pagină, fără căutare și fără cache.
  *
  *   tools/dev/php.sh tools/dev/test-formulare-wp.php
  *
@@ -710,6 +713,62 @@ $verifica('un răspuns înghețat pe /?feed=… se dă la adresa lui; la //cos?f
     && !str_contains($rFluxFaraCale['corp'], $marca . '-flux') && str_contains($rFluxFaraCale['corp'], 'et-l--footer')
     && str_contains((string) ($rFluxFaraCale['antete']['cache-control'] ?? ''), 'no-store') && $intrari() === $intrariInainte,
     $rFlux['cod'] . ' ' . $rFluxFaraCale['cod'] . ' ' . ($rFluxFaraCale['antete']['cache-control'] ?? '-') . ' ' . $intrariInainte . ' → ' . $intrari());
+// SEC-1, SEC-3 (docs/SECURITATE.md, N6): adresa scrisă întocmai (CURLOPT_REQUEST_TARGET; curl taie singur un „#”, browserul nu-l trimite niciodată).
+// HEAD pe o adresă fără cale: stratul WordPress face din HEAD un GET înaintea gărzii N6, deci înainte HEAD /x:1/?s=… scria și el intrarea primei
+// pagini (randată cu calea goală, cu formularul subsolului refuzat); acum 404 cu no-store, nicio intrare. „//#?page=2”: stratul SEO taie adresa la
+// „#”, ca serverul, deci 301 spre „/” fără query și cel mult intrarea primei pagini, octet cu octet a ei (înainte intrarea lui /?page=2, randată
+// fără page); „/#?s=…”: prima pagină, fără căutare (serverul taie query-ul la „#”) și fără cache.
+$cerereBruta = static function (int $port, string $metoda, string $tinta, array $antete = []): array {
+    $c = curl_init('http://127.0.0.1:' . $port . '/');
+    $primite = [];
+    curl_setopt_array($c, [CURLOPT_REQUEST_TARGET => $tinta, CURLOPT_CUSTOMREQUEST => $metoda, CURLOPT_NOBODY => $metoda === 'HEAD',
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => $antete, CURLOPT_HEADERFUNCTION => static function ($c, string $linie) use (&$primite): int {
+            if (str_contains($linie, ':')) {
+                [$n, $v] = explode(':', $linie, 2);
+                $primite[strtolower(trim($n))] = trim($v);
+            }
+            return strlen($linie);
+        }]);
+    $corp = (string) curl_exec($c);
+    $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+    curl_close($c);
+    return ['cod' => $cod, 'antete' => $primite, 'corp' => $corp];
+};
+$cheiIntrari = static function (): array {
+    $chei = [];
+    foreach (glob(\App\Support\ResponseCache::cacheDirectory() . '/*.json') ?: [] as $fisier) {
+        $meta = json_decode((string) file_get_contents($fisier), true);
+        $chei[] = (string) ($meta['path'] ?? '') . '?' . (string) ($meta['query'] ?? '');
+    }
+    sort($chei);
+    return $chei;
+};
+\App\Support\ResponseCache::purgePageCache();
+$gresite = [];
+foreach (['/x:1/?s=' . $marca, '/lista:1/?s=' . $marca, '/x:1/'] as $adresa) {
+    $r = $cerereBruta($port, 'HEAD', $adresa, [$gazda]);
+    if ($r['cod'] !== 404 || !str_contains((string) ($r['antete']['cache-control'] ?? ''), 'no-store') || isset($r['antete']['x-page-cache'])
+        || $cheiIntrari() !== []) {
+        $gresite[] = 'HEAD ' . $adresa . ' → ' . $r['cod'] . ' ' . ($r['antete']['cache-control'] ?? '-') . ' ' . json_encode($cheiIntrari());
+    }
+}
+$fragment = [$cerereBruta($port, 'GET', '//#?page=2', [$gazda]), $cerereBruta($port, 'GET', '//#?s=' . $marca, [$gazda])];
+foreach ($fragment as $k => $r) {
+    if ($r['cod'] !== 301 || ($r['antete']['location'] ?? '') !== 'https://pensiune-proba.example.test/') {
+        $gresite[] = ['//#?page=2', '//#?s=…'][$k] . ' → ' . $r['cod'] . ' ' . ($r['antete']['location'] ?? '-');
+    }
+}
+$cheiFragment = $cheiIntrari();
+$acasaFragment = $cerere($port, '/', [$gazda]);
+$cautareFragment = $cerereBruta($port, 'GET', '/#?s=' . $marca, [$gazda]);
+$verifica('SEC-1/SEC-3: HEAD /x:1/?s=…, HEAD /lista:1/?s=…, HEAD /x:1/: 404 cu no-store, nicio intrare; //#?page=2 și //#?s=…: 301 spre „/” fără query, '
+    . 'doar intrarea primei pagini, octet cu octet a ei; /#?s=…: prima pagină, fără căutare și fără cache',
+    $gresite === [] && $cheiFragment === ['/?'] && ($acasaFragment['antete']['x-page-cache'] ?? '') === 'HIT' && $acasaFragment['corp'] === $acasa[0]['corp']
+    && $cautareFragment['cod'] === 200 && !isset($cautareFragment['antete']['x-page-cache']) && !str_contains($cautareFragment['corp'], 'Rezultatele căutării')
+    && $cautareFragment['corp'] === $acasa[0]['corp'] && $cheiIntrari() === ['/?'],
+    implode('; ', $gresite) . ' | ' . json_encode([$cheiFragment, $acasaFragment['antete']['x-page-cache'] ?? '', $cautareFragment['cod'],
+        $cautareFragment['antete']['x-page-cache'] ?? '', $cheiIntrari()]));
 \App\Support\ResponseCache::purgePageCache();
 
 $scrie('');
