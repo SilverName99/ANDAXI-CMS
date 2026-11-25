@@ -241,3 +241,175 @@ function lista_neagra_tipar(string $termen): string
 {
     return '/(?<![\p{L}\p{N}])' . preg_quote($termen, '/') . '(?![\p{L}\p{N}])/iu';
 }
+
+/**
+ * Mesajele commiturilor care pleacă odată cu ramura (IG-03): cele de pe HEAD care nu sunt pe nicio ramură de pe server
+ * (`git log HEAD --not --remotes`), sha → mesajul întreg. Verificarea 11b le caută termenii înaintea oricărui push.
+ *
+ * @return array<string, string>
+ */
+function lista_neagra_mesaje_nepublicate(string $radacina): array
+{
+    $rez = [];
+    $log = (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' log -z --format=%H%n%B HEAD --not --remotes 2>/dev/null');
+    foreach (explode("\0", $log) as $commit) {
+        if (preg_match('/^\n*([0-9a-f]{40,64})\n(.*)$/s', $commit, $m) === 1) {
+            $rez[$m[1]] = $m[2];
+        }
+    }
+    return $rez;
+}
+
+/**
+ * Ce citește verificarea 11b dintr-o clonă, ca perechi [eticheta, citirea textului]: fișierele urmărite (`git ls-files`) și cele
+ * neurmărite, neignorate (de pe disc, fără legăturile simbolice), conținutul din index al celor puse pentru commit (`<cale> (index)`)
+ * și mesajele commiturilor nepublicate (`mesajul commitului <sha7>`, lista_neagra_mesaje_nepublicate). null dacă lista fișierelor din
+ * git nu se poate citi.
+ *
+ * @return list<array{0: string, 1: callable(): string}>|null
+ */
+function lista_neagra_texte_git(string $radacina): ?array
+{
+    $git = static fn (string $arg): array => array_values(array_filter(explode("\0", (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' ' . $arg . ' 2>/dev/null'))));
+    $urmarite = $git('ls-files -z');
+    if ($urmarite === []) {
+        return null;
+    }
+    // Recenzia 2, R3-2: și fișierele încă neurmărite (neignorate), și conținutul din index al celor puse pentru commit.
+    $neurmarite = $git('ls-files -z --others --exclude-standard');
+    $inIndex = $git('diff --cached --name-only -z --diff-filter=ACMR');
+    $texte = [];
+    foreach (array_unique(array_merge($urmarite, $neurmarite)) as $relativ) {
+        if (is_file($radacina . '/' . $relativ) && !is_link($radacina . '/' . $relativ)) {
+            $texte[] = [$relativ, static fn () => (string) file_get_contents($radacina . '/' . $relativ)];
+        }
+    }
+    foreach ($inIndex as $relativ) {
+        $texte[] = [$relativ . ' (index)', static fn () => (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' show ' . escapeshellarg(':' . $relativ) . ' 2>/dev/null')];
+    }
+    // IG-03: și mesajele commiturilor care pleacă odată cu ramura (cele din nicio ramură de pe server), înaintea oricărui push.
+    foreach (lista_neagra_mesaje_nepublicate($radacina) as $sha => $mesaj) {
+        $texte[] = ['mesajul commitului ' . substr($sha, 0, 7), static fn () => $mesaj];
+    }
+    return $texte;
+}
+
+/**
+ * Potrivirile termenilor în textele lui lista_neagra_texte_git (verificarea 11b): eticheta → numărul lor, doar cele cu potriviri,
+ * sortate. Imaginile, fonturile, PDF-urile și arhivele nu se citesc; un `.gz` se dezarhivează. null dacă lista fișierelor din git
+ * nu se poate citi.
+ *
+ * @param list<string> $termeni
+ * @return array<string, int>|null
+ */
+function lista_neagra_in_git(string $radacina, array $termeni): ?array
+{
+    $texte = lista_neagra_texte_git($radacina);
+    if ($texte === null) {
+        return null;
+    }
+    $rez = [];
+    foreach ($texte as [$eticheta, $citeste]) {
+        $nume = (string) preg_replace('/ \(index\)$/', '', $eticheta);
+        if (preg_match('/\.(png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|pdf|zip|mp4|webm|7z|rar|tar|tgz)$/i', $nume) === 1) {
+            continue;
+        }
+        $text = $citeste();
+        if (preg_match('/\.gz$/i', $nume) === 1) {
+            $text = (string) @gzdecode($text);
+        }
+        foreach (lista_neagra_gaseste($text, $termeni) as $n) {
+            $rez[$eticheta] = ($rez[$eticheta] ?? 0) + $n;
+        }
+    }
+    ksort($rez, SORT_STRING);
+    return $rez;
+}
+
+/**
+ * Proba verificării 11b (IG-01, IG-03), pe o clonă și un arbore inventați, într-un dosar temporar șters la sfârșit, fără niciun push
+ * și fără configurația git a utilizatorului (nici variabilele care ar trimite comenzile în altă clonă, ca într-un hook):
+ *  - un termen de probă e găsit într-un fișier urmărit, într-unul neurmărit, în conținutul din index al unuia pus pentru commit (nu
+ *    și în copia lui de pe disc, curată) și în mesajul unui commit nepublicat; după ce commitul e pe o ramură de pe server (o
+ *    referință `refs/remotes/…` scrisă local), mesajul lui nu mai pleacă, deci nu se mai citește;
+ *  - acoperirea: un pachet al unui site care se adoptă, fără listă, e neacoperit; cu lista în `privat/` sau cu un fișier din
+ *    `CMS_DEV_LISTA_NEAGRA` care are rândul `# site: <pachet>`, acoperit; un pachet cu numele public nu cere listă.
+ * Întoarce problemele (gol = trecută).
+ *
+ * @return list<string>
+ */
+function lista_neagra_autotest(): array
+{
+    $termeni = ['pensiuneaproba', 'proba-domeniu.test', '0700 000 111', 'mesajproba'];
+    $prefix = rtrim(sys_get_temp_dir(), '/') . '/cms-11b-proba-';
+    $dosar = $prefix . getmypid() . '-' . bin2hex(random_bytes(6));
+    $clona = $dosar . '/clona';
+    $envVechi = getenv('CMS_DEV_LISTA_NEAGRA');
+    $probleme = [];
+    $git = static fn (string $arg): string => (string) shell_exec('env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_COMMON_DIR '
+        . '-u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -C '
+        . escapeshellarg($clona) . ' -c user.name=Proba -c user.email=proba@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null '
+        . $arg . ' 2>&1');
+    try {
+        if (!@mkdir($clona, 0700, true)) {
+            return ['dosarul temporar al probei nu se poate face (' . $dosar . ')'];
+        }
+        $git('init -q');
+        file_put_contents($clona . '/urmarit.txt', "adresa: www.proba-domeniu.test\n");
+        $git('add urmarit.txt');
+        $git('commit -q --no-verify -m ' . escapeshellarg("Commit de probă\n\nMesajProba, nepublicat încă"));
+        file_put_contents($clona . '/pus.txt', "Vila Pensiunea Proba\n");
+        $git('add pus.txt');
+        file_put_contents($clona . '/pus.txt', "curat\n");
+        file_put_contents($clona . '/neurmarit.txt', "telefon: 0700-000-111\n");
+        $sha = trim($git('rev-parse --short=7 HEAD'));
+        $asteptat = ['mesajul commitului ' . $sha, 'neurmarit.txt', 'pus.txt (index)', 'urmarit.txt'];
+        $gasite = lista_neagra_in_git($clona, $termeni);
+        if ($gasite === null || array_keys($gasite) !== $asteptat) {
+            $probleme[] = 'termenii de probă trebuiau găsiți exact în ' . implode(', ', $asteptat) . '; găsiți în: '
+                . ($gasite === null ? '(lista fișierelor din git nu s-a citit)' : (implode(', ', array_keys($gasite)) ?: 'nicăieri'));
+        }
+        $git('update-ref refs/remotes/origin/proba HEAD');
+        $dupa = lista_neagra_in_git($clona, $termeni) ?? [];
+        if (lista_neagra_mesaje_nepublicate($clona) !== [] || isset($dupa['mesajul commitului ' . $sha]) || !isset($dupa['urmarit.txt'])) {
+            $probleme[] = 'după ce commitul e pe o ramură de pe server, mesajul lui nu mai trebuie citit (fișierele, da)';
+        }
+        // Acoperirea (IG-01).
+        foreach (['adoptatproba', 'alt-adoptat-proba/privat', 'bioscem'] as $d) {
+            mkdir($dosar . '/arbore/site-uri/' . $d, 0700, true);
+        }
+        file_put_contents($dosar . '/arbore/site-uri/alt-adoptat-proba/privat/lista-neagra.txt', "altadoptatproba\n");
+        putenv('CMS_DEV_LISTA_NEAGRA');
+        $fara = lista_neagra_acoperire($dosar . '/arbore');
+        file_put_contents($dosar . '/lista-externa.txt', "# site: adoptatproba\nadoptatproba\n");
+        putenv('CMS_DEV_LISTA_NEAGRA=' . $dosar . '/lista-externa.txt');
+        $cu = lista_neagra_acoperire($dosar . '/arbore');
+        if (array_keys($fara) !== ['adoptatproba', 'alt-adoptat-proba'] || $fara['adoptatproba'] !== [] || count($fara['alt-adoptat-proba']) !== 1
+            || array_keys($cu) !== ['adoptatproba', 'alt-adoptat-proba'] || $cu['adoptatproba'] !== [$dosar . '/lista-externa.txt']) {
+            $probleme[] = 'acoperirea pachetelor: fără listă, pachetul unui site care se adoptă trebuia neacoperit, iar cu „# site:” sau cu '
+                . 'privat/lista-neagra.txt acoperit (un pachet cu numele public, nicicum): ' . json_encode([$fara, $cu], JSON_UNESCAPED_SLASHES);
+        }
+    } finally {
+        putenv($envVechi === false ? 'CMS_DEV_LISTA_NEAGRA' : 'CMS_DEV_LISTA_NEAGRA=' . $envVechi);
+        lista_neagra_sterge_dosar($dosar, $prefix);
+    }
+    return $probleme;
+}
+
+/** Șterge dosarul unei probe, doar dacă e unul al ei (sub prefixul dat, cu un nume după el), fără să urmeze legăturile simbolice. */
+function lista_neagra_sterge_dosar(string $dosar, string $prefix): void
+{
+    if ($prefix === '' || strlen($dosar) <= strlen($prefix) || !str_starts_with($dosar, $prefix) || str_contains(substr($dosar, strlen($prefix)), '/')
+        || !is_dir($dosar) || is_link($dosar)) {
+        return;
+    }
+    $elemente = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dosar, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($elemente as $e) {
+        if ($e->isDir() && !$e->isLink()) {
+            rmdir($e->getPathname());
+        } else {
+            unlink($e->getPathname());
+        }
+    }
+    rmdir($dosar);
+}

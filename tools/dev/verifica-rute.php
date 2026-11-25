@@ -42,7 +42,9 @@ declare(strict_types=1);
  *     commiturilor încă nepublicate (`git log HEAD --not --remotes`), fără clichet: numele,
  *     domeniile, telefoanele și adresele unui client care se adoptă nu intră nici în teste,
  *     nici în documentație, nici în istoric. Fail-closed: un pachet din site-uri/ al unui site
- *     care se adoptă (oricare în afara celor cu numele public) fără lista lui pică.
+ *     care se adoptă (oricare în afara celor cu numele public) fără lista lui pică. Înainte,
+ *     proba ei pe o clonă inventată (lista_neagra_autotest): fiecare loc citit (fișier urmărit,
+ *     neurmărit, index, mesajul unui commit nepublicat) și acoperirea pachetelor.
  *
  * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
  *
@@ -473,6 +475,12 @@ foreach ($probaForme as $forma) {
 if (lista_neagra_gaseste('pensiunea de probă, 0700 001 111, 2026-07-00', $probaTermeni) !== []) {
     $problema('Verificarea 11b: potrivirea găsește termeni de probă unde nu sunt (lista_neagra_gaseste).');
 }
+// Proba citirii și a acoperirii (runda 1 de reparații a pistei A, IG-01 și IG-03), pe o clonă și un arbore inventați, în afara
+// repo-ului: un termen e găsit în fiecare loc din care pleacă ceva (fișier urmărit, neurmărit, index, mesajul unui commit nepublicat),
+// mesajul unui commit deja pe server nu se mai citește, iar un pachet fără lista lui e neacoperit (lista_neagra_autotest).
+foreach (lista_neagra_autotest() as $p) {
+    $problema('Verificarea 11b (proba pe o clonă inventată): ' . $p . ' (tools/dev/lib/lista-neagra.php, lista_neagra_autotest).');
+}
 // IG-01: fiecare pachet al unui site care se adoptă cere lista lui; fără ea, 11b pică (nu un rând de informare).
 foreach (lista_neagra_acoperire($radacina) as $pachet => $fisiereListei) {
     if ($fisiereListei === []) {
@@ -484,30 +492,14 @@ foreach (lista_neagra_acoperire($radacina) as $pachet => $fisiereListei) {
 $explicitaGasita = [];
 if ($explicita !== []) {
     $git = static fn (string $arg): array => array_values(array_filter(explode("\0", (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' ' . $arg . ' 2>/dev/null'))));
-    $urmarite = $git('ls-files -z');
-    if ($urmarite === []) {
+    // Fișierele urmărite și neurmărite, indexul și mesajele commiturilor nepublicate (IG-03): lista_neagra_in_git, aceeași citire ca
+    // în proba de mai sus.
+    $gasiteInGit = lista_neagra_in_git($radacina, $explicita);
+    if ($gasiteInGit === null) {
         $problema('Verificarea 11b: lista fișierelor din git nu se poate citi (git ls-files), deci lista neagră explicită nu s-a verificat.');
     }
-    // Recenzia 2, R3-2: și fișierele încă neurmărite (neignorate), și conținutul din index al celor puse pentru commit.
     $neurmarite = $git('ls-files -z --others --exclude-standard');
     $inIndex = $git('diff --cached --name-only -z --diff-filter=ACMR');
-    $texte = [];
-    foreach (array_unique(array_merge($urmarite, $neurmarite)) as $relativ) {
-        if (is_file($radacina . '/' . $relativ) && !is_link($radacina . '/' . $relativ)) {
-            $texte[] = [$relativ, static fn () => (string) file_get_contents($radacina . '/' . $relativ)];
-        }
-    }
-    foreach ($inIndex as $relativ) {
-        $texte[] = [$relativ . ' (index)', static fn () => (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' show ' . escapeshellarg(':' . $relativ) . ' 2>/dev/null')];
-    }
-    // IG-03: și mesajele commiturilor care pleacă odată cu ramura (cele din nicio ramură de pe server), înaintea oricărui push.
-    foreach (explode("\0", (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' log -z --format=%H%n%B HEAD --not --remotes 2>/dev/null')) as $commit) {
-        $commit = ltrim($commit, "\n");
-        if (preg_match('/^([0-9a-f]{40})\n(.*)$/s', $commit, $mc) === 1) {
-            $mesaj = $mc[2];
-            $texte[] = ['mesajul commitului ' . substr($mc[1], 0, 7), static fn () => $mesaj];
-        }
-    }
     // Arhivele și PDF-urile noi pe ramură (față de baza comună cu ramura principală), neurmărite sau puse în index: NU, în afara
     // listei albe (LISTA_NEAGRA_BINARE_PERMISE); un .gz se dezarhivează și se citește.
     $baza = trim((string) shell_exec('git -C ' . escapeshellarg($radacina) . ' merge-base HEAD origin/claude/etapa1-cod-comun 2>/dev/null'));
@@ -518,20 +510,7 @@ if ($explicita !== []) {
                 . ' (scoate-l, sau trece-l în LISTA_NEAGRA_BINARE_PERMISE din tools/dev/lib/lista-neagra.php, după o privire de om)');
         }
     }
-    foreach ($texte as [$relativ, $citeste]) {
-        $nume = preg_replace('/ \(index\)$/', '', $relativ);
-        if (preg_match('/\.(png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|pdf|zip|mp4|webm|7z|rar|tar|tgz)$/i', (string) $nume) === 1) {
-            continue;
-        }
-        $text = $citeste();
-        if (preg_match('/\.gz$/i', (string) $nume) === 1) {
-            $text = (string) @gzdecode($text);
-        }
-        foreach (lista_neagra_gaseste($text, $explicita) as $n) {
-            $explicitaGasita[$relativ] = ($explicitaGasita[$relativ] ?? 0) + $n;
-        }
-    }
-    ksort($explicitaGasita, SORT_STRING);
+    $explicitaGasita = $gasiteInGit ?? [];
     foreach ($explicitaGasita as $relativ => $n) {
         $problema('Un termen privat al unui client (lista neagră explicită, 11b) e în git: ' . $relativ . ' (' . $n . ' potriviri). Scoate-l '
             . '(și din istoric, dacă e într-un commit nepublicat); datele clientului stau doar în pachetul lui privat sau în afara repo-ului.');
