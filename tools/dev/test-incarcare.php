@@ -246,7 +246,9 @@ $oracolPastrate = [
     // Motivul spamului (WP-21): unul din textele fixe ale App\Support\ReviewGuard, niciodată text al clientului.
     'product_reviews' => ['source', 'spam_reason', 'created_at'],
     'reviews' => ['created_at'],
-    'newsletter_subscribers' => ['status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at'],
+    // Regulile Bioscem 27 (newsletter/0077, un site mutat de pe MailPoet): sursa abonării și datele implicării, fără IP-uri și jetoane.
+    'newsletter_subscribers' => ['status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at', 'last_subscribed_at', 'source', 'last_engagement_at',
+        'last_sending_at'],
     'newsletter_campaign_sends' => ['status', 'sent_at', 'created_at', 'opened_at', 'clicked_at'],
     'newsletter_campaign_opens' => ['opened_at'],
     // Linkul din campanie, același pentru toți abonații (cel de dezabonare nu se urmărește: NewsletterService::injectClickTracking).
@@ -289,7 +291,10 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     // Rapoartele CSP ale cadrului capturat (nucleu/0071): ale site-ului, nu ale copiei.
     'rapoarte_csp',
     // Regiunile dinamice ale documentelor capturate (nucleu/0072): se refac din captură, la import.
-    'regiuni_capturate'];
+    'regiuni_capturate',
+    // Regulile Bioscem 27 (newsletter/0077): arhiva MailPoet a unui site mutat (cozile, linkurile, dezabonările, încercările greșite
+    // ale jetoanelor vechi) și bugetul trimiterilor.
+    'newsletter_mailpoet_cozi', 'newsletter_mailpoet_linkuri', 'newsletter_dezabonari', 'newsletter_mailpoet_nepotriviri', 'buget_trimitere'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',

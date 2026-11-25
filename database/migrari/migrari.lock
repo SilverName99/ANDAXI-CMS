@@ -66,7 +66,8 @@
         "nucleu/0069_wp_harta": "93d576ad1276f3ffbc7b0e2254ad165b008ffba0d7ab2b6d21a345b0857752c0",
         "nucleu/0070_capturat": "6cebbd448084b5e6d2de60a3caa18ecd6bd8491fe3e757be71bdb085b493764c",
         "nucleu/0071_rapoarte_csp": "520e0cee8a6d656b529687773ff36ee5e3b58a1d1d5062b1b7d43f8eedb8301d",
-        "nucleu/0072_regiuni_capturate": "04eb905eab81cbe5e7f9be946f749c33242fe4b24cb40374247652f11123a43f"
+        "nucleu/0072_regiuni_capturate": "04eb905eab81cbe5e7f9be946f749c33242fe4b24cb40374247652f11123a43f",
+        "newsletter/0077_mailpoet": "9ba893c4deb6a6be44c66f418539e54375020da25115304f23a429f64f7df489"
     },
     "retrase": {}
 }

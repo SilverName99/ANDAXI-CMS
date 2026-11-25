@@ -106,7 +106,10 @@ return [
     // Stripe golite.
     // 26 (nucleu/0067, „Vezi” din Emailuri trimise): conținutul păstrat al emailurilor trimise (HTML-ul lor comprimat: nume,
     // adrese, comenzi), doar structura; istoricul (`email_send_history`) rămâne cum era, anonimizat.
-    'versiune' => 26,
+    // 27 (newsletter/0077, pista E, un site mutat de pe MailPoet): cozile și linkurile MailPoet, dezabonările (cu motivul scris la
+    // sondaj), încercările greșite ale jetoanelor vechi și bugetul trimiterilor, doar structura; pe abonați, dovada consimțământului
+    // (IP-urile) și amprentele jetoanelor MailPoet golite, prenumele și numele pseudonime, stările, sursa și datele păstrate.
+    'versiune' => 27,
     'schema' => 'Nou-site-bioscem@c47f270 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -181,6 +184,13 @@ return [
         // cunoscută se poate verifica împotriva ei, deci e o dată personală (pseudonimă); pe copie nu trebuie (fail-closed).
         'newsletter_suprimate' => ['mod' => 'doar_structura', 'motiv' => 'lista „nu trimite”: amprenta SHA-256 a adresei fiecărui abonat șters'],
         'newsletter_cereri_confirmare' => ['mod' => 'doar_structura', 'motiv' => 'cererile de abonare și de link de dezabonare: amprenta adresei și IP-ul (2 zile)'],
+        // newsletter/0077 (pista E): arhiva MailPoet a unui site mutat; pe celelalte site-uri goale. Cozile, linkurile și bugetul nu au date
+        // personale, dar o copie nu le folosește; dezabonările au textul scris de om la sondaj; nepotrivirile, încercările unui jeton.
+        'newsletter_mailpoet_cozi' => ['mod' => 'doar_structura', 'motiv' => 'cozile MailPoet importate (id-uri), doar pentru adresele vechi'],
+        'newsletter_mailpoet_linkuri' => ['mod' => 'doar_structura', 'motiv' => 'linkurile emailurilor MailPoet arhivate, doar pentru adresele vechi'],
+        'newsletter_dezabonari' => ['mod' => 'doar_structura', 'motiv' => 'dezabonările, cu motivul scris de abonat la sondaj'],
+        'newsletter_mailpoet_nepotriviri' => ['mod' => 'doar_structura', 'motiv' => 'încercările greșite ale jetoanelor vechi MailPoet, pe abonat'],
+        'buget_trimitere' => ['mod' => 'doar_structura', 'motiv' => 'bugetul trimiterilor (jetoanele), al site-ului live'],
         // WP-38 (nucleu/0047): adresele negăsite ale site-ului live (fără IP, dar o cale poate avea orice a scris cineva).
         'seo_404_log' => ['mod' => 'doar_structura', 'motiv' => 'adresele cerute pe site-ul live care au dat 404 (texte scrise de vizitatori)'],
         // 22 (pluginul fisiere_cloud, fisiere_cloud/0059; din regulile Biovitality, aceleași): o copie nu le folosește.
@@ -499,14 +509,27 @@ return [
             ]],
 
         // ── Newsletterul ──
-        'newsletter_lists' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'description', 'is_default', 'created_at'],
+        // Coloanele newsletter/0077 (pista E, un site mutat de pe MailPoet): pe site-urile fără MailPoet goale sau cu implicitele lor;
+        // dovada consimțământului (IP-urile) și amprentele jetoanelor MailPoet nu ajung pe copie.
+        'newsletter_lists' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'description', 'is_default', 'created_at', 'mailpoet_id', 'tip',
+            'afisare_gestionare'],
             'motive' => ['name' => 'numele listei'], 'emailuri_publice' => 'descrierile listelor, scrise de magazin'],
-        'newsletter_subscribers' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at'],
+        'newsletter_subscribers' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at',
+            'last_subscribed_at', 'source', 'wp_user_id', 'is_woocommerce_user', 'mailpoet_id', 'urmarire_refuzata', 'last_engagement_at', 'last_sending_at',
+            'email_count'],
+            'motive' => ['email_count' => 'numărul emailurilor trimise abonatului (un număr, nu o adresă)'],
             'transforma' => [
                 'email' => ['email'],
                 'name' => ['nume_abonat'],
+                'first_name' => ['prenume'],
+                'last_name' => ['nume_abonat'],
+                'subscribed_ip' => ['nul'],
+                'confirmed_ip' => ['nul'],
+                'mailpoet_token_hash' => ['nul'],
+                'mailpoet_token_len' => ['nul'],
+                'mailpoet_token6_hash' => ['nul'],
             ]],
-        'newsletter_list_subscribers' => ['mod' => 'copiaza', 'pastreaza' => ['list_id', 'subscriber_id', 'created_at']],
+        'newsletter_list_subscribers' => ['mod' => 'copiaza', 'pastreaza' => ['list_id', 'subscriber_id', 'created_at', 'status', 'updated_at']],
         'newsletter_templates' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'subject', 'blocks_json', 'html_content', 'is_active',
             'created_at', 'updated_at'], 'motive' => ['name' => 'numele șablonului'],
             'emailuri_publice' => 'șabloanele de newsletter au adresa magazinului'],
@@ -515,7 +538,8 @@ return [
             'emailuri_publice' => 'textele publice ale formularului de abonare'],
         'newsletter_campaigns' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'name', 'template_type', 'template_ref', 'subscriber_list_id',
             'subscriber_list_ids', 'subject', 'blocks_json', 'html_content', 'status', 'scheduled_at', 'sent_at', 'total_recipients', 'total_sent',
-            'total_failed', 'created_at', 'updated_at', 'total_opens', 'total_clicks'], 'motive' => ['name' => 'numele campaniei'],
+            'total_failed', 'created_at', 'updated_at', 'total_opens', 'total_clicks', 'sursa', 'mailpoet_id', 'mailpoet_hash', 'text_content',
+            'mailpoet_partajare'], 'motive' => ['name' => 'numele campaniei'],
             'emailuri_publice' => 'campaniile trimise au adresa magazinului',
             // De ce s-a oprit campania: poate fi răspunsul serverului de email, cu adresa unui abonat (de aceea tabelul e
             // „anonimizeaza” din v11: un tabel „copiaza” nu are transformări; restul coloanelor se păstrează ca înainte).

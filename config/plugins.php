@@ -513,9 +513,11 @@ return [
                 // confirmare; coloanele noi ale abonaților, campaniilor și trimiterilor.
                 'newsletter_suprimate', 'newsletter_cereri_confirmare', 'newsletter_subscribers.pending_at',
                 'newsletter_subscribers.confirmed_at', 'newsletter_campaigns.last_error', 'newsletter_campaign_sends.attempts',
-                // Abonații și arhiva MailPoet ale unui site mutat (migrarea rezervată newsletter/0077, docs/MAGAZIN-WC.md): cozile
-                // trimise, linkurile din emailurile vechi, bugetul comun al trimiterilor.
-                'newsletter_mailpoet_cozi', 'newsletter_mailpoet_linkuri', 'buget_trimitere'],
+                // Abonații și arhiva MailPoet ale unui site mutat (migrarea newsletter/0077, docs/MAGAZIN-WC.md): cozile
+                // trimise, linkurile din emailurile vechi, bugetul comun al trimiterilor; dezabonările (cu motivul din sondaj)
+                // și jetoanele MailPoet greșite din ultimele 24 de ore (pista E).
+                'newsletter_mailpoet_cozi', 'newsletter_mailpoet_linkuri', 'buget_trimitere', 'newsletter_dezabonari',
+                'newsletter_mailpoet_nepotriviri'],
         ],
 
         'chat_live' => [

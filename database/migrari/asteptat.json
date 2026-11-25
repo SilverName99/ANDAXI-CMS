@@ -1486,6 +1486,51 @@
             },
             "motor": "InnoDB"
         },
+        "buget_trimitere": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "actualizat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime(6)"
+                },
+                "capacitate": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "jetoane": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "decimal(12,4)"
+                },
+                "nume": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "perioada_s": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "nume"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "bunny_folder_unlocks": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -4769,6 +4814,24 @@
                     "null": true,
                     "tip": "text"
                 },
+                "mailpoet_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(150)"
+                },
+                "mailpoet_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "mailpoet_partajare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
                 "name": {
                     "extra": "",
                     "implicit": null,
@@ -4811,6 +4874,12 @@
                     "null": true,
                     "tip": "text"
                 },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "'cms'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
                 "template_ref": {
                     "extra": "",
                     "implicit": null,
@@ -4822,6 +4891,12 @@
                     "implicit": "'newsletter'",
                     "null": false,
                     "tip": "varchar(20)"
+                },
+                "text_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
                 },
                 "total_clicks": {
                     "extra": "",
@@ -4865,6 +4940,12 @@
                 "PRIMARY": {
                     "coloane": [
                         "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_mailpoet_id": {
+                    "coloane": [
+                        "mailpoet_id"
                     ],
                     "unic": true
                 }
@@ -4936,6 +5017,112 @@
             },
             "motor": "InnoDB"
         },
+        "newsletter_dezabonari": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "abonat_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "campanie_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "coada_mailpoet_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "email_automatizare_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "mailpoet_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "metoda": {
+                    "extra": "",
+                    "implicit": "'unknown'",
+                    "null": false,
+                    "tip": "varchar(12)"
+                },
+                "motiv": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "motiv_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "motiv_text": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "'newsletter'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_abonat_creat": {
+                    "coloane": [
+                        "abonat_id",
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_campanie": {
+                    "coloane": [
+                        "campanie_id"
+                    ],
+                    "unic": false
+                },
+                "uniq_mailpoet_id": {
+                    "coloane": [
+                        "mailpoet_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "newsletter_list_subscribers": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -4951,11 +5138,23 @@
                     "null": false,
                     "tip": "int unsigned"
                 },
+                "status": {
+                    "extra": "",
+                    "implicit": "'subscribed'",
+                    "null": false,
+                    "tip": "varchar(12)"
+                },
                 "subscriber_id": {
                     "extra": "",
                     "implicit": null,
                     "null": false,
                     "tip": "int unsigned"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
                 }
             },
             "fk": [],
@@ -4966,6 +5165,13 @@
                         "subscriber_id"
                     ],
                     "unic": true
+                },
+                "idx_abonat_stare": {
+                    "coloane": [
+                        "subscriber_id",
+                        "status"
+                    ],
+                    "unic": false
                 }
             },
             "motor": "InnoDB"
@@ -4973,6 +5179,12 @@
         "newsletter_lists": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
+                "afisare_gestionare": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "created_at": {
                     "extra": "",
                     "implicit": "current_timestamp",
@@ -4997,11 +5209,23 @@
                     "null": false,
                     "tip": "tinyint(1)"
                 },
+                "mailpoet_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
                 "name": {
                     "extra": "",
                     "implicit": null,
                     "null": false,
                     "tip": "varchar(190)"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": "'static'",
+                    "null": false,
+                    "tip": "varchar(20)"
                 }
             },
             "fk": [],
@@ -5015,6 +5239,154 @@
                 "name": {
                     "coloane": [
                         "name"
+                    ],
+                    "unic": true
+                },
+                "uniq_mailpoet_id": {
+                    "coloane": [
+                        "mailpoet_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_mailpoet_cozi": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "abonat_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "campanie_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "coada_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "email_automatizare_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "newsletter_mailpoet_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "task_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": "'campanie'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "trimis_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "coada_id"
+                    ],
+                    "unic": true
+                },
+                "idx_abonat": {
+                    "coloane": [
+                        "abonat_id"
+                    ],
+                    "unic": false
+                },
+                "idx_campanie": {
+                    "coloane": [
+                        "campanie_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_mailpoet_linkuri": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "coada_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "coada_id",
+                        "hash"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_mailpoet_nepotriviri": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "abonat_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "numar": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
+                "ultima_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "abonat_id"
                     ],
                     "unic": true
                 }
@@ -5111,6 +5483,12 @@
                     "null": true,
                     "tip": "datetime"
                 },
+                "confirmed_ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(45)"
+                },
                 "created_at": {
                     "extra": "",
                     "implicit": "current_timestamp",
@@ -5123,11 +5501,77 @@
                     "null": false,
                     "tip": "varchar(190)"
                 },
+                "email_count": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "first_name": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
                 "id": {
                     "extra": "auto_increment",
                     "implicit": null,
                     "null": false,
                     "tip": "int unsigned"
+                },
+                "is_woocommerce_user": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "last_engagement_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "last_name": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "last_sending_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "last_subscribed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "mailpoet_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "mailpoet_token6_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "char(64)"
+                },
+                "mailpoet_token_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "char(64)"
+                },
+                "mailpoet_token_len": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "tinyint unsigned"
                 },
                 "name": {
                     "extra": "",
@@ -5141,17 +5585,41 @@
                     "null": true,
                     "tip": "datetime"
                 },
+                "source": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(30)"
+                },
                 "status": {
                     "extra": "",
                     "implicit": "'active'",
                     "null": false,
                     "tip": "varchar(20)"
                 },
+                "subscribed_ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(45)"
+                },
                 "updated_at": {
                     "extra": "on update current_timestamp",
                     "implicit": "current_timestamp",
                     "null": true,
                     "tip": "timestamp"
+                },
+                "urmarire_refuzata": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "wp_user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "bigint unsigned"
                 }
             },
             "fk": [],
@@ -5165,6 +5633,18 @@
                 "email": {
                     "coloane": [
                         "email"
+                    ],
+                    "unic": true
+                },
+                "idx_wp_user_id": {
+                    "coloane": [
+                        "wp_user_id"
+                    ],
+                    "unic": false
+                },
+                "uniq_mailpoet_id": {
+                    "coloane": [
+                        "mailpoet_id"
                     ],
                     "unic": true
                 }
