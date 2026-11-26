@@ -1029,7 +1029,15 @@ dispar, iar linkurile spre el se scot din pagini.
   a pluginului; adresele din afara site-ului cerute doar dacă sunt publice, fără redirecționări) și „Alege un șablon” cu
   șabloanele magazinului (`NewsletterSabloane`: logo-ul și culorile din tema pachetului, `tema.json` → `newsletter`, altfel fără
   logo și paleta neutră; fără catalogul pe site, fără carduri de produs; fără magazin, fără prețuri). Componentele adminului
-  folosite de pași (`views/admin/componente/`) sunt ale nucleului ([ui/README.md](ui/README.md)). Tabelele și coloanele noi:
+  folosite de pași (`views/admin/componente/`) sunt ale nucleului ([ui/README.md](ui/README.md)). Previzualizarea Desktop / Mobil
+  din builder (26 nov 2026): fiecare clic pune emailul într-un cadru izolat nou, pus în pagină vizibil înainte de `srcdoc` (înainte,
+  același cadru era ascuns și reîncărcat la fiecare clic: după prima previzualizare, Mobil și din nou Desktop puteau rămâne un chenar
+  alb gol până la „Salvează”); doar ultimul clic se pune (un răspuns întârziat nu-l mai acoperă); o eroare (sesiune expirată, refuz)
+  se scrie în locul lui „Se generează previzualizarea…”; înălțimea cadrului e a emailului (`body`, trimisă la fiecare schimbare de
+  mărime), și în pasul Verificare, nu mai crește la fiecare clic; Desktop păstrează 960 px și panoul se derulează în lateral pe un
+  ecran îngust. Un titlu (Header) tras într-o coloană a unei secțiuni pornește cu textul închis (`#1f2937`): fără fundal propriu,
+  textul alb implicit era alb pe coloana albă (nevăzut pe pânză și în email); titlurile puse deja așa își păstrează culoarea.
+  Tabelele și coloanele noi:
   migrarea `newsletter/0040`. Statisticile unei campanii (20 nov 2026): „N comenzi” din cardul „Venituri atribuite” e o
   ancoră spre panoul „Comenzile atribuite”, exact comenzile numărate în card (aceeași condiție: `orders.nl_campaign_id`, fără
   cele anulate, rambursate, eșuate, returnate sau cu plata neconfirmată), cele mai noi întâi, câte 25 pe pagină (`com_page`):

@@ -9,6 +9,7 @@ declare(strict_types=1);
  * comparația (tools/dev/compara-cu-baza.sh, cazurile „newsletter: …”); aici, ce nu se vede acolo:
  *
  *   tools/dev/php.sh tools/dev/test-newsletter.php
+ *   tools/dev/php.sh tools/dev/test-newsletter.php --fara-browser
  *
  * A. Cheile: pragul cheii vechi scris de migrarea newsletter/0040; cheia de semnare aleatoare (Settings::secretGenerat), refăcută
  *    după ce e golită; ascunse din Settings::all și din Settings::save; IPv6 numărat pe /64; tokenul vechi doar sub prag; lista de
@@ -24,6 +25,10 @@ declare(strict_types=1);
  * F. Statistici newsletter, comenzile atribuite unei campanii (20 nov 2026): aceeași condiție ca totalul din card, cele mai noi
  *    întâi, paginile, linkul spre comandă (și spre coș), etichetele listei comenzilor, textul scris ca text; fără comenzi nimic
  *    nou; rolul emailuri și un site fără pluginul magazin nu văd panoul (nici datele clienților).
+ * G. Builderul în Chromium (tools/dev/newsletter-builder-browser.cjs, 26 nov 2026), pe un newsletter nou, nesalvat: Desktop → Mobil →
+ *    Editare → Desktop → Mobil → Desktop arată de fiecare dată emailul, într-un cadru izolat nou; înălțimea e a emailului (nu crește
+ *    la fiecare clic); doar ultimul clic se pune; o eroare se spune; panoul îngust se derulează în lateral; titlul (Header) pus într-o
+ *    coloană a unei secțiuni se vede, pe pânză și în email. Fără Chromium: --fara-browser.
  *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, sesiunile și emailurile
  * capturate. Raportul: $CMS_DEV_DIR/test-newsletter-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -63,6 +68,7 @@ $verifica = static function (string $eticheta, bool $ok, string $detalii = '') u
 };
 $scrie('Test newsletter (WP-R din 30 oct: codul vechi e2e2d77 … 739f58c) ANDAXI-CMS — ' . date('Y-m-d H:i:s') . ', PHP ' . PHP_VERSION);
 
+$faraBrowser = in_array('--fara-browser', $argv, true);
 $port = (int) (getenv('CMS_DEV_PORT') ?: '8701');
 $baza = 'http://127.0.0.1:' . $port;
 
@@ -625,6 +631,28 @@ $licenta('toate');
 $verifica('F9 fără pluginul magazin (fără Admin → Comenzi): cardul ca text, fără panou', $faraMagazin['cod'] === 200
     && str_contains($faraMagazin['corp'], '<div class="nl-kpi-sub">26 comenzi</div>') && !str_contains($faraMagazin['corp'], 'nl-comenzi-panel'),
     (string) $faraMagazin['cod']);
+
+// =====================================================================
+if (!$faraBrowser) {
+    $scrie('');
+    $scrie('== G. Builderul în Chromium: previzualizarea Desktop / Mobil, titlul dintr-o coloană (26 nov 2026)');
+    $dosarCapturi = $dosarDev . '/newsletter-builder';
+    @mkdir($dosarCapturi, 0775, true);
+    $env = ['CMS_DEV_URL=' . $baza, 'CMS_DEV_ADMIN_EMAIL=' . $adminEmail, 'CMS_DEV_PAROLA=' . $parolaAdmin, 'CMS_DEV_CAPTURI=' . $dosarCapturi,
+        'NO_PROXY=*', 'no_proxy=*'];
+    $iesire = [];
+    exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy ' . implode(' ', array_map('escapeshellarg', $env))
+        . ' node ' . escapeshellarg(__DIR__ . '/newsletter-builder-browser.cjs') . ' 2>&1', $iesire, $codNode);
+    $rezultate = json_decode((string) end($iesire), true);
+    if (!is_array($rezultate) || $rezultate === []) {
+        $verifica('Chromium a rulat', false, 'cod ' . $codNode . ': ' . implode("\n", array_slice($iesire, -15)));
+    } else {
+        foreach ($rezultate as $rezultat) {
+            $verifica((string) $rezultat['eticheta'], (bool) $rezultat['ok'], (string) $rezultat['detalii']);
+        }
+        $scrie('  INFO  capturile: ' . $dosarCapturi);
+    }
+}
 
 // =====================================================================
 $scrie('');

@@ -30,15 +30,22 @@
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   // Previzualizarea newsletterului e izolată (sandbox="allow-scripts", fără allow-same-origin: origine opacă; N1a,
-  // docs/SECURITATE.md), deci pagina nu-i mai poate citi documentul. Înălțimea o trimite cadrul printr-un mesaj, la
-  // încărcare; ascultăm doar mesajele cadrului de previzualizare, de la originea opacă.
-  const scriptInaltime = '<scr' + 'ipt>(function(){function t(){parent.postMessage({ax:"nlp-inaltime",h:document.documentElement.scrollHeight},"*");}'
-    + 'if(document.readyState==="complete"){t();}else{window.addEventListener("load",t);}})();<' + '/scr' + 'ipt>';
+  // docs/SECURITATE.md), deci pagina nu-i mai poate citi documentul. Înălțimea o trimite cadrul printr-un mesaj; ascultăm
+  // doar mesajele cadrului de previzualizare, de la originea opacă. Înălțimea e a conținutului (body), trimisă la fiecare
+  // schimbare de mărime (ResizeObserver: după imagini, la Calculator/Telefon), nu documentElement.scrollHeight, care e cel
+  // puțin înălțimea cadrului: cu ea fiecare previzualizare îl lungea și nu se mai micșora (ca în builder, EB_SCRIPT_INALTIME).
+  const scriptInaltime = '<scr' + 'ipt>(function(){var u=0;function t(){var b=document.body;if(!b)return;var s=getComputedStyle(b);'
+    + 'var h=Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height)+(parseFloat(s.marginTop)||0)+(parseFloat(s.marginBottom)||0));'
+    + 'if(h>0&&h!==u){u=h;parent.postMessage({ax:"nlp-inaltime",h:h},"*");}}'
+    + 'if(window.ResizeObserver&&document.body){new ResizeObserver(t).observe(document.body);}'
+    + 'window.addEventListener("load",t);window.addEventListener("resize",t);t();})();<' + '/scr' + 'ipt>';
   window.addEventListener('message', (e) => {
     const iframe = $('#nlp-iframe');
     if (!iframe || e.source !== iframe.contentWindow || e.origin !== 'null' || !e.data || e.data.ax !== 'nlp-inaltime') return;
     const h = Number(e.data.h);
-    if (Number.isFinite(h) && h > 0 && h < 200000) iframe.style.height = (h + 24) + 'px';
+    // Cu chenarul cadrului (rama telefonului), dacă înălțimea din CSS îl cuprinde.
+    const chenar = getComputedStyle(iframe).boxSizing === 'border-box' ? iframe.offsetHeight - iframe.clientHeight : 0;
+    if (Number.isFinite(h) && h > 0 && h < 200000) iframe.style.height = (h + chenar) + 'px';
   });
 
   function listeAlese() {

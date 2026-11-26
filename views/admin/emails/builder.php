@@ -122,8 +122,11 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
 .eb-empty-state button{margin-top:10px;}
 
 /* ── Preview pane ───────────────────────────────────────── */
-.eb-preview-pane{flex:1;overflow:auto;overscroll-behavior:contain;padding:16px;display:flex;justify-content:center;align-items:flex-start;background:var(--ax-suprafata-2);}
-.eb-preview-frame{background:var(--ax-suprafata);border:1px solid var(--ax-linie-tare);border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}
+/* Cadrul are lățimea ecranului ales (Desktop 960 px, Mobil 375 px) și nu se strânge: pe un ecran mai îngust panoul se
+   derulează în lateral (margin:auto îl centrează doar cât încape; centrat cu justify-content, partea din stânga ieșea din
+   panou și nu se mai putea vedea). */
+.eb-preview-pane{flex:1;overflow:auto;overscroll-behavior:contain;padding:16px;display:flex;justify-content:flex-start;align-items:flex-start;background:var(--ax-suprafata-2);}
+.eb-preview-frame{flex-shrink:0;margin:0 auto;background:var(--ax-suprafata);border:1px solid var(--ax-linie-tare);border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}
 .eb-preview-frame.mobile-preview{border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.18);}
 .eb-preview-frame iframe{display:block;width:100%;min-height:500px;border:none;}
 .eb-preview-loading{padding:48px;text-align:center;color:var(--ax-text-3);font-size:13px;}
@@ -602,10 +605,15 @@ function blockDefault(type) {
  * Blocul pus INTR-O COLOANA pornește fără fundal propriu, ca să se vadă
  * culoarea coloanei. Cu alb implicit, fiecare casetă acoperea culoarea aleasă
  * și coloana părea că n-are niciun fundal.
+ *
+ * Titlul (Header) are textul alb, ales pentru fundalul lui verde: fără fundal,
+ * pe coloana albă, textul alb nu se vedea deloc (nici pe pânză, nici în emailul
+ * trimis). În coloană pornește deci cu textul închis, ca blocul Text.
  */
 function subBlockDefault(type) {
   const d = blockDefault(type);
   if ('background' in d) { d.background = ''; }
+  if (d.type === 'header') { d.text_color = '#1f2937'; }
   return d;
 }
 
@@ -1758,50 +1766,86 @@ function applyPreviewMode() {
 }
 
 /* Previzualizările sunt izolate (sandbox="allow-scripts", fără allow-same-origin: cadrul are o origine opacă; N1a,
-   docs/SECURITATE.md), deci pagina nu le mai poate citi documentul. Înălțimea o trimite cadrul, printr-un mesaj, la
-   încărcare (scriptul de mai jos, pus la sfârșitul emailului); pagina primește doar mesajele propriilor cadre. */
-const EB_SCRIPT_INALTIME = '<script>(function(){var o=' + JSON.stringify(window.location.origin)
-  + ';function t(){parent.postMessage({ax:"eb-inaltime",h:document.documentElement.scrollHeight},o);}'
-  + 'if(document.readyState==="complete"){t();}else{window.addEventListener("load",t);}})();<\/script>';
+   docs/SECURITATE.md), deci pagina nu le mai poate citi documentul. Înălțimea o trimite cadrul, printr-un mesaj (scriptul
+   de mai jos, pus la sfârșitul emailului); pagina primește doar mesajele propriilor cadre.
+   Înălțimea e a conținutului (body), nu documentElement.scrollHeight: acela e cel puțin înălțimea cadrului, deci fiecare
+   previzualizare adăuga 10 px și cadrul nu se mai micșora. Se trimite la fiecare schimbare de mărime (ResizeObserver): la
+   prima așezare (un cadru încărcat înainte să fie așezat trimitea 0), după imagini și la altă lățime. */
+const EB_SCRIPT_INALTIME = '<script>(function(){var o=' + JSON.stringify(window.location.origin) + ',u=0;'
+  + 'function t(){var b=document.body;if(!b)return;var s=getComputedStyle(b);'
+  + 'var h=Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height)+(parseFloat(s.marginTop)||0)+(parseFloat(s.marginBottom)||0));'
+  + 'if(h>0&&h!==u){u=h;parent.postMessage({ax:"eb-inaltime",h:h},o);}}'
+  + 'if(window.ResizeObserver&&document.body){new ResizeObserver(t).observe(document.body);}'
+  + 'window.addEventListener("load",t);window.addEventListener("resize",t);t();})();<\/script>';
 window.addEventListener('message', (e) => {
   if (e.origin !== 'null' || !e.data || e.data.ax !== 'eb-inaltime') return;
   ['eb-preview-iframe', 'eb-fprev-iframe'].forEach((id) => {
     const cadru = document.getElementById(id);
     const h = Number(e.data.h);
-    if (cadru && e.source === cadru.contentWindow && Number.isFinite(h) && h > 0 && h < 200000) cadru.style.height = (h + 10) + 'px';
+    if (cadru && e.source === cadru.contentWindow && Number.isFinite(h) && h > 0 && h < 200000) cadru.style.height = h + 'px';
   });
 });
 
+/* Fiecare previzualizare primește un cadru NOU, pus în pagină vizibil, și abia apoi emailul (srcdoc). Înainte, același
+   cadru izolat era ascuns (display:none) la fiecare clic și reîncărcat cât era ascuns: prima previzualizare de după
+   încărcarea paginii mergea, următoarele (Mobil, din nou Desktop) puteau rămâne un chenar alb gol, până la o reîncărcare a
+   paginii („Salvează”). Un cadru nou nu păstrează nimic de la previzualizarea de dinainte (nici înălțimea). */
+function ebCadruPrevizualizare(vechi, stil) {
+  const cadru = document.createElement('iframe');
+  cadru.id = vechi.id;
+  cadru.title = vechi.title;
+  cadru.setAttribute('sandbox', 'allow-scripts');
+  if (vechi.hasAttribute('frameborder')) cadru.setAttribute('frameborder', vechi.getAttribute('frameborder'));
+  cadru.style.cssText = stil;
+  vechi.replaceWith(cadru);
+  return cadru;
+}
+
+/* Răspunsul previzualizării: JSON-ul cu emailul sau un mesaj de spus omului (sesiune expirată, refuz, eroare). */
+function ebCerePrevizualizare() {
+  const subject = document.getElementById('eb-subject-input')?.value || '';
+  return fetch('/admin/emails/builder/preview', {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded', 'Accept':'application/json'},
+    credentials:'same-origin',
+    body: 'blocks_json='+encodeURIComponent(JSON.stringify(blocks))+'&subject='+encodeURIComponent(subject),
+  })
+  .then(r => r.json().catch(() => null).then(d => {
+    if (r.ok && d && d.ok && typeof d.html === 'string') return d.html;
+    throw new Error((d && (d.message || d.error)) || (r.redirected || r.status === 401 || r.status === 403
+      ? 'Sesiunea a expirat sau nu ai acces. Reîncarcă pagina și încearcă din nou.'
+      : 'Nu am putut genera previzualizarea. Încearcă din nou.'));
+  }));
+}
+
+// Doar ultimul clic contează: un răspuns venit după alt clic (Desktop → Mobil repede) sau după „Editare” nu se mai pune.
+let ebPreviewCerere = 0;
 function loadPreview(width) {
+  const nr = ++ebPreviewCerere;
   const loading = document.getElementById('eb-preview-loading');
   const iframe  = document.getElementById('eb-preview-iframe');
   const frame   = document.getElementById('eb-preview-frame');
 
-  if(loading) loading.style.display = '';
+  if(loading) { loading.textContent = 'Se generează previzualizarea...'; loading.style.display = ''; }
   if(iframe)  iframe.style.display  = 'none';
   if(frame) {
     frame.style.width = (width + 2) + 'px';
     frame.classList.toggle('mobile-preview', width <= 400);
   }
 
-  const subject = document.getElementById('eb-subject-input')?.value || '';
-
-  fetch('/admin/emails/builder/preview', {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body: 'blocks_json='+encodeURIComponent(JSON.stringify(blocks))+'&subject='+encodeURIComponent(subject),
+  ebCerePrevizualizare()
+  .then(html => {
+    if(nr !== ebPreviewCerere || previewMode === 'edit') return;
+    const vechi = document.getElementById('eb-preview-iframe');
+    if(!vechi) return;
+    if(loading) loading.style.display = 'none';
+    ebCadruPrevizualizare(vechi, `width:${width}px;height:600px;`).srcdoc = html + EB_SCRIPT_INALTIME;
   })
-  .then(r=>r.json())
-  .then(d => {
-    if(d.ok && iframe) {
-      iframe.style.width  = width+'px';
-      iframe.style.height = '600px';
-      iframe.srcdoc = d.html + EB_SCRIPT_INALTIME;
-      if(loading) loading.style.display = 'none';
-      iframe.style.display = '';
-    }
-  })
-  .catch(() => { if(loading) loading.textContent = 'Eroare la generarea preview.'; });
+  .catch(err => {
+    if(nr !== ebPreviewCerere || !loading) return;
+    loading.textContent = err && err.message ? err.message : 'Eroare la generarea previzualizării.';
+    loading.style.display = '';
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2018,17 +2062,13 @@ window.ebFullPreviewSetWidth = function(w) {
 };
 function ebFullPreviewLoad(width) {
   const loading = document.getElementById('eb-fprev-loading');
-  const iframe  = document.getElementById('eb-fprev-iframe');
-  const subject = document.getElementById('eb-subject-input')?.value||'';
-  fetch('/admin/emails/builder/preview',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'blocks_json='+encodeURIComponent(JSON.stringify(blocks))+'&subject='+encodeURIComponent(subject)})
-  .then(r=>r.json()).then(d=>{
-    if(d.ok&&iframe){
-      iframe.style.cssText=`width:${width}px;max-width:100%;min-height:400px;border:none;display:block;border-radius:8px;`;
-      iframe.srcdoc=d.html + EB_SCRIPT_INALTIME;
-      if(loading) loading.style.display='none';
-      iframe.style.display='';
-    }
-  }).catch(()=>{if(loading)loading.textContent='Eroare la generarea preview.';});
+  if(loading) { loading.textContent = 'Se generează previzualizarea...'; loading.style.display = ''; }
+  ebCerePrevizualizare().then(html => {
+    const vechi = document.getElementById('eb-fprev-iframe');
+    if(!vechi) return;
+    if(loading) loading.style.display='none';
+    ebCadruPrevizualizare(vechi, `width:${width}px;max-width:100%;min-height:400px;border:none;display:block;border-radius:8px;`).srcdoc = html + EB_SCRIPT_INALTIME;
+  }).catch(err=>{if(loading){loading.textContent=err && err.message ? err.message : 'Eroare la generarea previzualizării.';loading.style.display='';}});
 }
 window.ebPickGalleryImg = function(url) {
   const inp = document.getElementById('eb-img-url-input');

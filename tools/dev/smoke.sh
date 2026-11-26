@@ -656,11 +656,14 @@ fi
 
 # Newsletterul portat din codul vechi (WP-R din 30 oct, Bioscem e2e2d77 … 739f58c): tools/dev/test-newsletter.php, pe licența „toate”,
 # pe serverul pornit aici: cheile, trimiterea (o dată, încercările, oprirea, lacătul), dubla confirmare și limitele, lista „nu trimite”,
-# dezabonarea și clicurile, pluginul oprit. Pune la loc toată baza (CHECKSUM TABLE).
+# dezabonarea și clicurile, pluginul oprit; builderul în Chromium doar cu capturi (previzualizarea Desktop / Mobil, titlul dintr-o
+# coloană). Pune la loc toată baza (CHECKSUM TABLE).
 if [ "$PACHET" = "toate" ]; then
     scrie ""
     scrie "== Newsletterul (tools/dev/test-newsletter.php)"
-    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-newsletter.php" > "$TMP/test-newsletter.log" 2>&1; then
+    optiuni_newsletter=()
+    [ "$cu_capturi" = 0 ] && optiuni_newsletter+=("--fara-browser")
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-newsletter.php" "${optiuni_newsletter[@]}" > "$TMP/test-newsletter.log" 2>&1; then
         TRECUTE=$((TRECUTE + 1))
         scrie "  OK    $(tail -1 "$TMP/test-newsletter.log" | sed 's/ Raport: .*//')"
     else
