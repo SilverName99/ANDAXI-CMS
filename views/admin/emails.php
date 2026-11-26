@@ -1544,9 +1544,10 @@ if (count($taburiEmail) > 1) {
                     &nbsp;&nbsp;|&nbsp;&nbsp;
                     <strong>Listă:</strong> <?= htmlspecialchars((string) ($statsCampaignDetail['list_name'] ?? '—'), ENT_QUOTES) ?>
                 </p>
-                <?php if ((string) ($statsCampaignDetail['sursa'] ?? '') === 'mailpoet'): ?>
+<?php /* Etichetele la începutul rândului: fără arhiva MailPoet, antetul iese octet cu octet ca înainte (inerția pistei E). */ ?>
+<?php if ((string) ($statsCampaignDetail['sursa'] ?? '') === 'mailpoet'): ?>
                 <p>Arhivă MailPoet: deschiderile sunt unice (MailPoet a păstrat doar prima deschidere a fiecărui abonat).</p>
-                <?php endif; ?>
+<?php endif; ?>
             </div>
 
             <!-- KPI cards -->
