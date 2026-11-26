@@ -80,6 +80,8 @@ poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecar
     "tools/dev/php.sh tools/dev/contract-admin.php --plimbare" WP-31
 poarta G-deploy "deploy-ul din Etapa 2 (docs/DEPLOY.md) pe o găzduire simulată cu două site-uri, pe al doilea MariaDB (privat, modul Hostinger): release.sh, bin/platforma, adopta.sh (o migrare care pică, un test de fum care pică, reluarea), actualizeaza.sh (întoarcerea singură), revino.sh (codul și baza exact cele de dinainte); și cu php$MINIM" \
     "tools/dev/mariadb-nestrict.sh porneste ;; tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php ;; CMS_DEV_PHP=php$MINIM tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php" E2-deploy
+poarta G-automatizari "automatizările newsletterului (pluginul automatizari): fiecare declanșator din calea lui, pașii, o singură dată pe subiect, reintrarea, dezabonații săriți, bugetul comun cu campaniile, căderea și reluarea fără retrimitere, pluginul oprit, adminul și editorul în Chromium; și cu php$MINIM" \
+    "tools/dev/php.sh tools/dev/test-automatizari.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-automatizari.php --fara-browser" AUT
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
@@ -198,14 +200,18 @@ declare -A PORTI=(
     [WP-R]="G-rute G-cmp G-cmp-istoric G-plug G-php"
     # Etapa 2, deploy-ul (docs/DEPLOY.md): stub-ul (G-paths, cu jetonul din MENTENANTA), uneltele (G-deploy), sintaxa (G-php).
     [E2-deploy]="G-rute G-paths G-deploy G-php"
+    # Automatizările newsletterului (26 nov 2026, pluginul automatizari): migrările noi (G-mig), rutele și garda (G-rute, G-plug),
+    # Bioscem neschimbat (G-cmp: pluginul nu e în licența lui), adminul (G-admin), copia de verificare (G-verif: regulile 27),
+    # poarta lui (G-automatizari) și testul de fum, unde rulează și ea.
+    [AUT]="G-rute G-mig G-cmp G-plug G-admin G-verif G-automatizari G-smoke G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33
-WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy"
+WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy AUT"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy G-automatizari; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

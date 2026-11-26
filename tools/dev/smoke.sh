@@ -741,6 +741,24 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Pluginul automatizari (26 nov 2026): tools/dev/test-automatizari.php (G-automatizari), pe licența „toate”, pe serverul pornit aici:
+# fiecare declanșator și pas, o dată pe subiect, dezabonații, bugetul comun, căderea și reluarea, pluginul oprit, adminul;
+# Chromium doar cu capturi (editorul). Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Automatizările newsletterului (tools/dev/test-automatizari.php)"
+    optiuni_automatizari=()
+    [ "$cu_capturi" = 0 ] && optiuni_automatizari+=("--fara-browser")
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-automatizari.php" "${optiuni_automatizari[@]}" > "$TMP/test-automatizari.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-automatizari.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-automatizari.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-automatizari.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Pluginul campanii (5 nov 2026, pentru Biovitality): tools/dev/test-campanii.php, pe licența „toate”, pe serverul pornit aici:
 # regulile (întoarcerea, roboții, adresele neoprite), adminul, prima intrare, insigna, bannerul, fereastra, pluginul oprit, Chromium
 # pe desktop și pe telefon. Pune la loc toată baza (CHECKSUM TABLE).
