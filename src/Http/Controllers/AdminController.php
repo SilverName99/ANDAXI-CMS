@@ -10262,6 +10262,9 @@ final class AdminController
 
         $fromStatus = trim($fromStatus);
         $toStatus = trim($toStatus);
+        // 26 nov 2026: fiecare schimbare de status (din admin, AWB, ERP) trece pe aici; „Comanda e livrată / finalizată” pentru
+        // automatizări (fără agățări, nimic).
+        \App\Support\Hooks::ruleaza('comanda.status', $db, $orderId, $fromStatus, $toStatus);
         if ($toStatus === 'completed') {
             // Punctele câștigate se acordă cât pluginul „Puncte de fidelitate” e pe
             // site (și când se oprește: comanda a fost plasată cu promisiunea lor).

@@ -936,10 +936,15 @@ final class EmailAutomation
         // iar ei sunau să întrebe ce n-a mers. De aceea fereastra se lărgește la
         // ultimele zile: o adresă care a comandat de curând nu primește
         // „ați uitat produse în coș", oricând ar fi început coșul.
+        // Fără emailuri duble (pluginul automatizari, 26 nov 2026): cu o automatizare „Coș abandonat” activă, coșurile
+        // abonaților activi sunt ale ei, iar aici rămân doar ceilalți. Fără ea, interogarea e cea de dinainte.
+        $faraAbonati = Automatizari\Declansatoare::preiaCosurileAbonatilor($db)
+            ? ' AND NOT EXISTS (SELECT 1 FROM newsletter_subscribers ns WHERE ns.email = ca.email AND ns.status = "active")'
+            : '';
         $stmt = $db->prepare(
             'SELECT ca.id, ca.session_id, ca.email, ca.customer_name, ca.cart_snapshot
              FROM cart_abandonments ca
-             WHERE ca.converted_at IS NULL
+             WHERE ca.converted_at IS NULL' . $faraAbonati . '
                AND ca.abandoned_email_sent_at IS NULL
                AND ca.email IS NOT NULL
                AND ca.email <> ""

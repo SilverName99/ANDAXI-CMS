@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\DonatiiController;
 use App\Http\Controllers\MembriController;
 use App\Support\AcasaAdmin;
+use App\Support\Automatizari\Declansatoare;
 use App\Support\Campanii;
 use App\Support\Statistici;
 
@@ -62,4 +63,11 @@ return [
     ['punct' => 'layout.final_body', 'plugin' => 'donatii', 'fn' => [DonatiiController::class, 'sertar']],
     // Ștergerea unui cont oprește donațiile lui lunare în Stripe (decizia proprietarului, 9 nov 2026).
     ['punct' => 'utilizator.sters', 'plugin' => 'donatii', 'fn' => [DonatiiController::class, 'utilizatorSters']],
+    // Automatizările newsletterului (26 nov 2026): evenimentele care pornesc un flux. Doar cu pluginul pornit (o intrare într-un
+    // flux e „ceva nou”); cât se oprește, fluxurile în curs se termină din cron, fără intrări noi.
+    ['punct' => 'newsletter.abonare_confirmata', 'plugin' => 'automatizari', 'fn' => [Declansatoare::class, 'laAbonareConfirmata'], 'stare' => 'activ'],
+    ['punct' => 'newsletter.eticheta_adaugata', 'plugin' => 'automatizari', 'fn' => [Declansatoare::class, 'laEtichetaAdaugata'], 'stare' => 'activ'],
+    ['punct' => 'cont.creat', 'plugin' => 'automatizari', 'fn' => [Declansatoare::class, 'laContCreat'], 'stare' => 'activ'],
+    ['punct' => 'comanda.plasata', 'plugin' => 'automatizari', 'fn' => [Declansatoare::class, 'laComandaPlasata'], 'stare' => 'activ'],
+    ['punct' => 'comanda.status', 'plugin' => 'automatizari', 'fn' => [Declansatoare::class, 'laSchimbareStatus'], 'stare' => 'activ'],
 ];

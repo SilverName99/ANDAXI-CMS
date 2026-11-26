@@ -49,6 +49,12 @@ namespace App\Support;
  *    `logare.blocata($db, $idUtilizator)` → bool (cu confirmarea cerută la înregistrare); `cont.profil($utilizator)` (HTML,
  *    în „Profilul meu”); `continut.nota_titlu($db)` → titlul notei; `admin.utilizatori.coloane($randuri)` →
  *    `{cap, celule: id => HTML, numar}` (Admin → Utilizatori).
+ *  - Evenimentele pentru automatizări (26 nov 2026, pluginul `automatizari`, doar pornit): `newsletter.abonare_confirmata($db,
+ *    $idAbonat, $email)` (NewsletterService::confirmaAbonare, după dubla confirmare), `newsletter.eticheta_adaugata($db,
+ *    $idAbonat, $idEticheta)` (NewsletterEtichete::adauga), `cont.creat($db, $idUtilizator, $email)` (înregistrarea din cont și
+ *    prima intrare cu Google), `comanda.plasata($db, $idComanda)` (checkout-ul, după tranzacția comenzii), `comanda.status($db,
+ *    $idComanda, $din, $in)` (fiecare schimbare de status din admin, AWB și ERP). Agățarea nu are voie să arunce: o greșeală a
+ *    pluginului nu oprește niciodată o comandă, o abonare sau o înregistrare.
  */
 final class Hooks
 {
@@ -67,6 +73,8 @@ final class Hooks
         'confirmare.dupa', 'logare.blocata', 'cont.profil', 'continut.nota_titlu', 'admin.utilizatori.coloane',
         // Pagina contului cu antet (tema vertij, `pagina_cont: antet`): starea membrului sub nume și în „Profilul meu”.
         'cont.stare',
+        // Pluginul automatizari (26 nov 2026): evenimentele care pornesc un flux.
+        'newsletter.abonare_confirmata', 'newsletter.eticheta_adaugata', 'cont.creat', 'comanda.plasata', 'comanda.status',
     ];
 
     /** @var array<string, list<array{plugin: string, fn: callable, stare: string}>>|null */

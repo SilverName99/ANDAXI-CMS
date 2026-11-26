@@ -684,13 +684,18 @@ final class NewsletterService
         if (!$rezultat['ok']) {
             return $rezultat;
         }
-        $db->prepare(
+        $confirmare = $db->prepare(
             'UPDATE newsletter_subscribers
              SET status = "active", confirmed_at = NOW(), pending_at = NULL
              WHERE id = :id AND status IN ("pending", "unsubscribed") AND pending_at IS NOT NULL'
-        )->execute(['id' => $rezultat['id']]);
+        );
+        $confirmare->execute(['id' => $rezultat['id']]);
         $db->prepare('DELETE FROM newsletter_suprimate WHERE email_hash = :h')
             ->execute(['h' => self::amprentaAdresa($rezultat['email'])]);
+        // Abonarea tocmai a devenit activă: punctul pentru automatizări („Abonat nou confirmat”); fără agățări, nimic.
+        if ($confirmare->rowCount() === 1) {
+            Hooks::ruleaza('newsletter.abonare_confirmata', $db, (int) $rezultat['id'], (string) $rezultat['email']);
+        }
         return $rezultat;
     }
 
@@ -2186,6 +2191,33 @@ final class NewsletterService
             return 'vechi';
         }
         return null;
+    }
+
+    /**
+     * Semnătura unui link din emailurile automatizărilor (App\Support\Automatizari\Trimitere: pixelul și clicurile), cu
+     * aceeași cheie secretă ca linkurile newsletterului; mesajul are prefixul lui („automatizare|…”), deci nu se poate
+     * folosi ca semnătura unui link de campanie sau de dezabonare.
+     */
+    public static function semneaza(string $mesaj): string
+    {
+        return self::base64UrlEncode(hash_hmac('sha256', $mesaj, self::cheieSemnare(), true));
+    }
+
+    /** Semnătura e făcută de noi, cu o cheie nouă (cheia veche, ghicibilă, nu contează aici: n-a semnat niciodată un astfel de link). */
+    public static function semnaturaNoua(string $mesaj, string $token): bool
+    {
+        foreach (self::cheiNoi() as $cheie) {
+            if (hash_equals(self::base64UrlEncode(hash_hmac('sha256', $mesaj, $cheie, true)), $token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Antetele dezabonării „cu un clic” (List-Unsubscribe, RFC 8058) pentru un email trimis unui abonat. */
+    public static function anteteListaDezabonare(string $unsubscribeUrl): array
+    {
+        return self::anteteDezabonare($unsubscribeUrl);
     }
 
     /** Pragul pentru cheia veche, lângă cheie în settings (ascuns la fel). */

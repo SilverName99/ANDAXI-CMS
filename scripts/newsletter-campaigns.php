@@ -9,7 +9,9 @@ declare(strict_types=1);
  *  1. continuă campaniile rămase în curs — o listă de zeci de mii de abonați nu
  *     pleacă dintr-o singură execuție PHP, așa că trimiterea merge pe bucăți și
  *     fiecare rulare o duce mai departe de unde a rămas;
- *  2. pornește campaniile programate care au ajuns la scadență.
+ *  2. pornește campaniile programate care au ajuns la scadență;
+ *  3. cu pluginul „Automatizări newsletter” pe site, duce mai departe fluxurile automate, cu ce a rămas din bugetul
+ *     rulării (App\Support\Automatizari\Motor; docs/PLUGINURI.md, „Automatizări newsletter”).
  *
  * Campaniile oprite („Oprit”: serverul de email a refuzat mesaje la rând sau
  * lista a dispărut) NU se reiau singure; le repornește un om din admin, cu
@@ -107,6 +109,20 @@ $programate = \App\Support\Plugins::permiteInceput('newsletter')
     ? NewsletterService::sendDueScheduledCampaigns($db, $settings, $limit, $deadline, $perRun)
     : [];
 
+// Automatizările newsletterului (pluginul `automatizari`, 26 nov 2026): după campanii, sub același lacăt, cu ce a rămas din
+// același buget de trimiteri al rulării (--per-run) și până la același termen. Fără plugin pe site nu rulează nimic de aici.
+$automatizari = null;
+if (\App\Support\Plugins::vizibil('automatizari')) {
+    $buget = new \App\Support\BugetTrimitere($perRun, $deadline);
+    $buget->consuma((int) ($continuate['sent'] ?? 0) + (int) ($programate['sent'] ?? 0)
+        + (int) ($continuate['failed'] ?? 0) + (int) ($programate['failed'] ?? 0));
+    try {
+        $automatizari = \App\Support\Automatizari\Motor::ruleaza($db, $settings, $buget);
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'Automatizari: trecerea a eșuat (' . get_class($e) . ").\n");
+    }
+}
+
 // Ora ultimei rulări încheiate: lista de verificare din builder avertizează
 // dacă cronul s-a oprit (fără el, programările nu pleacă).
 try {
@@ -123,3 +139,8 @@ echo 'terminate=' . (int) ($continuate['finished_campaigns'] ?? 0) . ', ';
 echo 'programate_pornite=' . (int) ($programate['processed_campaigns'] ?? 0) . ', ';
 echo 'trimise=' . ((int) ($continuate['sent'] ?? 0) + (int) ($programate['sent'] ?? 0)) . ', ';
 echo 'esuate=' . ((int) ($continuate['failed'] ?? 0) + (int) ($programate['failed'] ?? 0)) . "\n";
+if (is_array($automatizari)) {
+    echo 'Automatizari: rulari=' . (int) $automatizari['rulari'] . ', trimise=' . (int) $automatizari['trimise']
+        . ', esuate=' . (int) $automatizari['esuate'] . ', intrate_cos=' . (int) $automatizari['cosuri']
+        . ', intrate_inactivi=' . (int) $automatizari['inactivi'] . "\n";
+}

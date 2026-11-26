@@ -2172,6 +2172,8 @@ final class SiteController
 
         // Pagina de confirmare arată emailul întreg doar browserului care a plasat comanda.
         $this->tineMinteComandaPlasata($orderNumber);
+        // 26 nov 2026: „Comandă plasată” pentru automatizări, după tranzacție (fără agățări, nimic).
+        \App\Support\Hooks::ruleaza('comanda.plasata', $db, $orderId);
 
         // Comanda cu produse de precomandă se marchează acum, nu mai jos:
         // plata cu cardul pleacă la procesator și nu mai trece pe acolo, iar
@@ -4026,6 +4028,8 @@ final class SiteController
         ]);
 
         $userId = (int) $db->lastInsertId();
+        // 26 nov 2026: „Cont nou de client” pentru automatizări (fără agățări, nimic).
+        \App\Support\Hooks::ruleaza('cont.creat', $db, $userId, $email);
         // WP-24: după crearea contului, un plugin își salvează datele (de exemplu cererea de membru) și poate trimite
         // vizitatorul altundeva, fără logare automată (de exemplu „confirmă adresa”).
         $dupaCreare = \App\Support\Hooks::primul('inregistrare.dupa_creare', $db, $userId, $dateInregistrare);
@@ -10526,6 +10530,7 @@ CSS;
         if ($newUserId <= 0) {
             throw new RuntimeException('Contul Google nu a putut fi creat.');
         }
+        \App\Support\Hooks::ruleaza('cont.creat', $db, $newUserId, $email);
 
         EmailAutomation::sendAccountWelcome(
             $db,
