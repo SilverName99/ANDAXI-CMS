@@ -16,6 +16,7 @@ use App\Http\Controllers\OferteBbdController;
 use App\Http\Controllers\PacheteProduseController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AutomatizariController;
 use App\Http\Controllers\CampaniiController;
 use App\Http\Controllers\StatisticiController;
 use App\Http\Controllers\CereriOfertaController;
@@ -407,6 +408,22 @@ return static function (Router $router): void {
     // (formularul coșului) și din coșul flotant (JSON).
     $router->post('/cos/schimba-pachet', [PacheteProduseController::class, 'schimbaInCos']);
     $router->post('/api/cart/swap-bundle', [PacheteProduseController::class, 'schimbaInCosApi']);
+    // Pluginul automatizari (26 nov 2026; App\Support\Automatizari\*): Marketing → Automatizări newsletter (lista, șabloanele,
+    // editorul vizual, pornirea și oprirea, copia, ștergerea, emailul de test) și, mereu deschise, pixelul și linkurile de clic
+    // din emailurile trimise de un flux.
+    $router->get('/admin/automatizari', [AutomatizariController::class, 'lista']);
+    $router->post('/admin/automatizari/noua', [AutomatizariController::class, 'noua']);
+    $router->get('/admin/automatizari/{id}', [AutomatizariController::class, 'editor']);
+    $router->get('/admin/automatizari/{id}/previzualizare', [AutomatizariController::class, 'previzualizare']);
+    $router->post('/admin/automatizari/{id}/salveaza', [AutomatizariController::class, 'salveaza']);
+    $router->post('/admin/automatizari/{id}/stare', [AutomatizariController::class, 'stare']);
+    $router->post('/admin/automatizari/{id}/duplica', [AutomatizariController::class, 'duplica']);
+    $router->post('/admin/automatizari/{id}/sterge', [AutomatizariController::class, 'sterge']);
+    $router->post('/admin/automatizari/{id}/email-nou', [AutomatizariController::class, 'emailNou']);
+    $router->post('/admin/automatizari/{id}/email-test', [AutomatizariController::class, 'emailTest']);
+    $router->post('/admin/automatizari/{id}/eticheta', [AutomatizariController::class, 'eticheta']);
+    $router->get('/automatizari/d/{trimitere}/{token}', [AutomatizariController::class, 'deschidere']);
+    $router->get('/automatizari/c/{trimitere}/{token}', [AutomatizariController::class, 'clic']);
     // Pluginul campanii (5 nov 2026, pentru Biovitality; App\Support\Campanii): pagina de deschidere a campaniei active și
     // Marketing → Campanii pe site (administratorul general).
     $router->get('/campanie/{slug}', [CampaniiController::class, 'pagina']);

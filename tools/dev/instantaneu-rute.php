@@ -165,7 +165,10 @@ $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /
     'POST /newsletter/unsubscribe/{token}',
     // Etapa 4 (pluginul membri, din vertij): întoarcerea de la Stripe după plata cotizației; plata se notează în orice stare a
     // pluginului (ca webhook-ul), iar fără sesiunea Stripe a unei cotizații nu face nimic (trimite la cont).
-    'GET /contul-meu/activare/retur'];
+    'GET /contul-meu/activare/retur',
+    // Pluginul automatizari (26 nov 2026): pixelul de deschidere și linkurile de clic din emailurile deja trimise de un flux
+    // (semnate cu cheia newsletterului; cu pluginul oprit nu se numără nimic, iar un link nesemnat dă pagina 404).
+    'GET /automatizari/d/{trimitere}/{token}', 'GET /automatizari/c/{trimitere}/{token}'];
 $mereuDeschiseFixeNorm = [];
 foreach ($mereuDeschiseFixe as $adresa) {
     [$metodaFixa, $tiparFix] = explode(' ', $adresa, 2);

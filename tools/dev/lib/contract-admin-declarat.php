@@ -385,6 +385,13 @@ return [
         'meniu-campanii' => ['ce' => 'adaugat', 'rand' => '^link /admin/campanii$', 'licenta' => 'toate', 'rol' => 'adm',
             'motiv' => 'intrarea „Campanii pe site” din Marketing (pagina campaniei la intrare, insigna produselor, bannerul de sus)'],
     ],
+    // Pluginul automatizari (26 nov 2026): intrarea nouă „Automatizări newsletter” din Marketing, doar cu pluginul pornit (licența
+    // „toate”; nu e în nicio licență de dezvoltare a unui site), pentru administratorul general și „Administrator emailuri”
+    // (Auth::canAccessPath). Paginile lui sunt noi: ce trimit le verifică tools/dev/test-automatizari.php (G).
+    'automatizari' => [
+        'meniu-automatizari' => ['ce' => 'adaugat', 'rand' => '^link /admin/automatizari$', 'licenta' => 'toate', 'rol' => ['adm', 'emailuri'],
+            'motiv' => 'intrarea „Automatizări newsletter” din Marketing (fluxurile automate: lista, editorul, șabloanele)'],
+    ],
     // Pluginul fisiere_cloud (din Biovitality): intrările bunny.net din Conținut (fișierele, pentru rolurile care au dreptul, ca în codul
     // Biovitality) și din Setări (doar administratorul general), butonul „Fișiere bunny.net” din Galerie și rolul „Cloud user” din
     // Administratori. Doar cu pluginul pe site (licența „toate” aici; Biovitality); cu licențele Bioscem și grafoanaytis lipsesc. Paginile

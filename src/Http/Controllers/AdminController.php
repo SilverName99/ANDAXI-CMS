@@ -14563,6 +14563,14 @@ final class AdminController
                 'email_test'        => $this->emailAdminCurent($db),
                 'nou'               => (string) ($_GET['nou'] ?? '') === '1',
             ];
+        } elseif ($type === 'automatizare') {
+            // Emailul unui pas „Trimite email” dintr-o automatizare (pluginul automatizari; garda: get.type=automatizare).
+            $builder = \App\Http\Controllers\AutomatizariController::datePentruBuilder($db, (int) ($_GET['id'] ?? 0));
+            if ($builder === null) {
+                Flash::set('error', 'Emailul automatizării nu există.');
+                header('Location: /admin/automatizari');
+                return;
+            }
         } else {
             Flash::set('error', 'Tip builder necunoscut.');
             header('Location: /admin/emails/newsletters');
@@ -14770,6 +14778,26 @@ final class AdminController
             AdminActivityLog::log($db, 'email_ecommerce_save', ['ref' => $ref]);
             Flash::set('success', 'Template ecommerce salvat.');
             header('Location: /admin/emails/builder?type=ecommerce&ref=' . urlencode($ref));
+            return;
+        }
+
+        if ($type === 'automatizare') {
+            // Emailul unui pas dintr-o automatizare (pluginul automatizari; garda: post.builder_type=automatizare).
+            $id = (int) ($_POST['builder_id'] ?? 0);
+            $automatizareId = \App\Http\Controllers\AutomatizariController::salveazaDinBuilder($db, $id,
+                trim((string) ($_POST['builder_name'] ?? '')), $subject, $rawBlocks);
+            if ((string) ($_POST['ajax'] ?? '') === '1') {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => $automatizareId > 0, 'id' => $id], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            if ($automatizareId <= 0) {
+                Flash::set('error', 'Emailul automatizării nu există.');
+                header('Location: /admin/automatizari');
+                return;
+            }
+            Flash::set('success', 'Emailul automatizării a fost salvat.');
+            header('Location: /admin/emails/builder?type=automatizare&id=' . $id);
             return;
         }
 

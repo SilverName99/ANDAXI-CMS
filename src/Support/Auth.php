@@ -380,6 +380,8 @@ final class Auth
                 '/admin/emails',
                 // Pluginul statistici (8 nov 2026): sursele vizitelor și campaniile (rolul de marketing).
                 '/admin/statistici',
+                // Pluginul automatizari (26 nov 2026): fluxurile automate ale newsletterului, lângă newslettere.
+                '/admin/automatizari',
             ],
             // Doar fișierele din bunny.net: răsfoire, urcare, preluare pentru editare și cheia pentru aplicația de desktop.
             self::ROLE_CLOUD => [

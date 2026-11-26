@@ -47,7 +47,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
 $ebJson = static fn ($v): string => (string) (json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: 'null');
 $stareCampanie = \App\Support\NewsletterService::STARI[$bCampaignStatus] ?? $bCampaignStatus;
 $clasaStare = ['scheduled' => 'programat', 'sending' => 'se-trimite', 'paused' => 'oprit', 'sent' => 'trimis'][$bCampaignStatus] ?? 'ciorna';
-$eticheteStareBara = $bType === 'campaign' ? $stareCampanie : ($bType === 'ecommerce' ? 'Email comandă' : 'Șablon');
+$eticheteStareBara = $bType === 'campaign' ? $stareCampanie : ($bType === 'ecommerce' ? 'Email comandă' : ($bType === 'automatizare' ? 'Email automatizare' : 'Șablon'));
 
 // Iconițele paletei (machetă, desen propriu): fiecare bloc are un SVG 24×24 cu linie de 1.8.
 $ebIcon = static function (string $cheie): string {
@@ -523,7 +523,11 @@ $ebMaiMult = [
           <input type="text" id="eb-set-name" maxlength="190" value="<?= htmlspecialchars($bName, ENT_QUOTES) ?>">
         </label>
         <?php else: ?>
-        <?php if ($bType !== 'ecommerce'): ?>
+        <?php if ($bType === 'automatizare'): ?>
+        <label class="eb-camp"><span>Nume intern (doar pentru tine)</span>
+          <input type="text" id="eb-set-name" value="<?= htmlspecialchars($bName, ENT_QUOTES) ?>">
+        </label>
+        <?php elseif ($bType !== 'ecommerce'): ?>
         <label class="eb-camp"><span>Nume template</span>
           <input type="text" id="eb-set-name" value="<?= htmlspecialchars($bName, ENT_QUOTES) ?>">
         </label>
@@ -552,9 +556,9 @@ $ebMaiMult = [
           </div>
           <small>Click pe un token pentru a-l copia în clipboard</small>
         </div>
-        <?php endif; ?>
+        <?php endif; if ($bType !== 'automatizare'): /* emailul unei automatizări nu are bifa „Template activ” */ ?>
         <label class="eb-bifa"><input type="checkbox" id="eb-set-active" <?= $bIsActive ? 'checked' : '' ?>> Template activ</label>
-        <?php endif; ?>
+        <?php endif; endif; ?>
         <p class="eb-nota">Alege un bloc din email ca să-l schimbi, sau adaugă unul din stânga (clic sau trage-l în email). Textele și titlurile se scriu direct în email.</p>
       </div>
       <div class="eb-props-body" id="eb-props-body" role="tabpanel" aria-labelledby="eb-tab-continut" hidden></div>

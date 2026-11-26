@@ -272,6 +272,16 @@ if (count($taburiEmail) > 1) {
 
     <section class="panel">
         <h2 style="margin-top:0;">Setări abandon coș</h2>
+<?php
+// Pluginul automatizari (26 nov 2026): regula fără emailuri duble, doar cât e pornit și are o automatizare „Coș abandonat” activă.
+if (\App\Support\Plugins::activ('automatizari')):
+    $dbAutomatizari = \App\Support\Database::connection((array) ((require __DIR__ . '/../../config/app.php')['db'] ?? []));
+    if ($dbAutomatizari instanceof PDO && \App\Support\Automatizari\Declansatoare::preiaCosurileAbonatilor($dbAutomatizari)): ?>
+        <p class="adm-nota" style="margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;">
+            O automatizare „Coș abandonat” e pornită (<a href="/admin/automatizari">Marketing → Automatizări newsletter</a>): coșurile
+            abonaților activi primesc doar emailurile ei. Emailul de mai jos pleacă doar celor care nu sunt abonați la newsletter.
+        </p>
+<?php endif; endif; ?>
         <form method="post" action="/admin/emails" class="form-grid">
             <input type="hidden" name="section" value="automation">
             <div class="field">
