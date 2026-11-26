@@ -656,6 +656,40 @@ $verifica('scriptul planifică partea newsletter cu MailPoet (drumul necapturat:
     str_contains($out, 'newsletter (MailPoet): importul MailPoet cere drumul capturat') && !str_contains($out, 'abonați la newsletter, iar importul lor'), $out);
 $verifica('ieșirea scriptului: nicio adresă, niciun jeton, niciun IP al fixturii', array_filter(['@example.invalid', '0123456789abcdef', 'a1b2c3', 'fedcba98', '192.0.2.', '2001:db8'],
     static fn (string $x): bool => str_contains($out, $x)) === [], $out);
+// E-LEG-06-R1: o eroare neașteptată a scriptului ajunge la ramura lui de la sfârșit (catch Throwable), care scrie doar rândul NU al lui
+// ImportWordPress::eroareNeasteptata: aici o excepție PDO a bazei WordPress cu o adresă în mesaj (tabelul abonaților MailPoet înlocuit
+// pentru probă de o vedere a cărei condiție cheamă o funcție care dă eroarea 45000 cu textul ei), ca mesajul unei chei unice
+// încălcate. Codul 1, rândul NU cu clasa și SQLSTATE pe stderr, nicio adresă nicăieri. Plus forma ramurii, citită din script: cheamă
+// eroareNeasteptata și nu scrie mesajul excepției.
+$canar = 'canar-neasteptat@example.invalid';
+// RENAME TABLE așteaptă tranzacțiile READ ONLY încă deschise ale surselor WordPress de mai sus (blocajele de metadate): se închid întâi.
+$s = null;
+gc_collect_cycles();
+$wp->exec('SET SESSION lock_wait_timeout = 120');
+$wp->exec('RENAME TABLE wp_mailpoet_subscribers TO wp_mailpoet_subscribers_proba');
+try {
+    $wp->exec("CREATE FUNCTION canar_neasteptat() RETURNS INT NOT DETERMINISTIC BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '" . $canar . "'; RETURN 1; END");
+    $wp->exec('CREATE VIEW wp_mailpoet_subscribers AS SELECT * FROM wp_mailpoet_subscribers_proba WHERE canar_neasteptat() = 1');
+    $pr = proc_open([$radacina . '/tools/dev/php.sh', '-d', 'auto_prepend_file=' . $preludiu, 'scripts/importa-wordpress.php', '--wp=' . $dosarWp, '--plan',
+        '--export-mailpoet=' . $export, '--fara-articole'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipe, $radacina,
+        array_merge(getenv(), ['CMS_DEV_DB' => $bazaSite, 'SITE_DATE_DOSAR' => $lucru . '/pachet', 'CMS_DEV_LICENTA_DOSAR' => $lucru . '/licenta']));
+    $outNe = (string) stream_get_contents($pipe[1]);
+    $errNe = (string) stream_get_contents($pipe[2]);
+    fclose($pipe[1]);
+    fclose($pipe[2]);
+    $codNe = proc_close($pr);
+} finally {
+    $wp->exec('DROP VIEW IF EXISTS wp_mailpoet_subscribers');
+    $wp->exec('DROP FUNCTION IF EXISTS canar_neasteptat');
+    $wp->exec('RENAME TABLE wp_mailpoet_subscribers_proba TO wp_mailpoet_subscribers');
+}
+$sursaScript = (string) file_get_contents($radacina . '/scripts/importa-wordpress.php');
+$ramura = preg_match('/\}\s*catch\s*\(\s*\\\\Throwable\s+\$e\s*\)\s*\{(.*?)\n\}/s', $sursaScript, $mr) === 1 ? $mr[1] : '';
+$verifica('E-LEG-06-R1: o eroare neașteptată (PDOException 45000 cu o adresă în mesaj) → codul 1, pe stderr „NU: eroare neașteptată (PDOException, '
+    . 'SQLSTATE 45000, …)”, fără mesaj și fără nicio adresă; ramura de la sfârșit a scriptului cheamă eroareNeasteptata, fără getMessage', $codNe === 1
+    && str_contains($errNe, 'NU: eroare neașteptată (PDOException, SQLSTATE 45000, în ') && !str_contains($outNe . $errNe, '@') && !str_contains($outNe . $errNe, 'canar')
+    && str_contains($ramura, 'ImportWordPress::eroareNeasteptata($e)') && !str_contains($ramura, 'getMessage') && (int) $wp->query('SELECT COUNT(*) FROM wp_mailpoet_subscribers')
+        ->fetchColumn() === 12, json_encode([$codNe, mb_substr($errNe, 0, 300), mb_substr($outNe, -300), $ramura !== '']));
 
 // ---------------------------------------------------------------------------------------------------------------------
 $scrie('');
