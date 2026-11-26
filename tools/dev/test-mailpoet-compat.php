@@ -576,6 +576,31 @@ $db->exec('DELETE FROM newsletter_mailpoet_nepotriviri');
 $verifica('SEC-E-02: jetonul scurt (6 caractere) trece; după 10 jetoane greșite în 24 de ore nici cel bun, cel CMS (ax1.) da; jetonul de 32: '
     . 'nepotrivirile nu se numără, cel bun trece', $bun13 === 'a1b2c3' && $blocat13 === null && $ax13 !== null && $nepotriviri11 === 0 && $bun11 === $jeton11,
     (string) json_encode([$bun13, $blocat13, $ax13 !== null, $nepotriviri11, $bun11]));
+// SEC-E-02-R1: peste limita nepotrivirilor, retragerea „cu un clic” (al patrulea argument) primește jetonul scurt întreg, ca MailPoet:
+// oricine poate număra nepotriviri pentru un abonat, nimeni nu-l poate opri să se dezaboneze. Un jeton greșit tot nu trece (și nu se
+// mai numără peste limită), iar paginile rămân blocate; sub limită, o nepotrivire a retragerii se numără ca oricare alta.
+$retragere = static function (int $mp, mixed $jeton) use ($db, $ab): ?string {
+    Jetoane::uitaCererea();
+    return Jetoane::verifica($db, $ab($mp), $jeton, true);
+};
+$numarNepotriviri = static fn (int $mp): int => (int) $db->query('SELECT COALESCE(SUM(numar), 0) FROM newsletter_mailpoet_nepotriviri WHERE abonat_id = '
+    . $id($mp))->fetchColumn();
+$db->exec('DELETE FROM newsletter_mailpoet_nepotriviri');
+$retragereGresitSub = $retragere(13, 'zz0000');
+$numaratSub = $numarNepotriviri(13);
+for ($i = 1; $i < 10; $i++) {
+    $v(13, sprintf('zz%04d', $i));
+}
+$retragereBun = $retragere(13, 'a1b2c3');
+$retragereGresit = $retragere(13, 'zz9999');
+$paginaBlocata = $v(13, 'a1b2c3');
+$numaratPeste = $numarNepotriviri(13);
+$retragere32 = $retragere(11, $jeton11);
+$db->exec('DELETE FROM newsletter_mailpoet_nepotriviri');
+$verifica('SEC-E-02-R1: retragerea „cu un clic”: o nepotrivire sub limită se numără; peste limita jetonului scurt, jetonul bun trece, unul greșit nu '
+    . '(nenumărat), paginile tot nu; jetonul de 32 trece ca înainte', $retragereGresitSub === null && $numaratSub === 1 && $retragereBun === 'a1b2c3'
+    && $retragereGresit === null && $paginaBlocata === null && $numaratPeste === 10 && $retragere32 === $jeton11,
+    (string) json_encode([$retragereGresitSub, $numaratSub, $retragereBun, $retragereGresit, $paginaBlocata, $numaratPeste, $retragere32 === $jeton11]));
 // SEC-E-01: emailul „Abonat nou” cel mult o dată pe zi pentru o pereche (abonat, listă), cel mult LIMITA_NOTIFICARI_ORA pe oră pe site și
 // doar cu un jeton din bugetul comun (BugetTrimitere::ia: bugetul nu coboară sub zero pentru el).
 $db->exec("DELETE FROM newsletter_cereri_confirmare WHERE tip = 'notificare'");
@@ -1097,6 +1122,76 @@ foreach (['pornit', 'oprit'] as $runda) {
                 str_contains($constructor['corp'], '(toată lumea)'), str_contains($campaniiAdmin['corp'], 'Toți abonații'), str_contains($campaniiAdmin['corp'], 'Lista vizibil'),
                 str_contains($constructor['corp'], 'Lista vizibil')]));
     }
+    // SEC-E-02-R1: un abonat cu jetonul MailPoet scurt (13: 6 caractere, niciodată lungit), făcut activ pentru probă. Oricine îi poate
+    // aduce limita nepotrivirilor (10 în 24 de ore) cu clicuri urmărite cu jetoane greșite; atunci paginile și clicurile lui, care arată
+    // dacă jetonul e bun, rămân blocate (pagina F), dar dezabonarea „cu un clic” cu jetonul bun dintr-un email vechi dezabonează pe toate
+    // drumurile ei (un-clicul neurmărit, antetul urmărit sub buget și peste buget), cu același 200 gol pe care îl primește un jeton greșit
+    // (care nu dezabonează pe nimeni).
+    $faraData = static fn (array $x): array => [$x['cod'], $x['corp'], array_diff_key($x['antete'], ['date' => 1])];
+    $activ13 = static function () use ($db): void {
+        $db->exec("UPDATE newsletter_subscribers SET status = 'active' WHERE mailpoet_id = 13");
+    };
+    $date13Dez = ['queueId' => 41, 'token' => 'a1b2c3', 'email' => 'dezabonat@example.invalid'];
+    $db->exec('DELETE FROM newsletter_mailpoet_nepotriviri');
+    $activ13();
+    $coduriGresite = [];
+    for ($i = 0; $i < 10; $i++) {
+        $coduriGresite[] = $cerere($router('track', 'click', ['13', sprintf('ff%04d', $i), '41', '3d4e5f607182', false]))['cod'];
+    }
+    $numar13 = (int) $db->query('SELECT COALESCE(SUM(numar), 0) FROM newsletter_mailpoet_nepotriviri WHERE abonat_id = ' . $id(13))->fetchColumn();
+    $paginaManage = $cerere($abonare('manage', ['token' => 'a1b2c3', 'email' => 'dezabonat@example.invalid']));
+    $paginaDez = $cerere($abonare('unsubscribe', $date13Dez));
+    $clicBun = $cerere($router('track', 'click', ['13', 'a1b2c3', '41', '3d4e5f607182', false]));
+    $verifica($e . 'SEC-E-02-R1: 10 clicuri urmărite cu jetoane greșite (404) aduc limita jetonului scurt: administrarea și pagina dezabonării cu jetonul bun → '
+        . 'pagina F, clicul bun → 404', $coduriGresite === array_fill(0, 10, 404) && $numar13 === 10 && $paginaManage['cod'] === 404
+        && str_contains($paginaManage['corp'], 'Hmmm...') && $paginaDez['cod'] === 404 && $clicBun['cod'] === 404,
+        json_encode([$coduriGresite, $numar13, $paginaManage['cod'], $paginaDez['cod'], $clicBun['cod']]));
+    $u1 = $cerere($abonare('unsubscribe', array_replace($date13Dez, ['token' => 'ff9999'])), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stare1 = (string) $ab(13)['status'];
+    $u2 = $cerere($abonare('unsubscribe', $date13Dez), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stare2 = (string) $ab(13)['status'];
+    $verifica($e . 'SEC-E-02-R1: peste limită, un-clicul cu un jeton greșit → 200 gol, nimic schimbat; cu jetonul bun → același 200 gol, dezabonat',
+        $u1['cod'] === 200 && $u1['corp'] === '' && $stare1 === 'active' && $faraData($u1) === $faraData($u2) && $stare2 === 'unsubscribed',
+        json_encode([$faraData($u1), $stare1, $faraData($u2), $stare2]));
+    $activ13();
+    $t1 = $cerere($router('track', 'click', ['13', 'ff9999', '41', '1b2c3d4e5f60', false]), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stareT1 = (string) $ab(13)['status'];
+    $t2 = $cerere($router('track', 'click', ['13', 'a1b2c3', '41', '1b2c3d4e5f60', false]), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stareT2 = (string) $ab(13)['status'];
+    $verifica($e . 'SEC-E-02-R1: peste limită, POST pe linkul urmărit de dezabonare: un jeton greșit → 200 gol (nu 404: nicio diferență față de cel bun), '
+        . 'nimic schimbat; jetonul bun → același 200 gol, dezabonat', $t1['cod'] === 200 && $t1['corp'] === '' && $stareT1 === 'active'
+        && $faraData($t1) === $faraData($t2) && $stareT2 === 'unsubscribed', json_encode([$faraData($t1), $stareT1, $faraData($t2), $stareT2]));
+    // Și peste bugetul routerului (60 pe minut de pe rețea), tot cu limita jetonului scurt atinsă.
+    $activ13();
+    $golesteLimita = false;
+    $db->exec("DELETE FROM register_submit_logs WHERE status = '" . BugetRouter::STARE . "'");
+    for ($i = 0; $i < 61; $i++) {
+        $cerere($router('track', 'open', ['20', $jeton20, '42', null, false]));
+    }
+    $b1 = $cerere($router('track', 'click', ['13', 'ff9999', '41', '1b2c3d4e5f60', false]), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stareB1 = (string) $ab(13)['status'];
+    $b2 = $cerere($router('track', 'click', ['13', 'a1b2c3', '41', '1b2c3d4e5f60', false]), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stareB2 = (string) $ab(13)['status'];
+    $activ13();
+    $b3 = $cerere($abonare('unsubscribe', $date13Dez), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $stareB3 = (string) $ab(13)['status'];
+    $golesteLimita = true;
+    $verifica($e . 'SEC-E-02-R1: peste buget și peste limita jetonului scurt: POST-ul urmărit greșit → 200 gol, nimic; cel bun → același 200, dezabonat; '
+        . 'un-clicul neurmărit bun → 200, dezabonat', $faraData($b1) === $faraData($b2) && $b1['cod'] === 200 && $stareB1 === 'active' && $stareB2 === 'unsubscribed'
+        && $b3['cod'] === 200 && $b3['corp'] === '' && $stareB3 === 'unsubscribed', json_encode([$faraData($b1), $stareB1, $stareB2, $b3['cod'], $stareB3]));
+    // Sub limită, nepotrivirile un-clicului se numără ca oricare altele (nimic de ghicit pe acest drum, nici de ocolit pe celelalte).
+    $db->exec('DELETE FROM newsletter_mailpoet_nepotriviri');
+    $activ13();
+    for ($i = 0; $i < 10; $i++) {
+        $cerere($abonare('unsubscribe', array_replace($date13Dez, ['token' => sprintf('ee%04d', $i)])), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    }
+    $dupaPost = (int) $db->query('SELECT COALESCE(SUM(numar), 0) FROM newsletter_mailpoet_nepotriviri WHERE abonat_id = ' . $id(13))->fetchColumn();
+    $manageDupaPost = $cerere($abonare('manage', ['token' => 'a1b2c3', 'email' => 'dezabonat@example.invalid']));
+    $verifica($e . 'SEC-E-02-R1: 10 un-clicuri cu jetoane greșite se numără (10) și blochează administrarea cu jetonul bun; abonatul rămâne activ',
+        $dupaPost === 10 && $manageDupaPost['cod'] === 404 && (string) $ab(13)['status'] === 'active', json_encode([$dupaPost, $manageDupaPost['cod'],
+            $ab(13)['status']]));
+    $db->exec('DELETE FROM newsletter_mailpoet_nepotriviri');
+    $db->exec("UPDATE newsletter_subscribers SET status = 'unsubscribed' WHERE mailpoet_id = 13");
     // Pagina simplă și limita.
     $r = $cerere('/?mailpoet_page=subscriptions');
     $verifica($e . 'pagina simplă ?mailpoet_page=subscriptions → cadrul P, cum e capturat', $r['cod'] === 200 && str_contains($r['corp'], '[mailpoet_page]'));

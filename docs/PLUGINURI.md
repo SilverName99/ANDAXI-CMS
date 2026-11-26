@@ -1118,12 +1118,16 @@ dispar, iar linkurile spre el se scot din pagini.
     200-ul gol al dezabonării „cu un clic” și pe 403-ul unui formular). Bugetul: 60 de cereri pe minut de pe aceeași rețea pentru tot
     routerul (`BugetRouter`: un rând în `register_submit_logs`, starea `l:mailpoet`, cu o amprentă HMAC a rețelei în locul adresei, fără
     user agent; rândurile mai vechi de o oră se șterg la fiecare cerere); peste el, un GET primește răspunsul unui jeton greșit, iar orice
-    POST pe `track/click` același 200 gol, fără ca jetonul să fie cântărit (un POST pe linkul de dezabonare al cozii dezabonează și
-    atunci). Retragerile nu țin seama de buget: dezabonarea „cu un clic”, paginile dezabonării și butonul lor, oprirea urmăririi.
+    alt POST pe `track/click` același 200 gol, fără ca jetonul să fie cântărit. Un POST pe linkul de dezabonare al cozii (antetul
+    `List-Unsubscribe` urmărit) e dezabonarea „cu un clic”: răspunde mereu același 200 gol, oricare ar fi jetonul, sub și peste buget, și
+    dezabonează cu jetonul bun. Retragerile nu țin seama de buget: dezabonarea „cu un clic”, paginile dezabonării și butonul lor, oprirea
+    urmăririi.
     Jetoanele: prefixul jetonului MailPoet (regula 5.45), cele 6 caractere vechi cât ține perioada de grație
     (`mailpoet_jetoane_vechi_pana_la`, cel mult 10 încercări greșite în 24 de ore), un jeton păstrat mai scurt de 32 de caractere doar
-    cât abonatul are sub 10 nepotriviri în 24 de ore (apoi, 24 de ore, nici cel bun), jetonul CMS `ax1.` (HMAC, fără să expire) în
-    linkurile noi. Paginile sunt regiunea `mailpoet:pagina` a cadrului capturat R (`RandarePagina`), cu textele pachetului ro_RO, fără
+    cât abonatul are sub 10 nepotriviri în 24 de ore (apoi, 24 de ore, nici cel bun: paginile, clicurile și „vezi în browser” arată dacă
+    jetonul e bun), jetonul CMS `ax1.` (HMAC, fără să expire) în linkurile noi. Dezabonarea „cu un clic” (un-clicul neurmărit și POST-ul pe
+    linkul urmărit de dezabonare, al căror 200 gol nu spune nimic) primește jetonul întreg și peste limită, ca MailPoet: oricine poate
+    număra nepotriviri pentru un abonat, nimeni nu-l poate opri să se dezaboneze; o nepotrivire a ei se numără ca oricare alta. Paginile sunt regiunea `mailpoet:pagina` a cadrului capturat R (`RandarePagina`), cu textele pachetului ro_RO, fără
     trackerele site-ului (adresa lor poartă adresa de email și jetonul abonatului; VC-MP-23). POST-urile routerului nu pornesc sesiunea
     (`SesiuneLaNevoie`: niciun cookie de la un clic dintr-un email). Formularele paginilor (sondajul, oprirea urmăririi, administrarea)
     cer originea site-ului (`Sec-Fetch-Site`, altfel `Origin`), cu o excepție: `Origin: null` fără `Sec-Fetch-Site` (browserele mai vechi,

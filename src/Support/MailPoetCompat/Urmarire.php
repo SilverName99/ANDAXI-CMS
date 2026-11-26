@@ -18,12 +18,15 @@ use Throwable;
  * Clicul: date greșite, abonat sau coadă necunoscute, jeton greșit, abonat neprocesat în coadă → 404, pagina 404 a site-ului; un link
  * necunoscut al cozii → 302 la prima pagină; altfel clicul se notează (fără cookie-uri, VC-MP-12; nimic cu urmărirea refuzată, în
  * previzualizare sau pe linkul de oprire a urmăririi) și 302 la adresa importată pentru acel hash. Codurile `link:` duc la adresele
- * abonării în forma MailPoet, cu jetonul cererii; un POST pe linkul de dezabonare (antetul `List-Unsubscribe` urmărit al emailurilor
- * din 2024) dezabonează pe loc și răspunde 200, fără redirecționare (VC-MP-01, RFC 8058 §3.1). Niciodată spre o gazdă venită din
- * date: o adresă a cărei gazdă se schimbă după codurile scurte duce la prima pagină (aceeasiDestinatie). Peste bugetul routerului
- * (Router::LIMITA_MINUT): un GET primește răspunsul unui jeton greșit (404); orice POST primește același 200 cu corpul gol, fără ca
- * jetonul să fie cântărit (SEC-E-02), afară de un POST pe linkul de dezabonare al cozii (găsit după coadă și hash, fără jeton), a cărui
- * dezabonare se face și atunci, dacă jetonul e bun (ca un-clicul neurmărit, nu se refuză niciodată) — răspunsul e același.
+ * abonării în forma MailPoet, cu jetonul cererii. Niciodată spre o gazdă venită din date: o adresă a cărei gazdă se schimbă după
+ * codurile scurte duce la prima pagină (aceeasiDestinatie).
+ *
+ * Un POST pe linkul de dezabonare al cozii (antetul `List-Unsubscribe` urmărit al emailurilor din 2024; linkul se găsește după coadă și
+ * hash, fără jeton) e dezabonarea „cu un clic”: cu jetonul bun dezabonează pe loc, și răspunde MEREU același 200 cu corpul gol, fără
+ * redirecționare (VC-MP-01, RFC 8058 §3.1), oricare ar fi jetonul, sub sau peste bugetul routerului. Fiindcă răspunsul nu spune nimic,
+ * jetonul întreg trece și peste limita nepotrivirilor unui jeton scurt (SEC-E-02-R1, ca un-clicul neurmărit, Router::unClic). Peste
+ * bugetul routerului (Router::LIMITA_MINUT), un GET primește răspunsul unui jeton greșit (404), iar orice alt POST același 200 cu corpul
+ * gol, fără ca jetonul să fie cântărit (SEC-E-02).
  *
  * Un clic pe un link al abonamentului (dezabonarea, administrarea, oprirea urmăririi) se notează, dar nu reactivează un abonat inactiv
  * (E-LEG-04): nu e un semn că vrea emailuri.
@@ -56,9 +59,18 @@ final class Urmarire
             echo base64_decode(self::GIF);
             return;
         }
-        if ($peste && $estePost) {
-            self::postPesteBuget($db, $d);
-            return;
+        if ($estePost) {
+            $coadaPost = self::idPozitiv($d['queue_id']);
+            $linkPost = $coadaPost > 0 ? self::link($db, $coadaPost, $d['link_hash']) : null;
+            if (self::esteDezabonare($linkPost)) {
+                self::dezabonareUrmarita($db, $d, (string) $linkPost);
+                return;
+            }
+            if ($peste) {
+                // Orice alt POST peste buget: același 200 gol, fără ca jetonul să fie cântărit (SEC-E-02).
+                Router::gol(200, true);
+                return;
+            }
         }
         $v = $peste ? null : self::valid($db, $d);
         if ($v === null) {
@@ -78,16 +90,6 @@ final class Urmarire
         if ($a !== null) {
             if ($a === '') {
                 self::negasit();
-                return;
-            }
-            if ($estePost && in_array($a, ['subscription_unsubscribe_url', 'subscription_instant_unsubscribe_url'], true)) {
-                if ($noteaza) {
-                    self::noteazaClic($db, $coada, $abonat, $link);
-                }
-                if (empty($d['preview']) && (string) $abonat['status'] !== 'unsubscribed') {
-                    Abonati::dezaboneaza($db, $abonat, 'newsletter', 'one_click', $coada);
-                }
-                Router::gol(200, true);
                 return;
             }
             $campanie = self::campanie($db, $coada);
@@ -145,18 +147,19 @@ final class Urmarire
     }
 
     /**
-     * Abonatul (după `mailpoet_id`), coada și jetonul, verificate (jetonul, procesarea în coadă), sau null.
+     * Abonatul (după `mailpoet_id`), coada și jetonul, verificate (jetonul, procesarea în coadă), sau null. `$retragere`: verificarea
+     * dezabonării „cu un clic” (Jetoane::verifica: jetonul întreg trece și peste limita nepotrivirilor unui jeton scurt).
      *
      * @param array<string, mixed> $d
      * @return array{abonat: array<string, mixed>, coada: array<string, mixed>, jeton: string}|null
      */
-    private static function valid(PDO $db, array $d): ?array
+    private static function valid(PDO $db, array $d, bool $retragere = false): ?array
     {
         if (empty($d['subscriber_id']) || empty($d['subscriber_token']) || empty($d['queue_id'])) {
             return null;
         }
-        $idMp = is_int($d['subscriber_id']) || (is_string($d['subscriber_id']) && ctype_digit($d['subscriber_id'])) ? (int) $d['subscriber_id'] : 0;
-        $idCoada = is_int($d['queue_id']) || (is_string($d['queue_id']) && ctype_digit($d['queue_id'])) ? (int) $d['queue_id'] : 0;
+        $idMp = self::idPozitiv($d['subscriber_id']);
+        $idCoada = self::idPozitiv($d['queue_id']);
         if ($idMp <= 0 || $idCoada <= 0) {
             return null;
         }
@@ -165,7 +168,7 @@ final class Urmarire
         if ($coada === null || $abonat === null) {
             return null;
         }
-        $jeton = Jetoane::verifica($db, $abonat, $d['subscriber_token']);
+        $jeton = Jetoane::verifica($db, $abonat, $d['subscriber_token'], $retragere);
         if ($jeton === null || !Abonati::procesat($db, $coada, (int) $abonat['id'])) {
             return null;
         }
@@ -186,27 +189,32 @@ final class Urmarire
     }
 
     /**
-     * Un POST peste bugetul routerului: mereu 200 cu corpul gol și antetele un-clicului, oricare ar fi datele (nimic aflat despre jeton).
-     * Jetonul se cântărește doar pentru un POST pe linkul de dezabonare al cozii (linkul se găsește după coadă și hash, fără jeton): o
-     * dezabonare „cu un clic” prin antetul urmărit nu se refuză niciodată, ca un-clicul neurmărit (Router::unClic). Ghicitul jetoanelor
-     * scurte pe acest drum îl oprește numărul de nepotriviri al abonatului (Jetoane::verifica).
+     * Un POST pe linkul de dezabonare al cozii (dezabonarea „cu un clic” prin antetul `List-Unsubscribe` urmărit): mereu 200 cu corpul
+     * gol și antetele un-clicului, oricare ar fi jetonul, sub sau peste bugetul routerului (nimic aflat despre jeton, RFC 8058: nicio
+     * redirecționare). Cu jetonul bun (și peste limita nepotrivirilor unui jeton scurt: răspunsul nu arată nimic, SEC-E-02-R1), clicul
+     * se notează (ca MailPoet, afară de previzualizare și de urmărirea refuzată) și abonatul se dezabonează, dacă nu era deja. Un jeton
+     * greșit se numără ca oricare altul (Jetoane::verifica), deci tot nu ajută la ghicirea lui pe paginile care îl arată.
      *
      * @param array<string, mixed> $d
      */
-    private static function postPesteBuget(PDO $db, array $d): void
+    private static function dezabonareUrmarita(PDO $db, array $d, string $link): void
     {
-        $coada = is_int($d['queue_id']) || (is_string($d['queue_id']) && ctype_digit($d['queue_id'])) ? (int) $d['queue_id'] : 0;
-        $link = $coada > 0 ? self::link($db, $coada, $d['link_hash']) : null;
-        if (self::esteDezabonare($link)) {
-            $v = self::valid($db, $d);
-            if ($v !== null && empty($d['preview']) && (string) $v['abonat']['status'] !== 'unsubscribed') {
-                if ((int) ($v['abonat']['urmarire_refuzata'] ?? 0) === 0) {
-                    self::noteazaClic($db, $v['coada'], $v['abonat'], (string) $link);
-                }
+        $v = self::valid($db, $d, true);
+        if ($v !== null && empty($d['preview'])) {
+            if ((int) ($v['abonat']['urmarire_refuzata'] ?? 0) === 0) {
+                self::noteazaClic($db, $v['coada'], $v['abonat'], $link);
+            }
+            if ((string) $v['abonat']['status'] !== 'unsubscribed') {
                 Abonati::dezaboneaza($db, $v['abonat'], 'newsletter', 'one_click', $v['coada']);
             }
         }
         Router::gol(200, true);
+    }
+
+    /** Un id din `data` (un număr întreg sau un text doar din cifre), altfel 0. */
+    private static function idPozitiv(mixed $v): int
+    {
+        return is_int($v) || (is_string($v) && $v !== '' && ctype_digit($v)) ? (int) $v : 0;
     }
 
     /**

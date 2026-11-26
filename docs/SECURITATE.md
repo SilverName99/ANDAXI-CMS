@@ -169,11 +169,14 @@ abonare Divi primesc și ele cereri de la oricine:
   caractere), comparată cu `hash_equals`; un jeton vechi de 6 caractere trece doar cât ține perioada de grație a lui MailPoet și cel
   mult 10 încercări greșite în 24 de ore pe abonat. Jetonul site-ului (`ax1.`) e un HMAC cu cheia newsletterului, pe scopul lui.
 - **Fără oracol:** un jeton greșit dă aceeași pagină ca o adresă necunoscută (404); deschiderea dă mereu imaginea; dezabonarea „cu un
-  clic” (RFC 8058) răspunde mereu 200 gol. Peste 60 de cereri pe minut de pe aceeași rețea (`BugetRouter`), un GET primește răspunsul
-  unui jeton greșit, iar orice POST pe `track/click` același 200 gol, fără ca jetonul să fie cântărit; retragerile (dezabonarea,
-  oprirea urmăririi) nu țin seama de buget. Un jeton păstrat mai scurt de 32 de caractere (un jeton MailPoet de 6 caractere niciodată
-  lungit se ghicește din 2^24 încercări) trece doar cât abonatul are sub 10 nepotriviri în 24 de ore, numărate înaintea comparației;
-  planul importului spune câți abonați au un astfel de jeton.
+  clic” (RFC 8058: un-clicul neurmărit și POST-ul pe linkul urmărit de dezabonare) răspunde mereu 200 gol, oricare ar fi jetonul. Peste
+  60 de cereri pe minut de pe aceeași rețea (`BugetRouter`), un GET primește răspunsul unui jeton greșit, iar orice alt POST pe
+  `track/click` același 200 gol, fără ca jetonul să fie cântărit; retragerile (dezabonarea, oprirea urmăririi) nu țin seama de buget.
+  Un jeton păstrat mai scurt de 32 de caractere (un jeton MailPoet de 6 caractere niciodată lungit se ghicește din 2^24 încercări)
+  trece doar cât abonatul are sub 10 nepotriviri în 24 de ore, numărate înaintea comparației, pe drumurile al căror răspuns arată dacă
+  jetonul e bun (paginile, clicurile, „vezi în browser”); dezabonarea „cu un clic”, al cărei răspuns nu arată nimic, îl primește și
+  peste limită (altfel oricine ar putea bloca dezabonarea unui abonat cu 10 jetoane greșite). Planul importului spune câți abonați au
+  un astfel de jeton.
 - **Jurnalul bugetului:** routerul nu păstrează IP-uri și user agent-uri: în `register_submit_logs`, starea `l:mailpoet`, doar o
   amprentă HMAC-SHA256 a rețelei (cu cheia cadrului capturat; IPv6 pe /64), iar rândurile mai vechi de o oră se șterg la fiecare cerere.
   Singurul IP scris de router e dovada acordului (`confirmed_ip`, la confirmare).

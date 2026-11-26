@@ -28,7 +28,7 @@ use Throwable;
  *  - bugetul: LIMITA_MINUT cereri pe minut pe rețea pentru tot routerul (BugetRouter: doar o amprentă HMAC a rețelei, fără user
  *    agent, ștearsă după o oră); peste el, răspunsul unui jeton greșit (nimic aflat), afară de o retragere: dezabonarea (un-clicul,
  *    pagina dezabonării și butonul ei) și oprirea urmăririi nu se refuză niciodată cu pagina F (E-LEG-05); jetoanele scurte le apără
- *    numărul de nepotriviri al abonatului (Jetoane);
+ *    numărul de nepotriviri al abonatului (Jetoane), care nu oprește niciodată un-clicul (SEC-E-02-R1);
  *  - HEAD pe `action=confirm` nu confirmă nimic (un scaner de linkuri nu dă acordul în locul omului; VC-MP-24).
  *
  * În jurnale (error_log) nu ajunge nicio adresă de email, niciun jeton și niciun IP. Singurul IP scris de router e dovada acordului
@@ -273,12 +273,13 @@ final class Router
 
     /**
      * Abonatul din `data` cu jetonul verificat (null: necunoscut, jeton greșit sau peste buget), cu forma canonică a jetonului și coada
-     * verificată. `$confirmare`: primește și varianta de confirmare (cu `t`), marcată `proaspat`.
+     * verificată. `$confirmare`: primește și varianta de confirmare (cu `t`), marcată `proaspat`. `$retragere`: verificarea un-clicului
+     * (Jetoane::verifica: jetonul întreg trece și peste limita nepotrivirilor unui jeton scurt).
      *
      * @param array<mixed> $date
      * @return array{abonat: array<string, mixed>, jeton: string, coada: ?array<string, mixed>, proaspat: bool}|null
      */
-    public static function verificat(PDO $db, array $date, bool $peste, bool $confirmare = false): ?array
+    public static function verificat(PDO $db, array $date, bool $peste, bool $confirmare = false, bool $retragere = false): ?array
     {
         if ($peste) {
             return null;
@@ -289,7 +290,7 @@ final class Router
         }
         $token = $date['token'] ?? null;
         $proaspat = $confirmare && array_key_exists('t', $date) && Jetoane::verificaConfirmare($abonat, $token, $date['t']);
-        $jeton = $proaspat ? Jetoane::ax1((int) $abonat['id'], (string) $abonat['email']) : Jetoane::verifica($db, $abonat, $token);
+        $jeton = $proaspat ? Jetoane::ax1((int) $abonat['id'], (string) $abonat['email']) : Jetoane::verifica($db, $abonat, $token, $retragere);
         if ($jeton === null || $jeton === '') {
             return null;
         }
@@ -321,13 +322,15 @@ final class Router
     /**
      * Dezabonarea „cu un clic” (RFC 8058: POST la adresa din `List-Unsubscribe`, sau POST fără `type=confirmation`): doar jetonul
      * abonatului, fără CSRF și fără bugetul cererilor; mereu 200 cu corpul gol și antetele paginilor abonamentului (ca MailPoet, care
-     * le trimite la inițializarea paginii), oricare ar fi rezultatul (nimic aflat).
+     * le trimite la inițializarea paginii), oricare ar fi rezultatul (nimic aflat). Fiindcă răspunsul nu spune nimic, jetonul întreg al
+     * abonatului dezabonează și peste limita nepotrivirilor unui jeton scurt, pe care oricine o poate atinge cu jetoane greșite
+     * (SEC-E-02-R1; MailPoet primește mereu jetonul întreg).
      *
      * @param array<mixed> $date
      */
     private static function unClic(PDO $db, array $date, bool $previzualizare): void
     {
-        $g = self::verificat($db, $date, false);
+        $g = self::verificat($db, $date, false, false, true);
         if ($g !== null && !$previzualizare && (string) $g['abonat']['status'] !== 'unsubscribed') {
             Abonati::dezaboneaza($db, $g['abonat'], 'newsletter', 'one_click', $g['coada']);
             if ($g['coada'] !== null && (int) ($g['abonat']['urmarire_refuzata'] ?? 0) === 0) {

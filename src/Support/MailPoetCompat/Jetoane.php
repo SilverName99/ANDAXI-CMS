@@ -29,7 +29,11 @@ use Throwable;
  * Un jeton păstrat mai scurt de LUNGIME_SIGURA caractere (un abonat al cărui jeton MailPoet nu a fost niciodată lungit) se ghicește
  * ușor: pentru el, regula 2 trece doar cât abonatul are sub MAX_NEPOTRIVIRI nepotriviri în 24 de ore (verificat înaintea comparației),
  * iar o cerere care nu se potrivește nicăieri se numără la fel (SEC-E-02). Peste limită nici jetonul bun nu mai trece, 24 de ore de la
- * ultima nepotrivire numărată (ca la perioada de grație); jetonul CMS-ului (`ax1.`, din emailurile trimise de site) trece mereu.
+ * ultima nepotrivire numărată (ca la perioada de grație), pe drumurile al căror răspuns arată dacă jetonul e bun (paginile, clicurile,
+ * „vezi în browser”): altfel ele ar fi un oracol care ocolește limita. Retragerea „cu un clic” (`$retragere`: POST-ul RFC 8058, care
+ * răspunde mereu același 200 gol, deci nu arată nimic) primește jetonul întreg și peste limită, ca MailPoet 5.45.2, care îl primește
+ * mereu (SEC-E-02-R1): oricine poate număra nepotriviri pentru un abonat, dar nimeni nu-l poate opri să se dezaboneze. Jetonul
+ * CMS-ului (`ax1.`, din emailurile trimise de site) trece mereu.
  *
  * Varianta de confirmare (doar `action=confirm`): HMAC pe id, adresă și momentul cererii `t` (din `data`), valabilă
  * NewsletterService::ZILE_CONFIRMARE zile, ca linkurile de confirmare ale CMS-ului.
@@ -59,10 +63,13 @@ final class Jetoane
     /**
      * Jetonul cererii e al abonatului? Întoarce forma lui de pus în linkurile paginii (VC-MP-10: jetonul cu care a venit omul, partea
      * verificată; după o potrivire pe cele 6 caractere vechi, jetonul CMS-ului, care nu expiră odată cu perioada de grație), sau null.
+     * `$retragere`: o dezabonare „cu un clic” (un răspuns care nu depinde de rezultat): jetonul păstrat întreg trece și peste limita
+     * nepotrivirilor unui jeton scurt (SEC-E-02-R1); o nepotrivire se numără ca oricare alta. Grația celor 6 caractere vechi rămâne sub
+     * limita ei (regula lui MailPoet).
      *
      * @param array<string, mixed> $abonat rândul din `newsletter_subscribers`
      */
-    public static function verifica(PDO $db, array $abonat, mixed $cerere): ?string
+    public static function verifica(PDO $db, array $abonat, mixed $cerere, bool $retragere = false): ?string
     {
         $id = (int) ($abonat['id'] ?? 0);
         if (!is_string($cerere) || $cerere === '' || $id <= 0) {
@@ -73,7 +80,7 @@ final class Jetoane
         $areJeton = $lungime > 0 && strlen($amprenta) === 64;
         $scurt = $areJeton && $lungime < self::LUNGIME_SIGURA;
         $blocat = $scurt && self::nepotriviri($db, $id) >= self::MAX_NEPOTRIVIRI;
-        if ($areJeton && !$blocat && strlen($cerere) >= $lungime && hash_equals($amprenta, hash('sha256', substr($cerere, 0, $lungime)))) {
+        if ($areJeton && (!$blocat || $retragere) && strlen($cerere) >= $lungime && hash_equals($amprenta, hash('sha256', substr($cerere, 0, $lungime)))) {
             return substr($cerere, 0, $lungime);
         }
         if (str_starts_with($cerere, self::PREFIX)) {
