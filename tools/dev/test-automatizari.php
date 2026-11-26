@@ -501,6 +501,8 @@ $verifica('scanarea clienților inactivi rulează cel mult o dată pe oră', Dec
 // B6. Cont nou de client, prin înregistrarea adevărată (POST /register).
 $aCont = $automatizare('cont_creat', [], [['cheie' => 'p1', 'tip' => 'email', 'setari' => ['email' => 'e1']]], ['e1' => ['Contul tău e gata', 'Text']]);
 $abonat('cont.nou.automat@exemplu.ro');
+// Limita înregistrărilor de pe aceeași adresă IP (alte teste au încercat de pe 127.0.0.1): jurnalul se golește, apoi se pune la loc.
+$db->exec('DELETE FROM register_submit_logs');
 $pagina = $cerere('GET', '/register', $jarClient);
 preg_match('/name="register_form_token" value="([^"]+)"/', $pagina['corp'], $tok);
 preg_match('/name="register_form_rendered_at" value="(\d+)"/', $pagina['corp'], $randat);

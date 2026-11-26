@@ -52,6 +52,11 @@
   const CULORI_GRUP = { timp: ['#fef3c7', '#92400e'], mesaje: ['#d1fae5', '#065f46'], abonat: ['#e0e7ff', '#3730a3'] };
   const DESEN = {
     decl: '<path d="M6 7h12l-1 13H7L6 7z"></path><path d="M9 7a3 3 0 0 1 6 0"></path>',
+    decl_abonat_confirmat: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M16 11l2 2 4-4"></path>',
+    decl_cont_creat: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path>',
+    decl_cos_abandonat: '<circle cx="9" cy="20" r="1.5"></circle><circle cx="18" cy="20" r="1.5"></circle><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6"></path>',
+    decl_client_inactiv: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path><path d="M4 4l16 16"></path>',
+    decl_eticheta_primita: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"></path><path d="M7.5 7.5h.01"></path>',
     asteapta: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
     daca: '<path d="M12 3v6"></path><path d="M12 9L6 15v6"></path><path d="M12 9l6 6v6"></path>',
     email: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path>',
@@ -207,7 +212,7 @@
   function card(cheie, tip, eticheta, titlu, sub, insigna) {
     const [fundal, culoare] = CULORI[tip] || CULORI.email;
     const ic = h('span', { class: 'af-ic', style: 'background:' + fundal + ';color:' + culoare });
-    ic.appendChild(svg(tip));
+    ic.appendChild(svg(tip === 'decl' && DESEN['decl_' + S.declansator] ? 'decl_' + S.declansator : tip));
     return h('button', {
       type: 'button', class: 'af-card', 'data-cheie': cheie, 'aria-pressed': ales === cheie ? 'true' : 'false',
       'aria-label': eticheta + ': ' + titlu + (sub ? ', ' + sub : ''),

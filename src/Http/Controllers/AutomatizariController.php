@@ -276,7 +276,7 @@ final class AutomatizariController
         if ($db === null) {
             return;
         }
-        if (!$json && (!AdminCsrf::valid() || !Flux::disponibil($db))) {
+        if (!$json && (!AdminCsrf::valid() || !$db instanceof PDO || !Flux::disponibil($db))) {
             Flash::set('error', 'Sesiunea formularului a expirat. Reîncarcă pagina și încearcă din nou.');
             header('Location: /admin/automatizari');
             return;

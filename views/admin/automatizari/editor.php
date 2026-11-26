@@ -17,7 +17,7 @@ $stareEticheta = \App\Support\Automatizari\Flux::STARI[(string) $date['stare']] 
 .af-bara{height:64px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 20px;background:#fff;border-bottom:1px solid #e5e7eb;}
 .af-inapoi{text-decoration:none;color:#4b5563;font-size:14px;padding:8px 6px;border-radius:8px;white-space:nowrap;}
 .af-inapoi:hover{background:#f3f4f6;color:#111827;}
-.af-nume{font:inherit;font-size:16px;font-weight:600;color:#111827;border:1px solid transparent;border-radius:8px;padding:6px 8px;min-width:120px;max-width:380px;background:transparent;}
+.af-nume{font:inherit;font-size:16px;font-weight:600;color:#111827;border:1px solid transparent;border-radius:8px;padding:6px 8px;min-width:120px;max-width:380px;background:transparent;field-sizing:content;}
 .af-nume:hover{border-color:#e5e7eb;}
 .af-nume:focus{border-color:var(--af-albastru);outline:none;box-shadow:0 0 0 3px rgba(29,78,216,.15);}
 .af-stare{font-size:12px;padding:4px 10px;border-radius:999px;font-weight:600;white-space:nowrap;}
@@ -86,8 +86,9 @@ $stareEticheta = \App\Support\Automatizari\Flux::STARI[(string) $date['stare']] 
 .af-panou-antet strong{font-size:18px;font-weight:600;}
 .af-panou-corp{flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain;}
 .af-camp{font-size:13px;color:#4b5563;display:flex;flex-direction:column;gap:6px;}
-.af-camp select,.af-camp input[type=text],.af-camp input[type=email],.af-camp input[type=number],.af-camp input[type=search],.af-camp textarea{height:44px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px;font:inherit;font-size:14px;color:#111827;background:#fff;box-sizing:border-box;width:100%;}
-.af-camp textarea{height:96px;padding:8px 10px;resize:vertical;}
+.af-panou-corp select,.af-panou-corp input[type=text],.af-panou-corp input[type=email],.af-panou-corp input[type=number],.af-panou-corp input[type=search],.af-panou-corp textarea{height:44px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px;font:inherit;font-size:14px;color:#111827;background:#fff;box-sizing:border-box;width:100%;}
+.af-panou-corp textarea{height:96px;padding:8px 10px;resize:vertical;}
+.af-panou-corp select:focus,.af-panou-corp input:focus,.af-panou-corp textarea:focus{border-color:var(--af-albastru);outline:none;box-shadow:0 0 0 3px rgba(29,78,216,.15);}
 .af-rand{display:flex;gap:8px;align-items:flex-end;}
 .af-rand > *{flex:1;}
 .af-rand > .af-ingust{flex:0 0 90px;}
