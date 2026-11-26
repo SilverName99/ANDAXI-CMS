@@ -134,6 +134,12 @@ $verifica('așteptarea cu intervalul orar: 19:30 + 1 oră → a doua zi la 9:00;
     && Motor::scadentaAsteptare('2026-12-01 03:00:00', $fereastra)->format('Y-m-d H:i') === '2026-12-01 09:00'
     && Motor::scadentaAsteptare('2026-12-01 10:00:00', $fereastra)->format('Y-m-d H:i') === '2026-12-01 11:00'
     && Motor::scadentaAsteptare('2026-12-01 10:00:00', ['cat' => 3, 'unitate' => 'zile'])->format('Y-m-d H:i') === '2026-12-04 10:00');
+$verifica('așteptarea în zile peste schimbarea orei (ora de vară, 28 martie 2027; cea de iarnă, 31 octombrie 2027): aceeași oră din zi, nu cu o oră alături',
+    Motor::scadentaAsteptare('2027-03-27 19:30:00', ['cat' => 1, 'unitate' => 'zile'] + $fereastra)->format('Y-m-d H:i') === '2027-03-28 19:30'
+    && Motor::scadentaAsteptare('2027-10-29 10:00:00', ['cat' => 3, 'unitate' => 'zile'])->format('Y-m-d H:i') === '2027-11-01 10:00'
+    && Motor::scadentaAsteptare('2027-03-25 10:00:00', ['cat' => 1, 'unitate' => 'saptamani'])->format('Y-m-d H:i') === '2027-04-01 10:00'
+    && Motor::scadentaAsteptare('2027-03-28 01:30:00', ['cat' => 2, 'unitate' => 'ore'])->format('Y-m-d H:i') === '2027-03-28 04:30',
+    Motor::scadentaAsteptare('2027-03-27 19:30:00', ['cat' => 1, 'unitate' => 'zile'] + $fereastra)->format('Y-m-d H:i'));
 $buget = new BugetTrimitere(3, null);
 $buget->consuma(2);
 $verifica('bugetul: 3 − 2 = 1, apoi epuizat', $buget->ramase() === 1 && !$buget->epuizat() && (function () use ($buget): bool { $buget->consuma(); return $buget->epuizat(); })());
