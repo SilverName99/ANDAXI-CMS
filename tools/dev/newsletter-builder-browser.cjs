@@ -4,7 +4,7 @@
 // (blocurile lipite, aceeași înălțime ca emailul randat), eticheta blocului ales și într-o coloană, scrisul pe pânză (bara
 // B / I / U / link / culoare) cu textul curățat, încărcarea pozelor prin tragere și lipire, Anulează / Refă, salvarea automată,
 // tastatura, 1366 px; „Alege un șablon” (G14–G19: galeria cu miniaturi, previzualizarea, întrebarea, Anulează, aceleași blocuri
-// ca la 163cba7, 390 px). Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_CAPTURI (dosarul capturilor,
+// ca la 163cba7, 390 px); mișcarea pe pânză (G20, cu și fără „mișcare redusă”). Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_CAPTURI (dosarul capturilor,
 // opțional). Scrie pe stdout un JSON cu rezultatele.
 'use strict';
 
@@ -631,6 +631,65 @@ const indexTip = async (pagina, tip, ultimul) => {
       JSON.stringify({ ingustGal, apasat: ingustPrev.apasat, latime: ingustPrev.latime, incape }));
     await pagina.keyboard.press('Escape');
     await pagina.setViewportSize({ width: 1366, height: 800 });
+
+    // G20: mișcarea pe pânză (FLIP). Aceleași acțiuni — ↓, Duplică, Șterge, ↑, un bloc din paletă (clic), ⠿ tras în capul emailului,
+    // un Titlu tras într-o coloană, Anulează de două ori — o dată cu mișcarea pornită și o dată cu „mișcare redusă”: aceeași ordine a
+    // blocurilor după fiecare pas, pânza în aceeași ordine ca datele, animații doar pe pânză și doar cu mișcarea pornită, nimic rămas
+    // după ele (nici în blocuri, nici în formular).
+    const scenariuMiscare = async () => {
+      await pagina.evaluate(() => {
+        window.EB_DATE.sabloane.__flip = ['A', 'B', 'C', 'D', 'E'].map((t) => ({ type: 'text', content: 'Bloc ' + t, background: '#ffffff', padding_top: 18, padding_bottom: 18 }))
+          .concat([{ type: 'columns_2', columns: [[], []], background: '#ffffff' }]);
+        window.ebApplyStarter('magazin:__flip');
+      });
+      await pagina.waitForTimeout(150);
+      const semn = () => pagina.evaluate(() => {
+        const b = window.ebBuilder.blocuri();
+        const date = b.map((x) => x.type === 'text' ? x.content.replace('Bloc ', '') : x.type === 'columns_2' ? 'K[' + (x.columns || []).map((c) => c.map((s) => s.type).join('+')).join('|') + ']' : x.type);
+        const canvas = document.getElementById('eb-canvas');
+        const panza = [...canvas.querySelectorAll(':scope > .eb-bloc')].map((el, k) => (+el.dataset.blockIndex === k ? '' : '!') + (b[+el.dataset.blockIndex] ? '' : '?'));
+        const pePanza = panza.every((x) => x === '') && panza.length === b.length;
+        const anim = document.getAnimations().filter((a) => a.effect && a.effect.target && canvas.contains(a.effect.target)).length;
+        return { ordine: date.join(' '), pePanza, anim };
+      });
+      const alege = async (i) => { await pagina.click(`#eb-canvas > [data-block-index="${i}"]`, { position: { x: 4, y: 4 } }); await pagina.waitForTimeout(30); };
+      const act = (a) => pagina.click(`#eb-canvas .eb-bloc.is-sel [data-act="${a}"]`);
+      const pasi = [];
+      const pas = async (nume, fa) => { await fa(); const s = await semn(); pasi.push(Object.assign({ nume }, s)); await pagina.waitForTimeout(320); };
+      await alege(0);
+      await pas('jos', () => act('jos'));
+      await pas('duplica', () => act('dup'));
+      await pas('sterge', () => act('sterge'));
+      await alege(2);
+      await pas('sus', () => act('sus'));
+      await pas('paleta', () => pagina.click('.eb-block-btn[data-block-type="divider"]'));
+      await pas('trage', () => pagina.locator('#eb-canvas .eb-bloc.is-sel [data-act="trage"]').dragTo(pagina.locator('#eb-canvas'), { targetPosition: { x: 300, y: 3 } }));
+      await pas('coloana', () => pagina.locator('.eb-block-btn[data-block-type="header"]').dragTo(pagina.locator('.eb-col-cell[data-col-ci="0"]').first()));
+      await pas('anuleaza1', () => pagina.click('#btn-undo'));
+      await pas('anuleaza2', () => pagina.click('#btn-undo'));
+      await pagina.waitForTimeout(500);
+      const rest = await pagina.evaluate(() => ({ ramase: document.querySelectorAll('#eb-canvas .eb-fantoma, #eb-canvas .eb-lumina').length,
+        formular: document.getElementById('eb-blocks-input').value === JSON.stringify(window.ebBuilder.blocuri()),
+        curat: !/eb-(lumina|fantoma)/.test(document.getElementById('eb-blocks-input').value) }));
+      return { pasi, rest, final: JSON.stringify(await blocuri(pagina)) };
+    };
+    await clic(pagina, 'edit');
+    const cuMiscare = await scenariuMiscare();
+    await pagina.emulateMedia({ reducedMotion: 'reduce' });
+    const faraMiscare = await scenariuMiscare();
+    await pagina.emulateMedia({ reducedMotion: null });
+    const ordineAsteptata = ['B A C D E K[|]', 'B A A C D E K[|]', 'B A C D E K[|]', 'B C A D E K[|]', 'B C divider A D E K[|]', 'divider B C A D E K[|]',
+      'divider B C A D E K[header|]', 'divider B C A D E K[|]', 'B C divider A D E K[|]'];
+    const ordini = (r) => r.pasi.map((p) => p.ordine);
+    nota('G20 mișcarea pe pânză: ↓, Duplică, Șterge, ↑, un bloc din paletă, ⠿ tras, un Titlu tras într-o coloană și Anulează dau aceeași ordine a '
+      + 'blocurilor cu mișcarea pornită și cu „mișcare redusă”, pânza în ordinea datelor după fiecare pas; animațiile (doar pe pânză) rulează numai cu '
+      + 'mișcarea pornită (nu la Anulează); după ele nu rămâne nimic pe pânză, iar formularul și blocurile sunt aceleași în ambele feluri',
+      JSON.stringify(ordini(cuMiscare)) === JSON.stringify(ordineAsteptata) && JSON.stringify(ordini(faraMiscare)) === JSON.stringify(ordineAsteptata)
+      && cuMiscare.pasi.every((p) => p.pePanza) && faraMiscare.pasi.every((p) => p.pePanza)
+      && cuMiscare.pasi.filter((p) => !p.nume.startsWith('anuleaza')).every((p) => p.anim > 0) && cuMiscare.pasi.filter((p) => p.nume.startsWith('anuleaza')).every((p) => p.anim === 0)
+      && faraMiscare.pasi.every((p) => p.anim === 0) && cuMiscare.rest.ramase === 0 && faraMiscare.rest.ramase === 0 && cuMiscare.rest.formular && faraMiscare.rest.formular
+      && cuMiscare.rest.curat && cuMiscare.final === faraMiscare.final,
+      JSON.stringify({ cu: cuMiscare.pasi, fara: faraMiscare.pasi.map((p) => [p.ordine, p.anim]), restCu: cuMiscare.rest, restFara: faraMiscare.rest, aceleasi: cuMiscare.final === faraMiscare.final }));
 
     nota('nicio eroare JavaScript în pagina adminului', erori.length === 0, erori.join(' | '));
   } catch (e) {

@@ -35,7 +35,8 @@ declare(strict_types=1);
  *    ultimul clic se pune; o eroare se spune; titlul pus într-o coloană se vede, cu eticheta lui; pânza e lipită și de aceeași înălțime
  *    ca emailul randat; scrisul pe pânză (bara de text, lipirea) și codul din panou care nu rulează; pozele trase și lipite; Anulează /
  *    Refă; tastatura; salvarea automată; 1366 px; „Alege un șablon” (G14–G19): miniaturile adevărate, tastatura, previzualizarea Desktop /
- *    Mobil, întrebarea peste un email cu conținut, Anulează, aceleași blocuri ca înainte, 390 px. Fără Chromium: --fara-browser.
+ *    Mobil, întrebarea peste un email cu conținut, Anulează, aceleași blocuri ca înainte, 390 px; mișcarea pe pânză (G20: aceeași ordine a
+ *    blocurilor cu mișcarea pornită și cu „mișcare redusă”). Fără Chromium: --fara-browser.
  *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, sesiunile și emailurile
  * capturate. Raportul: $CMS_DEV_DIR/test-newsletter-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.

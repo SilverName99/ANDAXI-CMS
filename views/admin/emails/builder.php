@@ -192,6 +192,8 @@ $ebMaiMult = [
 .eb-col-cell{min-height:56px;}
 .eb-col-gol{display:block;padding:16px 6px;margin:2px;border:1px dashed #cbd5e1;border-radius:6px;color:#94a3b8;font:12px/1.4 var(--ax-font,system-ui,sans-serif);text-align:center;}
 .eb-col-cell.col-drag-over{outline:2px dashed #34d399;outline-offset:-2px;background:rgba(16,185,129,.06);}
+.eb-lumina{position:absolute;inset:0;z-index:4;pointer-events:none;background:rgba(59,130,246,.14);box-shadow:inset 0 0 0 2px rgba(59,130,246,.45);}
+.eb-fantoma{pointer-events:none;}
 .eb-indicator{position:absolute;left:0;right:0;height:4px;margin-top:-2px;background:var(--eb-albastru);border-radius:2px;z-index:8;pointer-events:none;display:none;box-shadow:0 0 0 2px rgba(255,255,255,.8);}
 .eb-email.is-drag-fisier{outline:2px dashed var(--eb-albastru);outline-offset:4px;}
 [data-edit][contenteditable="true"]{cursor:text;}

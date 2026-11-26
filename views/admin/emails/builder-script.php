@@ -193,6 +193,99 @@ function redo() {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   MIȘCAREA PE PÂNZĂ (FLIP): un bloc mutat alunecă la locul nou și vecinii după el, un bloc nou sau duplicat apare
+   (se mărește puțin și se luminează scurt), unul șters se stinge și se strânge. Doar pe pânză, după ce datele și pânza sunt
+   deja cele noi: blocurile, istoricul, salvarea și emailul nu știu nimic de ea. Cu „mișcare redusă” în sistem, nimic.
+═══════════════════════════════════════════════════════════ */
+const EB_MISCARE_MS = 220;
+const EB_MISCARE_EASE = 'cubic-bezier(.2,.8,.2,1)';
+function faraMiscare() {
+  try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return true; }
+}
+/** Elementele de pe pânză, cu blocul (obiectul) fiecăruia: blocurile emailului și blocurile din coloane. */
+function elementePanza() {
+  const canvas = document.getElementById('eb-canvas');
+  const lista = [];
+  if (!canvas) return lista;
+  canvas.querySelectorAll(':scope > [data-block-index]').forEach(el => {
+    const b = blocks[+el.dataset.blockIndex];
+    if (b) lista.push({el, b, sub: false});
+  });
+  canvas.querySelectorAll('[data-sub]').forEach(el => {
+    const b = caleBloc(el.dataset.sub);
+    if (b) lista.push({el, b, sub: true});
+  });
+  return lista;
+}
+/** Înainte de o schimbare: unde e fiecare bloc acum (ca dreptunghi pe ecran). */
+function flipInainte() {
+  if (faraMiscare() || previewMode !== 'edit' || typeof Element.prototype.animate !== 'function') return null;
+  const canvas = document.getElementById('eb-canvas');
+  if (!canvas) return null;
+  const pozitii = new Map();
+  elementePanza().forEach(({el, b}) => pozitii.set(b, {r: el.getBoundingClientRect(), el}));
+  return {pozitii, canvas};
+}
+/**
+ * După schimbare și după render(): fiecare bloc care s-a mutat pornește din locul vechi și alunecă la cel nou; `nou`
+ * (obiectul blocului adăugat sau duplicat) apare; `sters` (obiectul blocului scos) se stinge din locul lui vechi.
+ */
+function flipDupa(stare, optiuni) {
+  if (!stare) return;
+  const {nou, sters} = optiuni || {};
+  const {pozitii, canvas} = stare;
+  const dupa = elementePanza();
+  const parintiMutati = new Set();
+  dupa.filter(x => !x.sub).forEach(({el, b}) => {
+    const vechi = pozitii.get(b);
+    if (!vechi || b === nou) return;
+    const r = el.getBoundingClientRect();
+    const dx = vechi.r.left - r.left, dy = vechi.r.top - r.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    parintiMutati.add(el);
+    el.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'none'}], {duration: EB_MISCARE_MS, easing: EB_MISCARE_EASE});
+  });
+  dupa.filter(x => x.sub).forEach(({el, b}) => {
+    const vechi = pozitii.get(b);
+    if (!vechi || b === nou) return;
+    if (parintiMutati.has(el.closest('[data-block-index]'))) return; // se mută cu blocul lui
+    const r = el.getBoundingClientRect();
+    const dx = vechi.r.left - r.left, dy = vechi.r.top - r.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'none'}], {duration: EB_MISCARE_MS, easing: EB_MISCARE_EASE});
+  });
+  if (nou) {
+    const x = dupa.find(d => d.b === nou);
+    if (x) {
+      x.el.animate([{opacity: 0, transform: 'scale(.96)'}, {opacity: 1, transform: 'none'}], {duration: EB_MISCARE_MS, easing: EB_MISCARE_EASE});
+      // Luminarea scurtă: un strat peste bloc, fără clicuri, scos la final (nu ajunge în blocuri, nici în email).
+      const lumina = document.createElement('span');
+      lumina.className = 'eb-lumina';
+      lumina.setAttribute('aria-hidden', 'true');
+      x.el.appendChild(lumina);
+      lumina.animate([{opacity: 1}, {opacity: 0}], {duration: 700, easing: 'ease-out'}).finished.catch(() => {}).then(() => lumina.remove());
+    }
+  }
+  if (sters && pozitii.has(sters)) {
+    // Blocul șters nu mai e în date: o copie a lui, doar desen, se stinge și se strânge în locul vechi.
+    const {r, el} = pozitii.get(sters);
+    const c = canvas.getBoundingClientRect();
+    const fantoma = el.cloneNode(true);
+    fantoma.className = 'eb-fantoma';
+    [fantoma, ...fantoma.querySelectorAll('*')].forEach(n => {
+      ['data-block-index', 'data-sub', 'data-edit', 'data-unelte', 'data-act', 'id', 'tabindex', 'contenteditable', 'role', 'aria-label', 'aria-current'].forEach(a => n.removeAttribute(a));
+    });
+    fantoma.setAttribute('aria-hidden', 'true');
+    fantoma.inert = true;
+    fantoma.style.cssText = `position:absolute;left:${r.left - c.left - canvas.clientLeft}px;top:${r.top - c.top - canvas.clientTop + canvas.scrollTop}px;width:${r.width}px;height:${r.height}px;`
+      + 'margin:0;pointer-events:none;z-index:9;overflow:hidden;transform-origin:50% 0;';
+    canvas.appendChild(fantoma);
+    fantoma.animate([{opacity: 1, transform: 'scaleY(1)'}, {opacity: 0, transform: 'scaleY(.6)'}], {duration: EB_MISCARE_MS, easing: EB_MISCARE_EASE, fill: 'forwards'})
+      .finished.catch(() => {}).then(() => fantoma.remove());
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    OPERAȚIILE PE BLOCURI
 ═══════════════════════════════════════════════════════════ */
 function blocAles() {
@@ -201,6 +294,7 @@ function blocAles() {
   return blocks[sel.i];
 }
 function addBlock(type, index) {
+  const miscare = flipInainte();
   pushHistory();
   const b = blockDefault(type);
   const idx = (index === undefined || index < 0 || index > blocks.length) ? blocks.length : index;
@@ -208,14 +302,17 @@ function addBlock(type, index) {
   sel = {i: idx};
   tab = 'continut';
   render(); sync(); markDirty();
+  flipDupa(miscare, {nou: b});
   focusBloc();
 }
 function addInColoana(i, ci, type, imagine) {
   const b = blocks[i];
   if (!b || !eColoane(b.type) || !IN_COLOANA.includes(type)) return;
+  const miscare = flipInainte();
   pushHistory();
   const cnt = colWidths(b.type).length;
-  const cols = JSON.parse(JSON.stringify(b.columns || []));
+  // Aceleași obiecte în coloane noi (istoricul are deja copia lor): blocurile de lângă rămân aceleași pentru mișcare.
+  const cols = (b.columns || []).map(c => Array.isArray(c) ? [...c] : []);
   while (cols.length < cnt) cols.push([]);
   const nou = subBlockDefault(type);
   if (imagine) nou.image_url = imagine;
@@ -224,35 +321,44 @@ function addInColoana(i, ci, type, imagine) {
   sel = {i, ci, cbi: cols[ci].length - 1};
   tab = 'continut';
   render(); sync(); markDirty();
+  flipDupa(miscare, {nou});
 }
 function removeSel() {
   if (!sel || sel.subsol) return;
   inchideEditarea(false);
+  const miscare = flipInainte();
   pushHistory();
+  let sters;
   if (sel.ci !== undefined) {
     const col = blocks[sel.i].columns[sel.ci];
-    col.splice(sel.cbi, 1);
+    [sters] = col.splice(sel.cbi, 1);
     sel = {i: sel.i};
   } else {
-    blocks.splice(sel.i, 1);
+    [sters] = blocks.splice(sel.i, 1);
     sel = blocks.length ? {i: Math.min(sel.i, blocks.length - 1)} : null;
   }
   render(); sync(); markDirty();
+  flipDupa(miscare, {sters});
   focusBloc();
 }
 function duplicateSel() {
   if (!sel || sel.subsol) return;
   inchideEditarea(false);
+  const miscare = flipInainte();
   pushHistory();
+  let copie;
   if (sel.ci !== undefined) {
     const col = blocks[sel.i].columns[sel.ci];
-    col.splice(sel.cbi + 1, 0, JSON.parse(JSON.stringify(col[sel.cbi])));
+    copie = JSON.parse(JSON.stringify(col[sel.cbi]));
+    col.splice(sel.cbi + 1, 0, copie);
     sel = {i: sel.i, ci: sel.ci, cbi: sel.cbi + 1};
   } else {
-    blocks.splice(sel.i + 1, 0, JSON.parse(JSON.stringify(blocks[sel.i])));
+    copie = JSON.parse(JSON.stringify(blocks[sel.i]));
+    blocks.splice(sel.i + 1, 0, copie);
     sel = {i: sel.i + 1};
   }
   render(); sync(); markDirty();
+  flipDupa(miscare, {nou: copie});
   focusBloc();
 }
 function moveSel(delta) {
@@ -262,20 +368,24 @@ function moveSel(delta) {
   const de = sel.ci !== undefined ? sel.cbi : sel.i;
   const la = de + delta;
   if (la < 0 || la >= lista.length) return;
+  const miscare = flipInainte();
   pushHistory();
   [lista[de], lista[la]] = [lista[la], lista[de]];
   if (sel.ci !== undefined) sel = {i: sel.i, ci: sel.ci, cbi: la}; else sel = {i: la};
   render(); sync(); markDirty();
+  flipDupa(miscare);
   focusBloc();
 }
 function moveBlock(from, to) {
   if (from === to || from + 1 === to) return;
+  const miscare = flipInainte();
   pushHistory();
   const [b] = blocks.splice(from, 1);
   const adj = to > from ? to - 1 : to;
   blocks.splice(adj, 0, b);
   sel = {i: adj};
   render(); sync(); markDirty();
+  flipDupa(miscare);
 }
 /** Schimbă blocul ales (sau un bloc dat). `deLaPanou`: panoul nu se redesenează (câmpul păstrează cursorul). */
 function updateBlock(props, deLaPanou) {
@@ -759,7 +869,7 @@ function selecteaza(nou, focus) {
         stareSalvare('salveaza', 'Se încarcă poza…');
         const imagini = await urcaPoze(fisiere.slice(0, 1));
         if (pe && (pe.type === 'image' || pe.type === 'logo')) { sel = {i: t.pe}; updateBlock({image_url: imagini[0].url}); }
-        else { pushHistory(); const b = blockDefault('image'); b.image_url = imagini[0].url; blocks.splice(t.idx, 0, b); sel = {i: t.idx}; render(); sync(); markDirty(); }
+        else { const miscare = flipInainte(); pushHistory(); const b = blockDefault('image'); b.image_url = imagini[0].url; blocks.splice(t.idx, 0, b); sel = {i: t.idx}; render(); sync(); markDirty(); flipDupa(miscare, {nou: b}); }
         if (!dirty) clearDirty();
       } catch (err) { stareSalvare('eroare', err.message); }
       return;

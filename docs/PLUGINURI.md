@@ -1155,6 +1155,12 @@ dispar, iar linkurile spre el se scot din pagini.
     normalizează și randează `NewsletterService` (un cod mai vechi le-ar face text). Șabloanele magazinului (`NewsletterSabloane`)
     încep cu blocul Logo, au blocul Produse („Aleg eu”, cu cele mai noi produse) și un Cod reducere, fără blocul de text de subsol
     (subsolul e automat).
+  - **Mișcarea pe pânză** (26 nov 2026): un bloc mutat (↑ ↓, Alt+↑/↓, tras cu ⠿) alunecă la locul nou și vecinii după el; un bloc
+    nou (din paletă, cu clic sau tras, și într-o coloană; o poză trasă pe pânză) sau duplicat apare (se mărește puțin și se luminează
+    scurt); unul șters se stinge și se strânge în locul lui vechi, cât ceilalți urcă. FLIP cu Web Animations, 220 ms, fără bibliotecă:
+    pozițiile de dinainte, apoi datele și pânza noi pe loc, apoi fiecare bloc pornește din locul vechi; un bloc șters e o copie doar de
+    desen (fără atribute, `inert`), scoasă la final. Blocurile, istoricul (Anulează / Refă nu se animă), salvarea și emailul nu se schimbă;
+    cu „mișcare redusă” în sistem (`prefers-reduced-motion`) nu se mișcă nimic. Testul G20 face aceleași acțiuni cu și fără mișcare.
   - **„Alege un șablon”** (26 nov 2026, refăcut): o fereastră mare (sub 760 px tot ecranul), în doi pași. **Galeria**: fiecare
     șablon are o miniatură adevărată, emailul lui randat de server (`POST /admin/emails/builder/preview`, aceeași cale ca Desktop /
     Mobil), micșorat, într-un cadru izolat fără scripturi (`sandbox=""`, fără clicuri, scos din Tab), cerut doar când cardul ajunge
