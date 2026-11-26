@@ -1284,7 +1284,8 @@ poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum)
   nicio trambulină), nu pune niciun cookie de urmărire (doar sesiunea, ca linkurile newsletterului) și e numărat și ca deschidere.
   Sunt **mereu deschise**: linkurile din emailurile deja trimise merg și cu pluginul oprit (fără să mai numere). **Refuzul
   urmăririi**: un abonat cu `newsletter_subscribers.fara_urmarire` = 1 primește emailurile automatizărilor fără pixel și fără
-  linkuri rescrise, iar condițiile „a deschis / a apăsat” sunt „Nu” pentru el. Testul nu e urmărit niciodată.
+  linkuri rescrise, iar condițiile „a deschis / a apăsat” sunt „Nu” pentru el; dacă refuză după ce un email a plecat (cu pixel și
+  linkuri), de atunci pixelul și clicurile lui nu se mai numără (linkul duce tot unde trebuie). Testul nu e urmărit niciodată.
 - **Cronul și bugetul comun**: motorul (`Motor::ruleaza`) rulează în `scripts/newsletter-campaigns.php`, după campanii, sub
   același lacăt și cu ce a rămas din același buget al rulării (`--per-run`, `App\Support\BugetTrimitere`; și anunțurile către
   administrator se numără): campaniile trimit întâi ca până acum, automatizările doar cu restul, iar ce nu încape pleacă la

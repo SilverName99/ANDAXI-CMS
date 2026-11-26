@@ -179,8 +179,16 @@ final class Trimitere
         }
         $db->prepare(
             'UPDATE automatizari_trimiteri SET deschis_la = COALESCE(deschis_la, :acum), deschideri = deschideri + 1 WHERE id = :id'
+            . self::DOAR_URMARITI
         )->execute(['acum' => Ceas::sql(), 'id' => $trimitereId]);
     }
+
+    /**
+     * Un abonat care a refuzat urmărirea după ce emailul a plecat (cu pixel și linkuri) nu mai e numărat de atunci: pixelul și
+     * clicul lui nu scriu nimic (linkul merge mai departe).
+     */
+    private const DOAR_URMARITI = ' AND NOT EXISTS (SELECT 1 FROM newsletter_subscribers s
+        WHERE s.id = automatizari_trimiteri.abonat_id AND s.fara_urmarire = 1)';
 
     /**
      * Clicul: adresa la care se merge (doar una semnată de noi pentru trimiterea asta) sau null. Un clic e și o deschidere
@@ -193,10 +201,14 @@ final class Trimitere
         }
         if ($numara) {
             $acum = Ceas::sql();
-            $db->prepare(
-                'UPDATE automatizari_trimiteri SET clic_la = COALESCE(clic_la, :acum), clicuri = clicuri + 1,
-                        deschis_la = COALESCE(deschis_la, :acum2) WHERE id = :id'
-            )->execute(['acum' => $acum, 'acum2' => $acum, 'id' => $trimitereId]);
+            try {
+                $db->prepare(
+                    'UPDATE automatizari_trimiteri SET clic_la = COALESCE(clic_la, :acum), clicuri = clicuri + 1,
+                            deschis_la = COALESCE(deschis_la, :acum2) WHERE id = :id' . self::DOAR_URMARITI
+                )->execute(['acum' => $acum, 'acum2' => $acum, 'id' => $trimitereId]);
+            } catch (\Throwable) {
+                // Numărătoarea nu oprește niciodată linkul semnat.
+            }
         }
         return $url;
     }

@@ -665,6 +665,16 @@ $rau = $cerere('GET', '/automatizari/c/' . $tClic . '/' . NewsletterService::sem
 $verifica('clicul spre altă adresă decât cea semnată: pagina 404, nicio trambulină', $rau['cod'] === 404 && $rau['location'] === '', $rau['cod'] . ' ' . $rau['location']);
 $clicAltaTrimitere = $cerere('GET', '/automatizari/c/' . $tDeschide . '/' . NewsletterService::semneaza('automatizare|c|' . $tClic . '|' . $dest) . '?u=' . rawurlencode($dest));
 $verifica('semnătura unei trimiteri nu merge pentru alta', $clicAltaTrimitere['cod'] === 404);
+// Refuzul urmăririi după ce emailul a plecat (cu pixel și linkuri): de atunci nu se mai numără nimic, dar linkul merge.
+$db->prepare('UPDATE newsletter_subscribers SET fara_urmarire = 1 WHERE id = :id')->execute(['id' => $idDeschide]);
+$deschideriInainte = $unu('SELECT deschideri FROM automatizari_trimiteri WHERE id = :id', ['id' => $tDeschide]);
+$cerere('GET', '/automatizari/d/' . $tDeschide . '/' . NewsletterService::semneaza('automatizare|d|' . $tDeschide));
+$clicRefuz = $cerere('GET', '/automatizari/c/' . $tDeschide . '/' . NewsletterService::semneaza('automatizare|c|' . $tDeschide . '|' . $dest) . '?u=' . rawurlencode($dest));
+$verifica('abonatul care a refuzat urmărirea după trimitere: pixelul și clicul nu se mai numără, linkul duce tot unde trebuie',
+    $unu('SELECT deschideri FROM automatizari_trimiteri WHERE id = :id', ['id' => $tDeschide]) === $deschideriInainte
+    && $unu('SELECT clicuri FROM automatizari_trimiteri WHERE id = :id', ['id' => $tDeschide]) === '0'
+    && $clicRefuz['cod'] === 302 && $clicRefuz['location'] === $dest, $deschideriInainte . ' ' . $clicRefuz['cod']);
+$db->prepare('UPDATE newsletter_subscribers SET fara_urmarire = 0 WHERE id = :id')->execute(['id' => $idDeschide]);
 $mesajeAnunt = [];
 Ceas::fixeaza('2026-12-12 10:01:00');
 $mesajeAnunt = $emailuriNoi(static function () use ($tura): void {
