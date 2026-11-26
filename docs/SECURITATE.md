@@ -276,3 +276,25 @@ Galerie. Ce l-a făcut sigur:
 Testele: `tools/dev/test-newsletter.php`, H8 (curățarea pe server, și prin previzualizare), H9–H10 (ruta produselor, încărcarea:
 fără jeton, cu alt jeton, un fișier care nu e poză, un PDF, fără admin) și G7–G9 în Chromium (scrisul și lipirea pe pânză, codul
 din panou care nu rulează, pozele trase și lipite).
+
+## Automatizările newsletterului (26 noiembrie 2026)
+
+Pluginul `automatizari` ([PLUGINURI.md](PLUGINURI.md), „Automatizări newsletter”). Ce îl ține sigur:
+
+- **Adminul**: fiecare pagină și acțiune trece de garda adminului (`Auth::canAccessPath`: administratorul general și
+  „Administrator email-uri”) și de garda pluginului; fiecare scriere e POST cu jetonul formularului (`AdminCsrf`: câmpul `_csrf`
+  sau antetul `X-CSRF-Token`; fără el, 419 la JSON sau mesajul „Sesiunea formularului a expirat”). Editorul primește datele într-un
+  `<script type="application/json">` codat cu `JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT`, iar scriptul pune
+  totul în pagină cu `textContent` / `createElement` (niciun text din date ca HTML). Arborele fluxului se verifică din nou pe server
+  (tipuri, chei, adâncime, emailurile doar ale aceleiași automatizări). Previzualizarea emailului din panou vine izolată, ca „Vezi”
+  din Emailuri trimise: `Content-Security-Policy: sandbox`, într-un `<iframe sandbox="">`.
+- **Emailurile**: codurile (`{{prenume}}` …) se scapă la înlocuirea în HTML; conținutul trece prin același randat ca newsletterul
+  (`NewsletterService::renderHtmlFromBlocks`, cu `allowRichTags` și linkurile filtrate). Subsolul de dezabonare e obligatoriu, cu
+  linkul semnat al abonatului.
+- **Linkurile de urmărire**: semnate HMAC-SHA256 cu cheia secretă a newsletterului (`NewsletterService::semneaza`; doar cheile noi,
+  nu cea veche, ghicibilă), pe un mesaj cu prefixul lor (`automatizare|d|…`, `automatizare|c|<trimitere>|<adresa>`), deci nu pot
+  semna altceva și o semnătură nu merge pentru altă trimitere. Clicul duce doar la adresa semnată (altfel pagina 404: nicio
+  redirecționare deschisă), un link relativ în site, altă schemă decât http(s) la prima pagină; nu pune niciun cookie de urmărire.
+- **Datele personale**: jurnalul automatizărilor nu are adrese de email (id-uri, pași, motive); erorile din jurnalul PHP doar clasa
+  și locul, fără date. Doar abonații activi intră, iar refuzul urmăririi (`fara_urmarire`) e respectat. Pe copia de verificare
+  tabelele vin doar cu structura.

@@ -276,7 +276,9 @@ statistică poate avea și `cheie`), `cont.stare` (doar pagina contului cu antet
 (câmpurile din editorul paginii și al articolului), `utilizator.sters` (din Admin → Utilizatori și din „Șterge contul”,
 înaintea ștergerii, în aceeași tranzacție), `layout.final_body` (înainte de `</body>` pe paginile publice),
 `plugin.lucruri_in_curs` (pentru lucrurile în curs, WP-27), `layout.inceput_body` (imediat după `<body>` pe paginile publice:
-bannerul pluginului `campanii`). În dezvoltare (`APP_ENV=local`), `CMS_DEV_HOOKS` poate da un
+bannerul pluginului `campanii`), evenimentele pentru automatizări (26 nov 2026, pluginul `automatizari`, doar pornit):
+`newsletter.abonare_confirmata`, `newsletter.eticheta_adaugata`, `cont.creat`, `comanda.plasata`, `comanda.status` (mai jos,
+„Automatizări newsletter”). În dezvoltare (`APP_ENV=local`), `CMS_DEV_HOOKS` poate da un
 fișier cu agățări de probă (`tools/dev/test-porturi-vt-gr.php`).
 
 **Conținutul pentru membri** (`App\Support\AccesMembri`, migrarea `nucleu/0034`): o pagină sau un articol cu
@@ -645,6 +647,8 @@ dispar, iar linkurile spre el se scot din pagini.
   rambursări), plățile lor se confirmă (adresele procesatorilor răspund),
   emailurile lor pleacă, sincronizarea cu ERP-ul și AWB-urile merg mai departe.
   Cronul coșului abandonat nu mai trimite (cere „pornit”).
+- **Cu automatizările newsletterului** (pluginul `automatizari`, mai jos): cât o automatizare „Coș abandonat” e activă, emailul
+  clasic de coș abandonat sare coșurile abonaților activi (le trimite automatizarea; regula „fără emailuri duble”).
 - **Oprit**: fără coș, checkout, prețuri și butoane de coș pe tot site-ul;
   catalogul (dacă e pe site) rămâne vitrină: produsele fără preț, iar API-urile de
   produse nu mai dau prețuri. Emailurile de comandă nu mai pleacă. Contul
@@ -1182,6 +1186,12 @@ dispar, iar linkurile spre el se scot din pagini.
   starea și plata, cu etichetele listei comenzilor. Panoul și citirea lui sunt doar pentru cine vede Admin → Comenzi (rolul,
   pluginul magazin; un admin cu rolul emailuri vede doar numărul), iar fără comenzi atribuite pagina rămâne cum era.
   Testele: `tools/dev/test-newsletter.php`.
+  **Etichetele abonaților și refuzul urmăririi** (26 nov 2026, migrarea `newsletter/0082`, `App\Support\NewsletterEtichete`):
+  `newsletter_etichete` (numele, unic) și `newsletter_abonati_etichete` (ce etichete are fiecare abonat, de când); le pun și le
+  scot pașii automatizărilor, iar o etichetă nouă pe un abonat cheamă punctul `newsletter.eticheta_adaugata` („Primește o
+  etichetă”). `newsletter_subscribers.fara_urmarire` = 1: abonatul a refuzat urmărirea (emailurile automatizărilor pleacă fără
+  pixel și fără linkuri rescrise). Deocamdată fără ecran în Liste abonați: le folosesc doar automatizările (mai jos); campaniile nu
+  se schimbă. Confirmarea dublei abonări cheamă `newsletter.abonare_confirmata` (fără agățări, nimic).
 - **Are nevoie de**: nimic.
 - **Se oprește**: campaniile pornite se termină (cronul le duce la capăt); „Trimite
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile
@@ -1196,6 +1206,119 @@ dispar, iar linkurile spre el se scot din pagini.
   semnată de noi (era o trambulină spre orice site); altfel, la prima pagină a
   site-ului (adresa din `APP_URL`, nu bioscem.ro). Un link relativ din newsletter
   duce în site.
+
+### Automatizări newsletter (`automatizari`)
+
+Cerut de proprietar pe 26 noiembrie 2026, generic (orice site cu newsletter: Biovitality, Bioscem, alții): fluxuri de emailuri
+care pleacă singure, într-un editor vizual în stilul editorului de automatizări din MailPoet, mai simplu (macheta aprobată
+„Automatizări – editorul de flux”). Oprit pe orice site până îl pune CRM-ul în licență; nu e în niciun pachet și în nicio
+licență de dezvoltare. Codul: `App\Support\Automatizari\*` (`Catalog`, `Flux`, `Rulari`, `Declansatoare`, `Motor`, `Conditii`,
+`CoduriReducere`, `Trimitere`, `Sabloane`, `Ceas`), `App\Http\Controllers\AutomatizariController`, `views/admin/automatizari/`,
+`public/assets/js/admin/automatizari-editor.js`; migrările `automatizari/0078_automatizari` și `newsletter/0082_etichete_abonati`;
+poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum).
+
+- **Conține**: Marketing → **Automatizări newsletter** (`/admin/automatizari`): lista fluxurilor cu comutatorul pornit / oprit,
+  numărătorile (**Intrate** = câți au intrat, **În procesare** = câți sunt acum pe drum, de exemplu într-o așteptare, **Ieșite**
+  = câți au terminat sau au ieșit) și emailurile lor (trimise, deschise, clicuri), Editează / Duplică / Șterge, și „Automatizare
+  nouă” cu șabloanele: **Flux gol**, **Bun venit** (abonat confirmat → email → 3 zile → al doilea email), **Coș abandonat**
+  (o oră → amintirea coșului → o zi → dacă n-a cumpărat, cod de reducere și al doilea email), **Mulțumire după prima comandă**
+  (prima comandă finalizată → 3 zile → cod de reducere și mulțumire), **Recâștigă clienții inactivi** (90 de zile fără comandă →
+  cod → email → 7 zile → dacă a apăsat un link, eticheta „Reactivat”, altfel o ultimă amintire). Un șablon e o ciornă: se citește,
+  se schimbă, apoi se pornește. Administratorul general și „Administrator email-uri” (ca la newslettere); ceilalți nu.
+- **Editorul** (`/admin/automatizari/{id}`): bara de sus (← Automatizări, numele, starea Activă / Oprită / Ciornă, „au intrat / în
+  curs / au terminat”, Oprește / Pornește, Salvează și Ctrl+S); pânza cu puncte: cardul „Pornește când”, apoi pașii unul sub
+  altul, cu „+” între ei (fereastra pașilor pe grupuri — Timp și condiții, Mesaje, Abonat — cu căutare fără diacritice, Esc
+  închide); „Dacă / altfel” are ramurile **Da** și **Nu** alături (o ramură goală = „Gata, iese din automatizare”; fluxul continuă
+  doar pe ramuri, nu se mai unesc); panoul din dreapta are setările pasului ales, numărătorile lui și ↑ Mută sus / ↓ Mută jos /
+  Șterge pasul. Un pas adăugat apare, unul mutat alunecă, unul șters se stinge (FLIP cu Web Animations, 220 ms, ca builderul);
+  cu „mișcare redusă” în sistem nu se mișcă nimic. Sub 1600 px meniul adminului se strânge singur (ca la builder). La salvare
+  serverul verifică din nou arborele (tipuri, chei, „Dacă” doar la capăt, cel mult 100 de pași și 12 ramuri una în alta, emailurile
+  doar ale acestei automatizări); o automatizare activă salvată cu un flux incomplet (de exemplu un email nefăcut) se oprește
+  singură, cu motivul pe pânză.
+- **Declanșatorii** (fiecare doar cu pluginul lui pe site):
+  - **Abonat nou (confirmat)** — după dubla confirmare (`NewsletterService::confirmaAbonare`), opțional doar pentru o listă;
+  - **Comandă plasată** — după tranzacția comenzii din checkout, opțional doar cu anumite produse sau categorii (principală sau
+    suplimentară); o comandă plătită cu cardul sau prin OP așteaptă confirmarea plății (cel mult 3 zile, apoi iese:
+    `plata_neconfirmata`), una anulată iese (`comanda_anulata`);
+  - **Comanda e livrată / finalizată** — statusul trece în „Finalizată” (`completed`: din Comenzi, la generarea AWB-ului, din
+    ERP), cu produse / categorii și „Doar la prima comandă a clientului” (nicio comandă neanulată mai veche pe aceeași adresă);
+  - **Coș abandonat** — coșul (`cart_abandonments`) unui abonat activ, nevăzut de N minute / ore, cel mult 3 zile vechime, fără o
+    comandă a aceleiași adrese de la începutul coșului (sau din ultimele 7 zile, plasa emailului clasic); dacă omul cumpără între
+    timp, fluxul se oprește înaintea următorului email (`a_cumparat`);
+  - **Client inactiv de X zile** — abonații a căror ultimă comandă neanulată a trecut de X zile, doar cei care au trecut pragul în
+    ultimele 30 de zile (nu toți clienții vechi deodată, la pornire); se verifică cel mult o dată pe oră (setarea
+    `automatizari_scanare_inactivi`);
+  - **Cont nou creat** — înregistrarea din cont și prima intrare cu Google (adresele interne `@local.invalid` nu);
+  - **Primește o etichetă** — eticheta pusă de pasul „Adaugă etichetă” al altei automatizări.
+  Evenimentele vin din codul site-ului prin punctele `App\Support\Hooks` (`newsletter.abonare_confirmata`,
+  `newsletter.eticheta_adaugata`, `cont.creat`, `comanda.plasata`, `comanda.status`; `config/hooks.php`, doar cu pluginul
+  pornit); coșurile și clienții inactivi le caută cronul. O agățare nu aruncă niciodată (o greșeală nu oprește o comandă, o
+  abonare sau o înregistrare): se notează în jurnalul PHP, fără date personale.
+- **Pașii**: **Așteaptă** (minute, ore, zile, săptămâni; „Trimite doar între 9:00 și 20:00”, orele alese: o scadență în afara
+  intervalului se mută la începutul lui următor), **Dacă / altfel** (condițiile: a deschis emailul anterior — unul anume sau
+  oricare de mai sus —, a apăsat un link, a cumpărat — orice, anumite produse sau categorii, opțional doar de la intrarea în flux;
+  o comandă anulată nu contează —, totalul comenzii fluxului cel puțin X lei, are eticheta, e în lista), **Trimite email**
+  (conținutul în builderul newsletterului, varianta C: `/admin/emails/builder?type=automatizare&id=<email>`, același builder,
+  aceleași blocuri, „← Înapoi” la pasul din editor; în panou previzualizarea izolată și „Trimite un test”), **Anunță-mă pe email**
+  (administratorul: destinatarii pasului sau adresa de contact a site-ului, cu adresa abonatului și numărul comenzii),
+  **Cod de reducere** (pluginul `cupoane`: un cupon unic, de o singură folosire, procent sau lei, valabil N zile, în lotul
+  `automatizare-<id>` din Cupoane → Coduri unice; codul e făcut din semnătura rulării, deci o rulare reluată primește același cod),
+  **Adaugă etichetă** / **Scoate eticheta**, **Mută în listă** (din toate celelalte liste sau dintr-una anume; lista implicită
+  rămâne) și **Adaugă în listă**. Nu există, voit: acțiune proprie, schimbarea rolului, schimbarea statusului comenzii.
+- **Codurile din emailuri** (subiect și text): `{{prenume}}` (sau „acolo”), `{{email}}`, `{{cod_reducere}}`,
+  `{{cod_reducere_valoare}}`, `{{cod_reducere_expira}}`, `{{numar_comanda}}`, `{{total_comanda}}`, `{{magazin}}`; valorile se scapă
+  în HTML. Blocul „Cod reducere” al builderului primește `{{cod_reducere}}` ca cod. Blocul „Produse” „Recomandate” se alege pentru
+  fiecare abonat (ca la campanii).
+- **Cine intră și cine primește**: doar **abonații activi** ai newsletterului (status `active`, nu pe lista „nu trimite”); o adresă
+  care nu e abonată nu intră deloc (nici la comenzi, coșuri sau conturi). **La fiecare email** abonatul se verifică din nou: un
+  dezabonat, respins (`bounced`) sau șters iese din flux (`neabonat`), fără email. Fiecare email are subsolul de dezabonare cu
+  linkul semnat al abonatului (obligatoriu, ca la campanii) și antetele `List-Unsubscribe` / `List-Unsubscribe-Post`.
+- **O singură dată pe persoană**: implicit, un abonat intră o singură dată într-o automatizare (cheia unică = amprenta adresei).
+  Debifat („permite reintrarea”): după fiecare eveniment nou (altă comandă, alt coș, altă confirmare) intră din nou, dar același
+  eveniment tot o singură dată.
+- **Urmărirea**: pixelul de deschidere și linkurile de clic (`GET /automatizari/d/{trimitere}/{token}`,
+  `GET /automatizari/c/{trimitere}/{token}?u=…`), semnate cu cheia secretă a newsletterului (mesajul are prefixul lor, deci nu
+  poate semna un link de campanie sau de dezabonare); clicul duce doar la adresa semnată pentru acea trimitere (altfel pagina 404,
+  nicio trambulină), nu pune niciun cookie de urmărire (doar sesiunea, ca linkurile newsletterului) și e numărat și ca deschidere.
+  Sunt **mereu deschise**: linkurile din emailurile deja trimise merg și cu pluginul oprit (fără să mai numere). **Refuzul
+  urmăririi**: un abonat cu `newsletter_subscribers.fara_urmarire` = 1 primește emailurile automatizărilor fără pixel și fără
+  linkuri rescrise, iar condițiile „a deschis / a apăsat” sunt „Nu” pentru el. Testul nu e urmărit niciodată.
+- **Cronul și bugetul comun**: motorul (`Motor::ruleaza`) rulează în `scripts/newsletter-campaigns.php`, după campanii, sub
+  același lacăt și cu ce a rămas din același buget al rulării (`--per-run`, `App\Support\BugetTrimitere`; și anunțurile către
+  administrator se numără): campaniile trimit întâi ca până acum, automatizările doar cu restul, iar ce nu încape pleacă la
+  trecerea următoare (rularea rămâne scadentă, la pasul ei). Cel mult 200 de rulări și 30 de pași pe rulare într-o trecere; până la
+  același termen (`--seconds`). Un rând în plus în ieșirea cronului: `Automatizari: rulari=…, trimise=…, esuate=…,
+  intrate_cos=…, intrate_inactivi=…`. Lista avertizează când cronul nu a rulat în ultima oră.
+- **Fără trimiteri duble, și după o cădere**: o rulare scadentă e revendicată (`automatizari_rulari.revendicata_*`, un jeton);
+  fiecare email e rezervat („pending”, unic pe rulare și pas) **înaintea** trimiterii. Un proces oprit la jumătate lasă rularea
+  revendicată: după 15 minute o trecere o reia, iar un „pending” rămas devine „unknown” (poate a plecat) și **nu se retrimite**,
+  fluxul merge mai departe (ca trimiterile campaniilor). Un email respins se reîncearcă la 15 minute, de cel mult 3 ori, apoi
+  rularea iese (`eroare_trimitere`); după 5 respingeri la rând trecerea se oprește (serverul de email are o problemă). Ceasul
+  motorului (`Ceas`) e înghețat în teste.
+- **Coșul abandonat: regula fără emailuri duble** (față de emailul clasic din Emailuri de comandă → Coș abandonat,
+  `EmailAutomation::sendDueAbandonedCartEmails`): **cât o automatizare „Coș abandonat” e activă (cu pluginul pornit), coșurile
+  abonaților activi sunt ale ei**, iar emailul clasic le sare; cei care nu sunt abonați primesc emailul clasic ca până acum (dacă
+  e pornit). Un coș luat de automatizare e marcat pe loc (`abandoned_email_sent_at`, `abandoned_email_error` = `automatizare`),
+  deci emailul clasic nu-l mai ia niciodată, nici după ce automatizarea se oprește. Cu automatizarea oprită (sau pluginul oprit
+  ori „se oprește”) emailul clasic își ia înapoi coșurile abonaților care n-au fost luate. Regula se vede în listă, în panoul
+  declanșatorului și pe pagina Automatizări (emailurile comenzilor).
+- **Oprirea, ștergerea, copia**: o automatizare oprită nu-și mișcă rulările (stau unde au ajuns) și nu primește pe nimeni; la
+  repornire merg mai departe. Un pas șters din editor: rulările care așteptau la el ies (`pas_sters`). „Duplică” face o ciornă cu
+  aceiași pași și o copie a emailurilor, fără rulări. „Șterge” scoate automatizarea cu pașii, emailurile, rulările, trimiterile și
+  jurnalul; cupoanele trimise rămân valabile, iar linkurile din emailurile trimise merg.
+- **Tabele**: `automatizari`, `automatizari_pasi` (graful: următorul, Da, Nu), `automatizari_emailuri`, `automatizari_rulari`
+  (UNIQUE automatizare + subiect), `automatizari_trimiteri`, `automatizari_jurnal` (fără adrese de email: id-uri, pași, motive;
+  din el vin numărătorile pe pas); în newsletter `newsletter_etichete`, `newsletter_abonati_etichete` și
+  `newsletter_subscribers.fara_urmarire` (migrarea `newsletter/0082`; mai sus, „Newsletter”). Pe copia de verificare: doar
+  structura (regulile Bioscem 27).
+- **Are nevoie de**: newsletter. Declanșatorii comenzilor, ai coșului și ai clienților inactivi cer și magazinul, „Cont nou” cere
+  conturile de clienți, codul de reducere cere cupoanele (fără ele nu se oferă, iar un pas rămas e sărit).
+- **Se oprește**: nimeni nu mai intră (agățările și scanările cer „pornit”); fluxurile în curs se termină din cron; emailul
+  clasic de coș abandonat ia din nou coșurile abonaților neluate. Adminul rămâne.
+- **Oprit**: meniul dispare, adresele adminului dau „Modulul nu este inclus în abonament”, builderul cu `type=automatizare` la fel;
+  motorul nu mișcă nimic, cronul newsletterului nu mai are rândul automatizărilor, coșurile abonaților se întorc la emailul
+  clasic; pixelul și linkurile din emailurile trimise merg (fără să numere), un link nesemnat dă pagina 404. Datele rămân.
+- **Neinclus acum**: importul automatizărilor MailPoet din WordPress (vine cu migrarea GT).
 
 ### Chat live (`chat_live`)
 
