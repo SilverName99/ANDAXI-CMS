@@ -287,7 +287,9 @@ Pluginul `automatizari` ([PLUGINURI.md](PLUGINURI.md), „Automatizări newslett
   `<script type="application/json">` codat cu `JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT`, iar scriptul pune
   totul în pagină cu `textContent` / `createElement` (niciun text din date ca HTML). Arborele fluxului se verifică din nou pe server
   (tipuri, chei, adâncime, emailurile doar ale aceleiași automatizări). Previzualizarea emailului din panou vine izolată, ca „Vezi”
-  din Emailuri trimise: `Content-Security-Policy: sandbox`, într-un `<iframe sandbox="">`.
+  din Emailuri trimise: `Content-Security-Policy: sandbox`, într-un `<iframe sandbox="">`. Pasul „Cod de reducere” face cupoane ale
+  magazinului: o salvare care adaugă unul sau îi schimbă setările cere și dreptul la Cupoane (`Auth::canAccessPath('/admin/coupons')`),
+  deci „Administrator email-uri” nu poate face coduri (de exemplu 90% pentru o adresă a lui); altfel 403, nimic salvat.
 - **Emailurile**: codurile (`{{prenume}}` …) se scapă la înlocuirea în HTML; conținutul trece prin același randat ca newsletterul
   (`NewsletterService::renderHtmlFromBlocks`, cu `allowRichTags` și linkurile filtrate). Subsolul de dezabonare e obligatoriu, cu
   linkul semnat al abonatului.

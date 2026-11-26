@@ -988,6 +988,35 @@ $parolaRol = $parolaAdmin;
 $r = $cerere('POST', '/admin/login', $jarEmailuri, ['email' => 'emailuri@exemplu.ro', 'password' => $parolaRol]);
 $verifica('„Administrator email-uri”: lista automatizărilor și editorul (același drept ca newsletterele)', $cerere('GET', '/admin/automatizari', $jarEmailuri)['cod'] === 200
     && $cerere('GET', '/admin/automatizari/' . $idNou, $jarEmailuri)['cod'] === 200);
+// Codul de reducere face cupoane adevărate: „Administrator email-uri” (fără Cupoane) nu-l poate adăuga sau schimba.
+$edEmailuri = $cerere('GET', '/admin/automatizari/' . $idNou, $jarEmailuri);
+$csrfEmailuri = $jeton($edEmailuri['corp']);
+$pasiInainteCod = $unu('SELECT COUNT(*) FROM automatizari_pasi WHERE automatizare_id = :a', ['a' => $idNou]);
+$fluxCod = $fluxBun;
+// Fără <script> în nume: garda rolurilor parțiale (codul activ, docs/SECURITATE.md, N1) l-ar refuza oricum.
+$fluxCod['nume'] = 'Bun venit cu cod';
+$fluxCod['pasi'][] = ['cheie' => 'pcod', 'tip' => 'cod_reducere', 'setari' => ['tip' => 'percent', 'valoare' => 90, 'zile' => 365]];
+$r = $cerere('POST', '/admin/automatizari/' . $idNou . '/salveaza', $jarEmailuri, ['_csrf' => $csrfEmailuri, 'flux' => json_encode($fluxCod)]);
+$verifica('„Administrator email-uri”: un pas „Cod de reducere” nou e refuzat (403), nimic salvat; editorul știe (poate_cupoane false)',
+    $r['cod'] === 403 && $unu('SELECT COUNT(*) FROM automatizari_pasi WHERE automatizare_id = :a', ['a' => $idNou]) === $pasiInainteCod
+    && str_contains($edEmailuri['corp'], '"poate_cupoane":false') && str_contains($editor['corp'], '"poate_cupoane":true'), $r['cod'] . ' ' . $r['corp']);
+$r = $cerere('POST', '/admin/automatizari/' . $idNou . '/salveaza', $jarAdmin, ['_csrf' => $csrfEd, 'flux' => json_encode($fluxCod)]);
+$verifica('administratorul general adaugă pasul „Cod de reducere”', $r['cod'] === 200
+    && $unu("SELECT COUNT(*) FROM automatizari_pasi WHERE automatizare_id = :a AND tip = 'cod_reducere'", ['a' => $idNou]) === '1', $r['corp']);
+$fluxCodNume = $fluxCod;
+$fluxCodNume['nume'] = 'Bun venit, salvat de emailuri';
+$r1 = $cerere('POST', '/admin/automatizari/' . $idNou . '/salveaza', $jarEmailuri, ['_csrf' => $csrfEmailuri, 'flux' => json_encode($fluxCodNume)]);
+$fluxCodMare = $fluxCod;
+$fluxCodMare['pasi'][count($fluxCodMare['pasi']) - 1]['setari']['tip'] = 'fixed';
+$fluxCodMare['pasi'][count($fluxCodMare['pasi']) - 1]['setari']['valoare'] = 10000;
+$r2 = $cerere('POST', '/admin/automatizari/' . $idNou . '/salveaza', $jarEmailuri, ['_csrf' => $csrfEmailuri, 'flux' => json_encode($fluxCodMare)]);
+$fluxFaraCod = $fluxBun;
+$fluxFaraCod['nume'] = 'Bun venit fără cod';
+$r3 = $cerere('POST', '/admin/automatizari/' . $idNou . '/salveaza', $jarEmailuri, ['_csrf' => $csrfEmailuri, 'flux' => json_encode($fluxFaraCod)]);
+$verifica('„Administrator email-uri”: salvează fluxul cu pasul de cod neschimbat (200), nu-i poate schimba valoarea (403), îl poate șterge (200)',
+    $r1['cod'] === 200 && $r2['cod'] === 403 && $r3['cod'] === 200
+    && $unu("SELECT COUNT(*) FROM automatizari_pasi WHERE automatizare_id = :a AND tip = 'cod_reducere'", ['a' => $idNou]) === '0',
+    $r1['cod'] . ' ' . $r2['cod'] . ' ' . $r3['cod'] . ' ' . $r1['corp']);
 $r = $cerere('POST', '/admin/login', $jarMagazin, ['email' => 'magazin@exemplu.ro', 'password' => $parolaRol]);
 $rm = $cerere('GET', '/admin/automatizari', $jarMagazin);
 $rmJson = $cerere('POST', '/admin/automatizari/' . $idNou . '/salveaza', $jarMagazin, ['_csrf' => $csrfEd, 'flux' => json_encode($fluxBun)]);

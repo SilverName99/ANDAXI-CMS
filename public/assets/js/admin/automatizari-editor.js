@@ -312,7 +312,7 @@
     const grupuri = document.getElementById('af-alege-grupuri');
     const parti = [];
     for (const [grup, titluGrup] of Object.entries(D.grupuri)) {
-      const butoane = Object.entries(D.pasi_tipuri).filter(([, p]) => p.grup === grup)
+      const butoane = Object.entries(D.pasi_tipuri).filter(([tip, p]) => p.grup === grup && (tip !== 'cod_reducere' || D.poate_cupoane))
         .filter(([, p]) => !q || faraDiacritice(p.eticheta + ' ' + titluGrup).includes(q))
         .map(([tip, p]) => {
           const [fundal, culoare] = CULORI_GRUP[grup] || CULORI.email;
@@ -626,6 +626,11 @@
         nota('Primești adresa abonatului și, la comenzi, numărul comenzii. Poți folosi codurile, de exemplu {{numar_comanda}}.'));
         break;
       case 'cod_reducere':
+        if (!D.poate_cupoane) {
+          // Codurile sunt cupoane ale magazinului: le schimbă doar cine are acces la Cupoane (serverul refuză oricum).
+          b.push(caseta('Codul de reducere îl poate schimba doar cine are acces la Cupoane. Poți muta sau șterge pasul.'));
+          break;
+        }
         b.push(h('div', { class: 'af-rand' },
           camp('Reducerea', select(s.tip, [['percent', 'Procent (%)'], ['fixed', 'Sumă (lei)']], (v) => seteaza(s, 'tip', v))),
           camp('Valoare', numar(s.valoare, 1, 10000, (v) => seteaza(s, 'valoare', v)))),

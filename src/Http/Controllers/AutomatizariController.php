@@ -175,6 +175,8 @@ final class AutomatizariController
             'produse' => $produse,
             'cu_catalog' => Plugins::vizibil('catalog'),
             'cu_cupoane' => Plugins::vizibil('cupoane'),
+            // Codurile de reducere sunt cupoane: fără acces la Cupoane („Administrator email-uri”) pasul se vede, dar nu se schimbă.
+            'poate_cupoane' => \App\Support\Auth::canAccessPath('/admin/coupons'),
             'preluare_cos' => Declansatoare::preiaCosurileAbonatilor($db),
             'email_clasic_cos' => Plugins::vizibil('magazin') && OrderMailer::isTemplateActive('abandoned_cart', $setari),
             'email_test' => $this->emailAdmin($db),
@@ -247,8 +249,15 @@ final class AutomatizariController
             $this->jsonResponse(['ok' => false, 'mesaj' => 'Declanșatorul nu se poate folosi pe acest site.'], 422);
             return;
         }
+        $arbore = is_array($date['pasi'] ?? null) ? $date['pasi'] : [];
+        // Pasul „Cod de reducere” face cupoane adevărate ale magazinului: doar cine are acces la Cupoane îl poate adăuga sau
+        // schimba („Administrator email-uri” nu are; poate doar păstra, muta sau șterge un pas pus de altcineva).
+        if (!\App\Support\Auth::canAccessPath('/admin/coupons') && self::coduriSchimbate($db, $id, $arbore)) {
+            $this->jsonResponse(['ok' => false, 'mesaj' => 'Codurile de reducere le poate adăuga sau schimba doar cine are acces la Cupoane.'], 403);
+            return;
+        }
         $erori = Flux::salveaza($db, $id, (string) ($date['nume'] ?? ''), $declansator, is_array($date['setari'] ?? null) ? $date['setari'] : [],
-            !empty($date['permite_reintrarea']), is_array($date['pasi'] ?? null) ? $date['pasi'] : []);
+            !empty($date['permite_reintrarea']), $arbore);
         if ($erori !== []) {
             $this->jsonResponse(['ok' => false, 'mesaj' => implode(' ', $erori)], 422);
             return;
@@ -263,6 +272,23 @@ final class AutomatizariController
         AdminActivityLog::log($db, 'automatizare_salvata', ['id' => $id]);
         $this->jsonResponse(['ok' => true, 'probleme' => $probleme, 'oprita' => $oprita,
             'stare' => (string) (Flux::citeste($db, $id)['stare'] ?? 'ciorna')]);
+    }
+
+    /** Arborele salvat are un pas „Cod de reducere” nou sau cu alte setări decât cel cu aceeași cheie din bază? */
+    private static function coduriSchimbate(PDO $db, int $id, array $arbore): bool
+    {
+        $vechi = [];
+        foreach (Flux::pasi($db, $id) as $pas) {
+            if ($pas['tip'] === 'cod_reducere') {
+                $vechi[$pas['cheie']] = $pas['setari'];
+            }
+        }
+        foreach (Flux::randuriDinArbore($arbore)[0] as $rand) {
+            if ($rand['tip'] === 'cod_reducere' && (!array_key_exists($rand['cheie'], $vechi) || $vechi[$rand['cheie']] !== $rand['setari'])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** POST /admin/automatizari/{id}/stare (`stare` = activa | oprita); din listă (formular) sau din editor (JSON). */

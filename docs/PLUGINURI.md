@@ -1224,7 +1224,9 @@ poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum)
   (o oră → amintirea coșului → o zi → dacă n-a cumpărat, cod de reducere și al doilea email), **Mulțumire după prima comandă**
   (prima comandă finalizată → 3 zile → cod de reducere și mulțumire), **Recâștigă clienții inactivi** (90 de zile fără comandă →
   cod → email → 7 zile → dacă a apăsat un link, eticheta „Reactivat”, altfel o ultimă amintire). Un șablon e o ciornă: se citește,
-  se schimbă, apoi se pornește. Administratorul general și „Administrator email-uri” (ca la newslettere); ceilalți nu.
+  se schimbă, apoi se pornește. Administratorul general și „Administrator email-uri” (ca la newslettere); ceilalți nu. Pasul
+  „Cod de reducere” face cupoane adevărate, deci îl adaugă sau îi schimbă setările doar cine are acces la Cupoane (administratorul
+  general): „Administrator email-uri” îl vede, îl poate muta sau șterge, dar o salvare cu un cod nou sau schimbat e refuzată (403).
 - **Editorul** (`/admin/automatizari/{id}`): bara de sus (← Automatizări, numele, starea Activă / Oprită / Ciornă, „au intrat / în
   curs / au terminat”, Oprește / Pornește, Salvează și Ctrl+S); pânza cu puncte: cardul „Pornește când”, apoi pașii unul sub
   altul, cu „+” între ei (fereastra pașilor pe grupuri — Timp și condiții, Mesaje, Abonat — cu căutare fără diacritice, Esc
