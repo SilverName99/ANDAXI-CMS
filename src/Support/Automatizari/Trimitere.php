@@ -160,8 +160,14 @@ final class Trimitere
             . '<p>' . $e('Abonat: ' . (string) $rulare['email']) . '</p>'
             . ((string) ($valori['{{numar_comanda}}'] ?? '') !== '' ? '<p>' . $e('Comanda: ' . $valori['{{numar_comanda}}']) . '</p>' : '')
             . ($mesaj !== '' ? '<p>' . nl2br($e(self::inlocuiesteCodurile($mesaj, $valori, false))) . '</p>' : '');
+        // Documentul întreg, cu titlul scăpat: altfel OrderMailer::sendCustom pune subiectul ca atare în <title>, iar subiectul
+        // poate avea date venite de la vizitator ({{prenume}} din coș sau din comandă) — HTML străin în emailul adminului.
+        $document = '<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<title>' . $e($subiect) . '</title></head><body style="margin:0;padding:20px;background:#f4f6f8;font-family:Arial,sans-serif;color:#1f2937;">'
+            . '<div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;">'
+            . $corp . '</div></body></html>';
         foreach ($destinatari as $adresa) {
-            OrderMailer::sendCustom($adresa, $subiect, $corp, $setari, $db, [
+            OrderMailer::sendCustom($adresa, $subiect, $document, $setari, $db, [
                 'email_type' => 'automatizare_anunt',
                 'source' => 'automatizare',
                 'meta' => ['automatizare_id' => (int) $automatizare['id']],

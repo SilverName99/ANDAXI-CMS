@@ -721,6 +721,15 @@ $verifica('numărătorile pe pas: p3 intrate 4 / în procesare 0 / ieșite 4, tr
     && ($numere['p3']['deschise'] ?? 0) === 2 && ($numere['p3']['clicuri'] ?? 0) === 1 && ($numere['p6']['intrate'] ?? 0) === 1, json_encode($numere));
 $verifica('numărătorile automatizării: intrate 4, în procesare 0, ieșite 4', Flux::numere($db, $aFlux) === ['intrate' => 4, 'in_procesare' => 0, 'iesite' => 4]);
 
+// „Anunță-mă” cu un cod venit de la vizitator în subiect (prenumele din coș): niciun HTML străin în emailul adminului.
+$anuntRau = $emailuriNoi(static function () use ($db, $setari): void {
+    \App\Support\Automatizari\Trimitere::anuntaAdmin($db, ['id' => 1, 'nume' => 'Test anunț'], ['email' => 'vizitator@exemplu.ro',
+        'context' => ['prenume' => '</title><a href="https://rau.exemplu.ro/">Apasă</a>']], ['destinatari' => 'echipa@exemplu.ro', 'subiect' => 'Coș: {{prenume}}'], $setari);
+});
+$corpAnuntRau = (string) (preg_split('/\r?\n\r?\n/', $anuntRau[0] ?? '', 2)[1] ?? '');
+$verifica('„Anunță-mă”: prenumele vizitatorului din subiect nu ajunge ca HTML în emailul adminului (titlul scăpat; antetul Subject e text)',
+    count($anuntRau) === 1 && !str_contains($corpAnuntRau, '<a href="https://rau.exemplu.ro/') && str_contains($corpAnuntRau, '&lt;/title&gt;'),
+    mb_substr($corpAnuntRau, 0, 1500));
 // C3. Celelalte condiții, pe rulări construite.
 $rulareTest = ['id' => 0, 'email' => 'comanda.automat@exemplu.ro', 'comanda_id' => $cPlasata, 'intrata_la' => '2000-01-01 00:00:00', 'context' => []];
 $verifica('„Valoarea comenzii cel puțin”: 150 ≥ 150 da, ≥ 150,01 nu, fără comandă nu', Conditii::adevarata($db, $rulareTest, ['conditie' => 'total_minim', 'valoare' => 150])
