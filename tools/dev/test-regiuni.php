@@ -285,12 +285,14 @@ $verifica('documentele regulilor: calea (decodată), 404, „produs:*” doar pe
     && count(Regiuni::pentruDocument([['document' => 'produs:*']], 'produs', '/product/x/')) === 1 && Regiuni::pentruDocument([['document' => 'produs:*']], 'pagina', '/x/') === []
     && count(Regiuni::pentruDocument([['document' => 'sablon:articol']], 'sablon_articol', '/a/')) === 1
     && count(Regiuni::pentruDocument([['document' => '/c%C4%83/']], 'pagina', '/că/')) === 1);
+// Randatorii construiți de pistele care i-au livrat (pista E: mailpoet:pagina); ceilalți încă nu există.
+$construite = ['mailpoet:pagina'];
 $verifica('catalogul randatorilor: fiecare id din forma <familie>:<nume>, cu cache pagina|sesiune, moduri, pista și clasa lui (App\\Support\\…); '
-    . 'niciuna nu există încă, deci niciun randator construit',
+    . 'construiți doar cei ai pistelor livrate (mailpoet:pagina, pista E), ceilalți încă nu',
     array_filter(array_keys(Regiuni::CATALOG), static fn (string $id): bool => preg_match(Regiuni::RE_ID, $id) !== 1) === []
-    && array_filter(Regiuni::CATALOG, static fn (array $d): bool => !in_array($d['cache'], ['pagina', 'sesiune'], true) || $d['moduri'] === []
-        || !str_starts_with($d['clasa'], 'App\\Support\\') || class_exists($d['clasa'])) === []
-    && array_filter(array_keys(Regiuni::CATALOG), static fn (string $id): bool => Regiuni::randator($id) !== null) === []
+    && array_filter(Regiuni::CATALOG, static fn (array $d, string $id): bool => !in_array($d['cache'], ['pagina', 'sesiune'], true) || $d['moduri'] === []
+        || !str_starts_with($d['clasa'], 'App\\Support\\') || class_exists($d['clasa']) !== in_array($id, $construite, true), ARRAY_FILTER_USE_BOTH) === []
+    && array_values(array_filter(array_keys(Regiuni::CATALOG), static fn (string $id): bool => Regiuni::randator($id) !== null)) === $construite
     && Regiuni::cache('wc:cos_produse') === 'sesiune' && Regiuni::cache('wc:adauga_in_cos') === 'pagina' && Regiuni::cache('necunoscut:x') === 'sesiune');
 $exceptie = null;
 try {

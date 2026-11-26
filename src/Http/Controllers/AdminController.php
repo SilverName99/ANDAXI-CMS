@@ -14474,13 +14474,15 @@ final class AdminController
                 return;
             }
             $blocks  = json_decode((string) ($row['blocks_json'] ?? '[]'), true) ?: [];
-            // Numărul care contează la trimitere: doar abonații activi.
+            // Numărul care contează la trimitere: doar abonații activi. Pe un site mutat de pe MailPoet, lista internă „Toți abonații”
+            // nu e o țintă (E-LEG-02): acordul e pe fiecare listă, deci nici nu se arată, nici nu e aleasă dinainte.
             $newsletterLists = $db->query(
                 'SELECT l.id, l.name, l.is_default, COUNT(ls.subscriber_id) AS subscribers_count,
-                        COALESCE(SUM(s.status = "active"), 0) AS active_count
+                        COALESCE(SUM(s.status = "active" AND ls.status = "subscribed"), 0) AS active_count
                  FROM newsletter_lists l
                  LEFT JOIN newsletter_list_subscribers ls ON ls.list_id = l.id
-                 LEFT JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
+                 LEFT JOIN newsletter_subscribers s ON s.id = ls.subscriber_id'
+                 . (\App\Support\WpCompat::mailpoet() ? ' WHERE l.is_default = 0' : '') . '
                  GROUP BY l.id ORDER BY l.is_default DESC, l.name ASC'
             )->fetchAll() ?: [];
             $builder = [
@@ -14883,12 +14885,15 @@ final class AdminController
                  FROM newsletter_templates
                  ORDER BY updated_at DESC, id DESC'
             )->fetchAll();
+            // Pe un site mutat de pe MailPoet, fără lista internă „Toți abonații” (E-LEG-02): nu e o țintă a campaniilor și nu e prima
+            // opțiune (aleasă dinainte) a formularelor de campanie.
             $newsletterLists = $db->query(
                 'SELECT l.id, l.name, l.description, l.is_default, COUNT(ls.subscriber_id) AS subscribers_count,
-                        COALESCE(SUM(s.status = "active"), 0) AS active_count
+                        COALESCE(SUM(s.status = "active" AND ls.status = "subscribed"), 0) AS active_count
                  FROM newsletter_lists l
                  LEFT JOIN newsletter_list_subscribers ls ON ls.list_id = l.id
-                 LEFT JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
+                 LEFT JOIN newsletter_subscribers s ON s.id = ls.subscriber_id'
+                 . (\App\Support\WpCompat::mailpoet() ? ' WHERE l.is_default = 0' : '') . '
                  GROUP BY l.id
                  ORDER BY l.is_default DESC, l.name ASC'
             )->fetchAll();
@@ -15905,7 +15910,7 @@ final class AdminController
             }
 
             $stmt = $db->prepare(
-                'SELECT name, template_type, template_ref, subscriber_list_id, subscriber_list_ids, subject, blocks_json, html_content
+                'SELECT name, template_type, template_ref, subscriber_list_id, subscriber_list_ids, subject, blocks_json, html_content, sursa
                  FROM newsletter_campaigns
                  WHERE id = :id
                  LIMIT 1'
@@ -15915,6 +15920,11 @@ final class AdminController
             if (!is_array($source)) {
                 Flash::set('error', 'Newsletterul sursă nu a fost găsit.');
                 header('Location: /admin/emails/newsletters?tab=campaigns');
+                return;
+            }
+            if ((string) ($source['sursa'] ?? 'cms') === 'mailpoet') {
+                Flash::set('error', NewsletterService::MESAJ_ARHIVA_MAILPOET);
+                header('Location: /admin/emails/newsletters?tab=campaigns&campaign=' . $campaignId);
                 return;
             }
 
@@ -16338,8 +16348,14 @@ final class AdminController
                 header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
                 return;
             }
+            if ($status === 'bounced') {
+                // O adresă care a respins emailurile (importată din MailPoet) revine doar printr-o abonare nouă, confirmată din email.
+                Flash::set('error', 'Adresa a respins emailurile („sărit”): o reactivează doar o abonare nouă a persoanei, confirmată din email.');
+                header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
+                return;
+            }
             $next = $status === 'active' ? 'unsubscribed' : 'active';
-            $db->prepare('UPDATE newsletter_subscribers SET status = :status WHERE id = :id')->execute([
+            $db->prepare('UPDATE newsletter_subscribers SET status = :status' . ($next === 'active' ? ', last_subscribed_at = NOW()' : '') . ' WHERE id = :id')->execute([
                 'status' => $next,
                 'id' => $subscriberId,
             ]);

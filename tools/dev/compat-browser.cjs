@@ -476,6 +476,20 @@ const LEGATURI = [
 const CORP_FORMULAR = '<div id="page-container"><div id="et-main-area"><div class="proba-pagina">' + formularDivi(0, '/pagina/formular') + '</div>'
   + '<footer class="et-l et-l--footer"><div class="proba-subsol">' + formularDivi(1, '/pagina/formular') + '</div></footer></div></div>\n';
 const STIL_FORMULAR = 'body{margin:0}.et_contact_error{border:1px solid #f00!important}.et_pb_contact_form_label{display:none}';
+// Formularele de abonare Divi (divi4/v1/abonare.js, pista E): unul în conținut și unul în subsol, ca pe live (lista în câmpul ascuns, pe
+// care serverul o ia din documentul capturat, nu din cerere). Clasele de stare și ascunderea rezultatelor sunt cele din CSS-ul Divi.
+const modulAbonare = (n, succes) => '<div class="et_pb_module et_pb_signup_' + n + ' et_pb_newsletter et_pb_subscribe clearfix"><div class="et_pb_newsletter_form">'
+  + '<form method="post"><div class="et_pb_newsletter_result et_pb_newsletter_error"></div><div class="et_pb_newsletter_result et_pb_newsletter_success"><h2>'
+  + succes + '</h2></div><div class="et_pb_newsletter_fields"><p class="et_pb_newsletter_field et_pb_contact_field_last"><label class="et_pb_contact_form_label" '
+  + 'for="et_pb_signup_email">Email</label><input id="et_pb_signup_email" class="input" type="text" placeholder="Email" name="et_pb_signup_email"></p>'
+  + '<p class="et_pb_newsletter_button_wrap"><a class="et_pb_newsletter_button et_pb_button" href="#"><span class="et_subscribe_loader"></span>'
+  + '<span class="et_pb_newsletter_button_text">Abonează-te</span></a></p></div><input type="hidden" value="mailpoet" name="et_pb_signup_provider">'
+  + '<input type="hidden" value="' + (n + 3) + '" name="et_pb_signup_list_id"></form></div></div>';
+const CORP_ABONARE = '<div id="page-container"><div class="proba-pagina">' + modulAbonare(0, 'Te-ai înscris la atelier.') + '</div><footer class="proba-subsol">'
+  + modulAbonare(1, 'Mulțumim!') + '</footer></div>\n';
+const STIL_ABONARE = 'body{margin:0}.et_pb_newsletter_result,.et_subscribe_loader{display:none}.et_pb_signup_error{border:1px solid #f00!important}';
+const DATE_ABONARE = Object.assign({}, DATE_IMPLICITE, { et_pb_custom: Object.assign({}, DATE_IMPLICITE.et_pb_custom, { et_frontend_nonce: '0a1b2c3d4e',
+  subscription_failed: 'Please, check the fields below to make sure you entered the correct information.' }) });
 const TEXTE_FORMULAR = { fill_message: 'Please, fill in the following fields:', contact_error_message: 'Please, fix the following errors:', invalid: 'Invalid email',
   captcha: 'Captcha', wrong_captcha: 'You entered the wrong number in captcha.' };
 const formulareTrimise = [];
@@ -589,6 +603,9 @@ const PAGINI = {
   'toggle-dublu': { corp: CORP_TOGGLE, stil: STIL_TOGGLE, cap: capImplicit().concat(capImplicit()), final: finalImplicit().concat(finalImplicit()) },
   multiview: { corp: CORP_MV, stil: STIL_MV },
   legaturi: { corp: CORP_LEGATURI, stil: STIL_LEGATURI, date: Object.assign({}, DATE_IMPLICITE, { et_link_options_data: LEGATURI }) },
+  abonare: { corp: CORP_ABONARE, stil: STIL_ABONARE, date: DATE_ABONARE, final: finalImplicit().concat([spreAdresa('divi4/v1/abonare.js')]) },
+  'abonare-dublu': { corp: CORP_ABONARE, stil: STIL_ABONARE, date: DATE_ABONARE,
+    final: finalImplicit().concat([spreAdresa('divi4/v1/abonare.js'), spreAdresa('divi4/v1/abonare.js')]) },
   formular: { corp: CORP_FORMULAR, stil: STIL_FORMULAR, date: Object.assign({}, DATE_IMPLICITE, { et_pb_custom: Object.assign({}, DATE_IMPLICITE.et_pb_custom, TEXTE_FORMULAR) }) },
   derulare: { corp: CORP_DERULARE, stil: STIL_DERULARE, date: Object.assign({}, DATE_IMPLICITE, { et_pb_sticky_elements: CONFIG_STICKY }) },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -683,12 +700,52 @@ function formularProba(req, res) {
   });
 }
 
+// Serverul abonării de probă (contractul App\\Support\\AbonareCapturata, POST /_andaxi/abonare/<n>): răspunsul după adresa trimisă; fiecare
+// cerere e notată în abonariTrimise (n, câmpurile, valorile, Sec-Fetch-Site).
+const abonariTrimise = [];
+function abonareProba(req, res, n) {
+  const bucati = [];
+  req.on('data', (b) => bucati.push(b));
+  req.on('end', () => {
+    const corp = Buffer.concat(bucati).toString('utf8');
+    const valori = {};
+    const rx = /name="([^"]+)"\r\n\r\n([\s\S]*?)\r\n--/g;
+    let m;
+    while ((m = rx.exec(corp)) !== null) {
+      valori[m[1]] = m[2];
+    }
+    abonariTrimise.push({ n, valori, tip: String(req.headers['content-type'] || '').split(';')[0], fetchSite: req.headers['sec-fetch-site'] || null });
+    const js = (cod, o) => trimite(res, cod, 'application/json; charset=utf-8', JSON.stringify(o));
+    const email = String(valori.et_pb_signup_email || '');
+    if (email.startsWith('eroare@')) {
+      return js(200, { error: 'Adresa nu poate fi abonată acum.' });
+    }
+    if (email.startsWith('fals@')) {
+      return js(200, false);
+    }
+    if (email.startsWith('html@')) {
+      return trimite(res, 200, 'text/html; charset=utf-8', '<!DOCTYPE html><p>nu e JSON</p>', CSP_SITE);
+    }
+    if (email.startsWith('cod500@')) {
+      return js(500, { success: true });
+    }
+    if (email.startsWith('lent@')) {
+      return setTimeout(() => js(200, { success: true }), 700);
+    }
+    return js(200, { success: true });
+  });
+}
+
 // Punctul de primire al statisticilor (contractul POST /api/statistici): fiecare corp, cu antetele lui, în statisticiPrimite; 204.
 const statisticiPrimite = [];
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1');
   if (req.method === 'POST' && u.pathname === '/pagina/formular') {
     return formularProba(req, res);
+  }
+  const abonare = req.method === 'POST' ? u.pathname.match(/^\/_andaxi\/abonare\/(\d{1,3})$/) : null;
+  if (abonare) {
+    return abonareProba(req, res, Number(abonare[1]));
   }
   if (req.method === 'POST' && u.pathname === '/api/statistici') {
     const bucati = [];
@@ -2466,6 +2523,103 @@ async function verificaMultiView(browser) {
   }
 }
 
+async function verificaAbonarea(browser) {
+  scrie('== abonare (pista E, divi4/v1/abonare.js, AbonareCapturata): validarea Divi, trimiterea pe loc, stările de succes și de eroare');
+  const stareA = (f, n) => f.evaluate((n) => {
+    const m = document.querySelectorAll('.et_pb_newsletter')[n];
+    const vizibil = (el) => !!el && getComputedStyle(el).display !== 'none';
+    const camp = m.querySelector('input[name="et_pb_signup_email"]');
+    const eroare = m.querySelector('.et_pb_newsletter_error');
+    return { rosu: camp.classList.contains('et_pb_signup_error'), eroare: vizibil(eroare) ? eroare.textContent : null, eroareHtml: eroare.innerHTML,
+      succes: vizibil(m.querySelector('.et_pb_newsletter_success')), campuri: vizibil(m.querySelector('.et_pb_newsletter_fields')),
+      incarca: m.querySelector('.et_pb_newsletter_button').classList.contains('et_pb_button_text_loading'), roata: vizibil(m.querySelector('.et_subscribe_loader')) };
+  }, n);
+  const scrieAdresa = (f, n, v) => f.evaluate(([n, v]) => {
+    document.querySelectorAll('.et_pb_newsletter input[name="et_pb_signup_email"]')[n].value = v;
+  }, [n, v]);
+  const apasa = (f, n) => f.evaluate((n) => document.querySelectorAll('.et_pb_newsletter_button')[n].click(), n);
+  const asteapta = (page, cate) => page.waitForFunction((c) => window.__axAbonari === undefined || true, cate, { timeout: 2000 }).then(() => page.waitForTimeout(300));
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/abonare' });
+    const f = page.mainFrame();
+    const s = await stare(f);
+    abonariTrimise.length = 0;
+    const r = {};
+    r.modul = await f.evaluate(() => !!(window.axCompat && window.axCompat.abonare));
+    await scrieAdresa(f, 0, 'nu-e-adresa');
+    await apasa(f, 0);
+    await page.waitForTimeout(200);
+    r.rau = await stareA(f, 0);
+    await scrieAdresa(f, 0, ' bun@example.invalid');
+    await apasa(f, 0);
+    await page.waitForTimeout(200);
+    r.spatiu = await stareA(f, 0);
+    r.cereriRele = abonariTrimise.length;
+    await scrieAdresa(f, 0, 'bun@example.invalid');
+    await apasa(f, 0);
+    await asteapta(page);
+    r.bun = await stareA(f, 0);
+    r.subsol = await stareA(f, 1);
+    r.cerere = abonariTrimise[0] || null;
+    verifica('validarea Divi: o adresă greșită (și una cu un spațiu în față, regula nu retează) → doar chenarul roșu (et_pb_signup_error), niciun mesaj, nicio cerere',
+      curate(ev, s) && r.modul && r.rau.rosu && r.rau.eroare === null && r.spatiu.rosu && r.cereriRele === 0, { r, ...detaliiCurate(ev, s) });
+    verifica('trimiterea: POST /_andaxi/abonare/0 (primul formular al paginii), cu calea, nonce-ul zilei din et_pb_custom și adresa; succes → câmpurile ascunse, '
+      + 'mesajul capturat arătat, chenarul roșu scos; formularul din subsol neatins',
+      !!r.cerere && r.cerere.n === 0 && r.cerere.tip === 'multipart/form-data' && r.cerere.valori.cale === '/pagina/abonare' && r.cerere.valori.et_frontend_nonce === '0a1b2c3d4e'
+      && r.cerere.valori.et_pb_signup_email === 'bun@example.invalid' && r.cerere.fetchSite === 'same-origin' && r.bun.succes && !r.bun.campuri && !r.bun.rosu
+      && !r.bun.incarca && !r.bun.roata && r.subsol.campuri && !r.subsol.succes, r);
+    abonariTrimise.length = 0;
+    await scrieAdresa(f, 1, 'eroare@example.invalid');
+    await apasa(f, 1);
+    await asteapta(page);
+    r.eroare = await stareA(f, 1);
+    await scrieAdresa(f, 1, 'fals@example.invalid');
+    await apasa(f, 1);
+    await asteapta(page);
+    r.fals = await stareA(f, 1);
+    await scrieAdresa(f, 1, 'html@example.invalid');
+    await apasa(f, 1);
+    await asteapta(page);
+    r.html = await stareA(f, 1);
+    await scrieAdresa(f, 1, 'cod500@example.invalid');
+    await apasa(f, 1);
+    await asteapta(page);
+    r.cod500 = await stareA(f, 1);
+    r.nSubsol = abonariTrimise.map((x) => x.n);
+    verifica('răspunsurile: {"error"} → textul în blocul de eroare (ca text); false → textul Divi subscription_failed; un răspuns care nu e JSON sau un 500 → '
+      + 'nimic schimbat (ca jQuery-ul lui Divi), fără roată; subsolul e formularul 1',
+      r.eroare.eroare === 'Adresa nu poate fi abonată acum.' && r.fals.eroare === 'Please, check the fields below to make sure you entered the correct information.'
+      && r.html.eroare === null && r.html.campuri && !r.html.incarca && r.cod500.eroare === null && r.cod500.campuri && !r.cod500.roata
+      && egal(r.nSubsol, [1, 1, 1, 1]), r);
+    abonariTrimise.length = 0;
+    await scrieAdresa(f, 1, 'lent@example.invalid');
+    await f.focus('.proba-subsol input[name="et_pb_signup_email"]');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+    r.inCurs = await stareA(f, 1);
+    await apasa(f, 1);
+    await page.waitForTimeout(900);
+    r.lent = await stareA(f, 1);
+    r.adresa = page.url();
+    verifica('Enter în câmp trimite (fără reîncărcarea paginii); cât merge cererea, butonul are et_pb_button_text_loading și roata se vede; un al doilea clic '
+      + 'în timpul ei nu mai trimite; apoi succesul', r.inCurs.incarca && r.inCurs.roata && abonariTrimise.length === 1 && r.lent.succes && !r.lent.incarca
+      && r.adresa === BAZA + '/pagina/abonare', { r, cereri: abonariTrimise.length });
+    await context.close();
+  }
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/abonare-dublu' });
+    const f = page.mainFrame();
+    const s = await stare(f);
+    abonariTrimise.length = 0;
+    await scrieAdresa(f, 0, 'bun@example.invalid');
+    await apasa(f, 0);
+    await asteapta(page);
+    verifica('o a doua includere a modulului nu face nimic: un clic = o cerere', curate(ev, s) && abonariTrimise.length === 1, { cereri: abonariTrimise.length,
+      ...detaliiCurate(ev, s) });
+    await context.close();
+  }
+}
+
 async function verificaFormularul(browser) {
   scrie('== formular (felia 3, formular-divi.md, FormularCapturat): validarea din browser ca pe live, trimiterea pe loc, răspunsurile, rezerva nativă');
   const stareF = (f, n) => f.evaluate((n) => {
@@ -3222,6 +3376,7 @@ async function main() {
     await verificaToggle(browser);
     await verificaMultiView(browser);
     await verificaFormularul(browser);
+    await verificaAbonarea(browser);
     await verificaLegaturile(browser);
     await verificaSticky(browser);
     await verificaSusSiAncorele(browser);

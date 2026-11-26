@@ -109,6 +109,11 @@ final class Importator
                     $rez['seo']++;
                 }
             }
+            if ($plan->newsletter !== null) {
+                // Newsletter-ul MailPoet (pista E), înaintea documentelor capturate: dovada regiunii mailpoet:pagina (cadrul R) citește
+                // listele și setările MailPoet scrise aici, în aceeași tranzacție.
+                $rez['newsletter'] = MailPoet\ScriereMailPoet::aplica($db, $plan->newsletter);
+            }
             if ($plan->capturat && $plan->capturata !== null) {
                 // Pasul 5a: documentele tăiate, fragmentele, răspunsurile înghețate, formularele, galeriile; apoi P1 la import (o
                 // randare diferită de T anulează tot), cu scripturile runtime-ului pe care le pune cadrul (pasul 6: tema.json → runtime).

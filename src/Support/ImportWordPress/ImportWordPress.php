@@ -150,6 +150,18 @@ final class ImportWordPress
     }
 
     /**
+     * Rândul NU al unei erori neașteptate a importului (scripts/importa-wordpress.php; codul 1, nimic scris: scrierea e într-o
+     * tranzacție): clasa, la o eroare a bazei codul SQLSTATE, și locul ei, fără mesaj. Mesajul serverului bazei poate cita valoarea unei
+     * chei unice (o adresă de email, la o cheie `email` încălcată; E-LEG-06), iar ieșirea scriptului ajunge în jurnalul adoptării
+     * (deploy/lib/adopta-wp.php).
+     */
+    public static function eroareNeasteptata(\Throwable $e): string
+    {
+        return 'NU: eroare neașteptată (' . get_class($e) . ($e instanceof \PDOException ? ', SQLSTATE ' . (string) $e->getCode() : '')
+            . ', în ' . basename($e->getFile()) . ':' . $e->getLine() . ')';
+    }
+
+    /**
      * Cheile unui import-wordpress.json PUBLIC care au voie doar în privat/ (recenzia 2, R3-7): `scripturi_aruncate` (sha256-urile
      * scripturilor site-ului real), `captura.structura` (selectorii observați), `captura.nonce`, `sabloane` (pista A: adresele
      * documentelor-șablon).
@@ -339,6 +351,14 @@ final class ImportWordPress
         $reguli ??= self::reguli();
         $context = new Context($inventar, new Adrese($inventar->site['url'] !== '' ? $inventar->site['url'] : $url), $reguli, $config->dosar,
             $config->dosarUploads(), $url, $convertoare);
-        return ['config' => $config, 'sursa' => $sursa, 'inventar' => $inventar, 'context' => $context, 'plan' => Plan::fa($inventar, $context, $optiuni)];
+        // Newsletter-ul unui site cu MailPoet (pista E): îl planifică MailPoet\PlanMailPoet (abonații, listele, arhiva, setările), cu NU-urile lui;
+        // fără tabelele MailPoet, partea rămâne cum era (NU cât site-ul are abonați, afară de --fara-newsletter).
+        $mailpoet = MailPoet\SursaMailPoet::exista($sursa);
+        $plan = Plan::fa($inventar, $context, $optiuni + ['planificate' => $mailpoet ? ['newsletter'] : []]);
+        if ($mailpoet) {
+            $export = isset($optiuni['export_mailpoet']) && is_string($optiuni['export_mailpoet']) ? $optiuni['export_mailpoet'] : null;
+            MailPoet\PlanMailPoet::adauga($plan, new MailPoet\SursaMailPoet($sursa, $export), (array) ($optiuni['fara'] ?? []));
+        }
+        return ['config' => $config, 'sursa' => $sursa, 'inventar' => $inventar, 'context' => $context, 'plan' => $plan];
     }
 }

@@ -1272,6 +1272,58 @@ merge și containerul estompat ca pe live; la „trimis” formularul dispare ș
 textul doar prin `textContent`; o rețea picată sau un răspuns care nu e JSON trimite formularul nativ (pagina cu rezultatul). Poarta
 browserului: **G-compat**.
 
+**Formularele de abonare** (mutarea unui site WooCommerce, pista E; `App\Support\AbonareCapturata`, interceptat în `public/index.php`
+imediat după formularele de contact, fără sesiune: `SesiuneLaNevoie` nu o pornește pentru această cale și nici pentru POST-urile
+routerului MailPoet, deci răspunsul nu pune niciun cookie; doar pe cadrul capturat și cu `wp-compat.json` → `mailpoet`): modulele Divi `et_pb_signup` cu
+furnizorul MailPoet. Clientul (`divi4/v1/abonare.js`, setul `comportament`) face validarea lui Divi (adresa după regula Divi, fără
+retezare; un câmp greșit primește doar chenarul roșu `et_pb_signup_error`, niciun mesaj și nicio cerere), apoi `fetch` POST la
+`/_andaxi/abonare/<n>` (n = al câtelea formular de abonare al paginii, în ordinea documentului), cu `cale` (calea paginii, cu
+query-ul), `et_frontend_nonce` (nonce-ul zilei din `et_pb_custom`) și adresa (numele, doar dacă formularul le are); cât merge,
+`et_pb_button_text_loading` și roata. Serverul, fail-closed la fiecare pas: mărimea (16 KB, 20 de câmpuri: 413), originea (403),
+bugetul vizitatorului (20 în 15 minute, 60 pe zi), nonce-ul zilei (azi sau ieri), pluginul `newsletter` pornit, **lista din
+documentul capturat al căii** (formularul n, `et_pb_signup_provider` = `mailpoet`, `et_pb_signup_list_id` = lista MailPoet → lista
+CMS cu acel `mailpoet_id`), adresa (`FILTER_VALIDATE_EMAIL`, 190 de caractere), apoi `NewsletterService::cerereAbonare` (dubla
+confirmare cu emailul MailPoet, limitele ei; sursa `api`, IP-ul cererii ca dovadă). Răspunsul: `{"success":true}` (și pentru o adresă
+deja abonată sau una care a primit deja confirmările îngăduite, ca pagina să nu spună cine e abonat și ca MailPoet, care nu mai
+trimite confirmarea dar arată succesul) → câmpurile ascunse și mesajul de succes capturat al modulului; `false` → textul
+Divi `subscription_failed`; `{"error": …}` → textul în blocul de eroare; o rețea picată sau un răspuns care nu e JSON → nimic (ca
+Divi). Porțile: **G-mailpoet-compat** (serverul) și **G-compat** (clientul).
+
+**Newsletter-ul MailPoet la import** (pista E; `ImportWordPress\MailPoet`, [PLUGINURI.md](PLUGINURI.md), „Newsletter”): un site WordPress
+cu tabelele MailPoet are partea `newsletter` planificată de `PlanMailPoet` (în locul NU-ului „nu e făcut încă”); doar pe drumul
+capturat, cu `wp-compat.json` → `mailpoet`. NU-urile: o listă dinamică, un cod MailPoet necunoscut într-un email arhivat, o etichetă
+a editorului nou MailPoet (`[mailpoet/…]`, `[woocommerce/…]`, în orice formă: în corpul, textul sau subiectul unui email, în emailul
+de confirmare ori în adresa unui link urmărit), o adresă de link mai lungă de 2048 de caractere, un pas de automatizare necunoscut, automatizările (până la importul lor, pista J; altfel `--fara-automatizari`), un câmp personalizat, două
+adrese egale fără majuscule, o stare necunoscută, un nivel al urmăririi necunoscut, cadrele P și R ale paginii MailPoet lipsă din
+captură (cu numele câmpurilor formularului de administrare și sufixul titlului), autorul paginilor MailPoet capturate într-o formă
+necunoscută, un email trimis fără HTML păstrat și fără randarea exportată, o pagină de abonare care nu e pagina MailPoet, dubla
+confirmare oprită, o trimitere MailPoet în curs; cu baza site-ului, o adresă din MailPoet care e deja a altui abonat al site-ului
+(doar id-urile). MailPoet instalat, dar fără niciun abonat, nu e NU (nimic de importat). Cadrele sunt două documente capturate prin GET,
+cu date demo: P, pagina simplă `/?mailpoet_page=subscriptions` (servită cum e capturată), și R, administrarea în previzualizare
+(`/?mailpoet_page=subscriptions&mailpoet_router&endpoint=subscription&action=manage&data=eyJwcmV2aWV3IjoxfQ`), cu regulile ei din
+`import-wordpress.json` (pachetul `ateliere`: `head > title` → jetonul titlului, `h1.entry-title` → `mailpoet:pagina` 0,
+`div.entry-content` → `mailpoet:pagina` 1); din R se iau sufixul titlului și numele câmpurilor formularului. Din amândouă importul
+scoate numele și legătura autorului din linia `p.post-meta` a temei (`CadreMailPoet`, VC-MP-25; rămâne data). Până la două reparații
+ale pistei A (atributele `data-automation-id` și `data-parsley-*` ale formularului de administrare în politica HTML-ului capturat;
+textul RCDATA al lui `<title>` primit de jetonul titlului la tăiere), cadrul R al unei capturi reale e NU, cu motivul lui. Exportul MailPoet (exportatorul din PLAN §7.1, rulat
+în WordPress, în `site/privat/mailpoet-export.json`, 0600; `--export-mailpoet=<fișier>` altfel) are forma
+`{"format": "andaxi-mailpoet-export/1", "newslettere": {"<id>": {"html", "text", "partajare"}}, "confirmare": {"subiect", "html", "text"}}`:
+randările cu codurile pe loc ale emailurilor fără corp păstrat în coadă (și ale emailurilor automatizărilor), identificatorul adresei
+publice a fiecărei campanii partajabile (`partajare` = `<hash>-<slug>`, cel al lui MailPoet, doar când `ShareVisibility::canShare`;
+fără el, `newsletter_campaigns.mailpoet_partajare` rămâne NULL) și emailul de confirmare făcut în editor (doar cu
+`signup_confirmation.use_mailpoet_editor` pornit; fără cheie e modul simplu, ca MailPoet, cu subiectul și corpul din setări, și
+exportul nu-l cere). Fiecare cheie e opțională. Datele MailPoet sunt UTC; exportatorul nu schimbă fusul sesiunii lui (le citește
+cum le-a scris MailPoet), iar importul le scrie în ora Bucureștiului în coloanele `DATETIME` (regula orei de vară pentru fiecare
+valoare) și ca același moment în cele `TIMESTAMP`. Emailurile arhivate cu fonturi Google se văd în „vezi în browser” cu fonturile de
+rezervă (pagina nu cere nimic de la Google); importul le numără într-un avertisment. Scrierea
+merge în tranzacția importului, înaintea documentelor capturate (dovada regiunii `mailpoet:pagina` citește listele și setările), după
+cheia MailPoet a fiecărui rând: fără nicio schimbare pe site-ul nou, a doua aplicare dă aceleași rânduri. Ce s-a hotărât între timp pe
+site-ul nou (o dezabonare, un acord, o schimbare a abonatului sau a listelor lui, o abonare cu aceeași adresă) rămâne: acei abonați
+primesc din MailPoet doar legătura cu adresele vechi și retragerile mai noi ([PLUGINURI.md](PLUGINURI.md), „O nouă aplicare”), iar
+planul (cu baza site-ului) și aplicarea îi raportează doar după id. Invers, o revenire pe WordPress nu duce în MailPoet ce s-a
+schimbat pe site-ul nou (exportul de revenire e al pistei M). Ieșirea are doar numere și id-uri. Poarta:
+**G-mp-import** (`tools/dev/test-import-mailpoet.php`, pe fixtura `tools/dev/fixturi-wp/mailpoet.sql`).
+
 **Căutarea** (pasul 9b; `App\Support\CautareCapturata`, `wp-compat.json` → `cautare_wp`; VC-CAUT-001): `GET /?s=<termeni>` (lupa din
 antet) primește o pagină de rezultate în cadrul site-ului: documentul 404 capturat (antetul, subsolul, bannerul, foile), cu
 conținutul înlocuit de lista paginilor găsite (titlul și legătura, escapate) sau de „Nu am găsit niciun rezultat”, statusul 200,

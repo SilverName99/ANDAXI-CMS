@@ -8,7 +8,8 @@ namespace App\Support;
  * Sesiunea PHP doar unde e nevoie (WP-40, SEO partea B, B6; PLAN-SEO §8.12): un vizitator nou (fără cookie-ul sesiunii)
  * care deschide o pagină publică (GET sau HEAD) nu primește sesiune: niciun fișier în storage/sessions, niciun cookie,
  * deci pagina poate veni din cache-ul de pagini și din CDN. Sesiunea pornește, ca înainte:
- *  - la orice POST (coșul, comanda, formularele);
+ *  - la orice POST (coșul, comanda, formularele), afară de POST-urile unui site mutat de pe MailPoet care nu au nevoie de ea
+ *    (postFaraSesiune(): routerul MailPoet și formularele de abonare capturate, doar cu wp-compat.json → mailpoet);
  *  - când browserul are deja cookie-ul sesiunii (un coș, o logare, un mesaj de după un formular);
  *  - pe căile care o folosesc din prima cerere: adminul, coșul și comanda, plata, contul, logarea, înregistrarea,
  *    Google, API-ul (coșul, livrarea), confirmările, newsletterul, adresele „mereu deschise” ale pluginurilor
@@ -91,7 +92,7 @@ final class SesiuneLaNevoie
     public static function trebuie(string $metoda, string $uri, array $cookie): bool
     {
         if (!in_array(strtoupper($metoda), ['GET', 'HEAD'], true)) {
-            return true;
+            return !self::postFaraSesiune($uri);
         }
         if (self::tehnica($metoda, $uri)) {
             return false;
@@ -112,6 +113,26 @@ final class SesiuneLaNevoie
             }
         }
         return SeoRedirects::eExclusa($cale);
+    }
+
+    /**
+     * Un POST care nu are nevoie de sesiune, pe un site mutat de pe MailPoet (pista E, E-PAR-03; doar cu `wp-compat.json` →
+     * `mailpoet`, altfel false: pe orice alt site orice POST pornește sesiunea, ca înainte): routerul MailPoet de pe `/` (cheile
+     * `mailpoet_router` și `mailpoet_page`, CompatWp\Interogari: dezabonarea „cu un clic” trimisă de clientul de email, butonul
+     * dezabonării, sondajul, oprirea urmăririi, formularul de administrare, fiecare cu jetonul abonatului și nonce-ul lui) și
+     * formularele de abonare capturate (`/_andaxi/abonare/<n>`, cu nonce-ul zilei al paginii). Niciunul nu citește și nu scrie
+     * sesiunea; cu ea, un clic dintr-un email ar lăsa în browser cookie-ul sesiunii, pe 30 de zile. Plasa de siguranță rămâne.
+     */
+    private static function postFaraSesiune(string $uri): bool
+    {
+        if (!WpCompat::mailpoet()) {
+            return false;
+        }
+        if (preg_match('#^/_andaxi/abonare/\d{1,3}$#D', (string) (parse_url($uri, PHP_URL_PATH) ?? '')) === 1) {
+            return true;
+        }
+        parse_str((string) (parse_url($uri, PHP_URL_QUERY) ?? ''), $get);
+        return in_array(CompatWp\Interogari::cheie($uri, $get), ['mailpoet_router', 'mailpoet_page'], true);
     }
 
     /**

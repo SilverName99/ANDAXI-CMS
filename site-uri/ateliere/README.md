@@ -8,7 +8,7 @@ doar configurația generică, fără nicio dată a site-ului real.
 |---|---|
 | `tema/tema.json` | cadrul capturat, runtime-ul `divi4@1` și seturile lui (`runtime_seturi`: comportament, magazin_wc, calendar) |
 | `wp-compat.json` | adresele ca WordPress, plus `magazin_wc` (rutele, cheile și CSP-ul magazinului în forma WooCommerce) și `mailpoet` (adresele vechi ale MailPoet de pe `/`) |
-| `import-wordpress.json` | drumul capturat, dialectul și regulile publice ale regiunilor dinamice (selectori neutri, doar pe coș, checkout, cont, produse și șabloane) |
+| `import-wordpress.json` | drumul capturat, dialectul și regulile publice ale regiunilor dinamice (selectori neutri, doar pe coș, checkout, cont, produse, șabloane și cadrul R al paginilor MailPoet) |
 | `seo.json` | regulile SEO (goale deocamdată) |
 | `ce-se-schimba.md` | ce se schimbă pentru client (se completează de fiecare pistă, în commit-ul care schimbă) |
 

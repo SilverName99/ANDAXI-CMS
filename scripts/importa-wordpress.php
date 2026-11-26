@@ -15,8 +15,13 @@ declare(strict_types=1);
  * Opțiuni: --url=<adresa site-ului WordPress> (când e încă pornit), --captura=<dosar> (captura de la pasul 4; implicit
  * capturat/ din dosarul site-ului), --raport=<fișier.json> (ce s-a planificat și ce s-a făcut), --suprascrie (scrie și
  * peste rândurile editate de om după importul de dinainte: amprentele, corectura 1.9), --fara-media (fără copierea
- * mediilor; doar testele), --fara-magazin, --fara-newsletter, --fara-articole (părțile pe care proprietarul a ales să nu
- * le importe).
+ * mediilor; doar testele), --fara-magazin, --fara-newsletter, --fara-articole, --fara-automatizari (părțile pe care proprietarul a ales
+ * să nu le importe), --export-mailpoet=<fișier.json> (exportul MailPoet al exportatorului, PLAN §7.1: randările emailurilor fără corp
+ * păstrat și emailul de confirmare; implicit privat/mailpoet-export.json din dosarul site-ului, dacă există).
+ *
+ * Un site cu MailPoet (pista E): partea `newsletter` o planifică și o scrie ImportWordPress\MailPoet (abonații cu starea și dovada
+ * consimțământului, listele, arhiva campaniilor, cozile și linkurile lor, dezabonările, setările), înaintea documentelor capturate, în
+ * aceeași tranzacție; ieșirea are doar numere.
  *
  * Drumul capturat (`import-wordpress.json` → `"continut": "capturat"`, `"dialect": "divi4"`): --url și captura sunt
  * obligatorii, iar paginile le transformă dialectul (Continut\Divi4, pasul 5a) din captura de la pasul 4; HTML-ul transformat
@@ -53,15 +58,15 @@ use App\Support\ImportWordPress\ScriereCapturata;
 use App\Support\Paths;
 use App\Support\ResponseCache;
 
-$optiuni = ['wp' => null, 'url' => '', 'raport' => null, 'captura' => null, 'sha-raport' => null, 'aplica' => false, 'plan' => false, 'fara-media' => false,
-    'suprascrie' => false, 'fara' => []];
+$optiuni = ['wp' => null, 'url' => '', 'raport' => null, 'captura' => null, 'sha-raport' => null, 'export-mailpoet' => null, 'aplica' => false, 'plan' => false,
+    'fara-media' => false, 'suprascrie' => false, 'fara' => []];
 $folosire = "Folosire: php scripts/importa-wordpress.php --wp=<dosarul WordPress> [--plan|--aplica] [--url=…] [--captura=…] [--raport=…] [--suprascrie]\n";
 foreach (array_slice($argv, 1) as $arg) {
-    if (preg_match('/^--(wp|url|raport|captura|sha-raport)=(.+)$/', $arg, $m) === 1) {
+    if (preg_match('/^--(wp|url|raport|captura|sha-raport|export-mailpoet)=(.+)$/', $arg, $m) === 1) {
         $optiuni[$m[1]] = $m[2];
     } elseif (in_array($arg, ['--aplica', '--plan', '--fara-media', '--suprascrie'], true)) {
         $optiuni[substr($arg, 2)] = true;
-    } elseif (preg_match('/^--fara-(magazin|newsletter|articole)$/', $arg, $m) === 1) {
+    } elseif (preg_match('/^--fara-(magazin|newsletter|articole|automatizari)$/', $arg, $m) === 1) {
         $optiuni['fara'][] = $m[1];
     } else {
         fwrite(STDERR, "Argument necunoscut: {$arg}\n" . $folosire);
@@ -116,7 +121,10 @@ try {
         }
         $convertoare[] = new Divi4($dosarCaptura);
     }
-    $r = ImportWordPress::planifica((string) $optiuni['wp'], (string) $optiuni['url'], $convertoare, ['fara' => $optiuni['fara']], $reguli);
+    // Exportul MailPoet (PLAN §7.1): cel dat, altfel cel din privat/ al dosarului site-ului, dacă există (fără el, planul spune ce lipsește).
+    $exportMailPoet = $optiuni['export-mailpoet'] ?? (is_file(dirname(Paths::env()) . '/privat/mailpoet-export.json') ? dirname(Paths::env()) . '/privat/mailpoet-export.json' : null);
+    $r = ImportWordPress::planifica((string) $optiuni['wp'], (string) $optiuni['url'], $convertoare, ['fara' => $optiuni['fara'],
+        'export_mailpoet' => $exportMailPoet], $reguli);
     $plan = $r['plan'];
     $inventar = $r['inventar'];
     $ctx = $r['context'];
@@ -144,6 +152,15 @@ try {
             }
         } catch (Throwable) {
             // O bază încă neinstalată (fără tabelul pages) nu are pagini care să se bată cap în cap cu planul.
+        }
+    }
+    // Pista E: verificările newsletterului MailPoet care cer baza site-ului (expeditorul, adresele deja ale altui abonat, abonații
+    // păstrați la reaplicare), doar citite; o bază încă neinstalată nu are ce verifica.
+    if ($db !== null && $plan->newsletter instanceof \App\Support\ImportWordPress\MailPoet\PlanMailPoet) {
+        try {
+            \App\Support\ImportWordPress\MailPoet\PlanMailPoet::verificaSite($plan, $db);
+        } catch (\PDOException) {
+            // Fără tabelele newsletterului (o bază neinstalată): nimic de comparat.
         }
     }
     if ($db !== null && Amprente::disponibil($db)) {
@@ -233,6 +250,18 @@ try {
         $scrie('  OK', 'captura: ' . $c['documente'] . ' documente, ' . $c['fragmente'] . ' fragmente, ' . $c['raspunsuri'] . ' răspunsuri înghețate, ' . $c['formulare']
             . ' formulare, ' . $c['galerii'] . ' galerii' . ($c['sterse'] > 0 ? ', ' . $c['sterse'] . ' rânduri vechi șterse' : '') . '; P1 la import: fiecare document randat din bază = T');
     }
+    if (is_array($facut['newsletter'] ?? null)) {
+        $n = $facut['newsletter'];
+        $scrie('  OK', 'newsletter (MailPoet): ' . $n['abonati'] . ' abonați (' . $n['abonati_noi'] . ' noi' . ($n['sariti_suprimati'] > 0 ? ', ' . $n['sariti_suprimati']
+            . ' pe lista „nu trimite”, săriți' : '') . '), ' . $n['liste'] . ' liste, ' . $n['apartenente'] . ' apartenențe, ' . $n['campanii'] . ' campanii ('
+            . $n['trimiteri'] . ' trimiteri, ' . $n['deschideri'] . ' deschideri, ' . $n['clicuri'] . ' clicuri), ' . $n['cozi'] . ' cozi, ' . $n['linkuri'] . ' linkuri, '
+            . $n['dezabonari'] . ' dezabonări, ' . $n['setari'] . ' setări');
+        if (($n['pastrati'] ?? 0) > 0) {
+            $scrie('  ATENȚIE', 'newsletter (MailPoet): ' . $n['pastrati'] . ' abonați și-au păstrat starea, acordul și listele de pe site-ul nou (id MailPoet→site: '
+                . implode(', ', (array) $n['pastrati_id']) . ')' . (($n['retrageri_mailpoet'] ?? 0) > 0 ? '; ' . $n['retrageri_mailpoet']
+                . ' retrageri din MailPoet mai noi aplicate' : ''));
+        }
+    }
     foreach ($facut['suprascrise'] as $t) {
         $scrie('  ATENȚIE', 'scris peste (--suprascrie): ' . $t);
     }
@@ -245,7 +274,8 @@ try {
     fwrite(STDERR, 'NU: ' . $e->getMessage() . "\n");
     exit(1);
 } catch (\Throwable $e) {
-    // Orice eroare neașteptată e NU (codul 1, nimic scris: scrierea e într-o tranzacție), nu o eroare fatală (recenzia m1).
-    fwrite(STDERR, 'NU: eroare neașteptată (' . get_class($e) . ': ' . $e->getMessage() . ")\n");
+    // Orice eroare neașteptată e NU (codul 1, nimic scris: scrierea e într-o tranzacție), nu o eroare fatală (recenzia m1); fără mesajul
+    // ei (ImportWordPress::eroareNeasteptata, E-LEG-06).
+    fwrite(STDERR, \App\Support\ImportWordPress\ImportWordPress::eroareNeasteptata($e) . "\n");
     exit(1);
 }

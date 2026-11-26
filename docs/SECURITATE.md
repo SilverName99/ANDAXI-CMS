@@ -161,3 +161,42 @@ Formularele de contact Divi ale unui site mutat de pe WordPress primesc date de 
 - **Nimic pierdut:** mesajul se scrie în `contact_form_messages` înaintea emailului; unul care nu pleacă rămâne în admin, marcat.
 
 Testul: `tools/dev/test-formulare-wp.php` (poarta G-formulare).
+
+Pe un site mutat de pe MailPoet (pista E; [PLUGINURI.md](PLUGINURI.md), „Newsletter”), adresele vechi ale MailPoet și formularele de
+abonare Divi primesc și ele cereri de la oricine:
+
+- **Jetoanele:** din jetoanele MailPoet păstrăm doar amprenta (sha256 și lungimea; pentru un jeton actualizat, și sha256-ul primelor 6
+  caractere), comparată cu `hash_equals`; un jeton vechi de 6 caractere trece doar cât ține perioada de grație a lui MailPoet și cel
+  mult 10 încercări greșite în 24 de ore pe abonat. Jetonul site-ului (`ax1.`) e un HMAC cu cheia newsletterului, pe scopul lui.
+- **Fără oracol:** un jeton greșit dă aceeași pagină ca o adresă necunoscută (404); deschiderea dă mereu imaginea; dezabonarea „cu un
+  clic” (RFC 8058) răspunde mereu 200 gol. Peste 60 de cereri pe minut de pe aceeași rețea (`BugetRouter`), un GET primește răspunsul
+  unui jeton greșit, iar orice POST pe `track/click` același 200 gol, fără ca jetonul să fie cântărit; retragerile (dezabonarea,
+  oprirea urmăririi) nu țin seama de buget. Un jeton păstrat mai scurt de 32 de caractere (un jeton MailPoet de 6 caractere niciodată
+  lungit se ghicește din 2^24 încercări) trece doar cât abonatul are sub 10 nepotriviri în 24 de ore, numărate înaintea comparației;
+  planul importului spune câți abonați au un astfel de jeton.
+- **Jurnalul bugetului:** routerul nu păstrează IP-uri și user agent-uri: în `register_submit_logs`, starea `l:mailpoet`, doar o
+  amprentă HMAC-SHA256 a rețelei (cu cheia cadrului capturat; IPv6 pe /64), iar rândurile mai vechi de o oră se șterg la fiecare cerere.
+  Singurul IP scris de router e dovada acordului (`confirmed_ip`, la confirmare).
+- **CSRF:** formularul de administrare are un nonce pe zi, scop și abonat (`_ax`), sondajul și oprirea urmăririi la fel (`_wpnonce`),
+  plus verificarea originii (`Sec-Fetch-Site`, altfel `Origin`; `Origin: null` fără `Sec-Fetch-Site`, al browserelor mai vechi după
+  `Referrer-Policy: no-referrer`, trece doar cu nonce-ul); doar dezabonarea „cu un clic” n-are nevoie de el (RFC 8058: doar jetonul
+  abonatului). Un GET nu schimbă nimic (un program care pre-încarcă linkurile nu dezabonează pe nimeni), iar un HEAD pe linkul de
+  confirmare nu confirmă (un scaner de linkuri al unui filtru de email nu dă acordul în locul omului).
+- **Fără sesiune, fără trackere:** POST-urile routerului și ale formularelor de abonare Divi nu pornesc sesiunea (niciun cookie);
+  paginile routerului nu încarcă trackerele site-ului, fiindcă adresa lor poartă adresa de email și jetonul abonatului (un analytics
+  le-ar păstra, iar jetonul dezabonează și deschide administrarea).
+- **Redirecționări:** clicul duce doar la adresa importată a linkului (un cod al abonatului în gazdă nu duce niciodată în altă parte);
+  un hash necunoscut, la prima pagină. „Vezi în browser” are un CSP propriu: fără scripturi, fără formulare, fără `base`, fără
+  fonturile Google ale emailului (legătura lor se scoate; nicio cerere a cititorului nu pleacă la Google).
+- **Abonarea Divi:** aceleași apărări ca formularele de contact (mărimea, originea, bugetul pe rețea, nonce-ul zilei), lista luată din
+  documentul capturat (niciodată din cerere), dubla confirmare cu limitele ei; răspunsul nu spune dacă o adresă era deja abonată.
+  Emailul „Abonat nou” către administrator (pe care oricine îl poate cere retrimițând formularul cu adresa unui abonat activ): o
+  listă anunțată pentru un abonat nu se mai anunță 24 de ore, cel mult 60 de perechi (abonat, listă) pe oră pe tot site-ul, fiecare
+  email cu un jeton din bugetul comun (bugetul emailurilor comenzilor și confirmărilor nu coboară sub zero pentru el).
+- **Conținutul emailurilor arhivate:** `[site:title]` intră scăpat în HTML (numele site-ului vine decodat din WordPress).
+- **Datele:** IP-urile consimțământului stau doar în baza site-ului; importul și uneltele scriu doar numere și id-uri (și rândul NU
+  al unei erori neașteptate: clasa, codul SQLSTATE și locul, fără mesajul bazei, care ar cita o adresă); copia de verificare nu le
+  are (regulile ei le golesc). Paginile MailPoet capturate pierd numele și legătura autorului (adesea adresa de email a contului care
+  a instalat pluginul) la import; altă formă a autorului e NU.
+
+Testele: `tools/dev/test-mailpoet-compat.php` (G-mailpoet-compat), `tools/dev/test-import-mailpoet.php` (G-mp-import).

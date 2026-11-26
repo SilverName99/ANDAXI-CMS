@@ -223,6 +223,13 @@ if (\App\Support\FormularCapturat::intercepteaza($cacheDb instanceof PDO ? $cach
     (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
     return;
 }
+// Mutarea unui site WooCommerce (pista E): formularele de abonare Divi ale paginilor capturate (POST /_andaxi/abonare/{n}, din
+// runtime-ul compat divi4/v1/abonare.js): aceleași protecții ca formularele de contact, lista din documentul capturat, dubla
+// confirmare (App\Support\AbonareCapturata). Fără cadrul capturat sau fără wp-compat.json → mailpoet nu face nimic.
+if (\App\Support\AbonareCapturata::intercepteaza($cacheDb instanceof PDO ? $cacheDb : null, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+    (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
+}
 // Pasul 9b: căutarea WordPress (GET /?s=…, wp-compat.json → cautare_wp): rezultatele în cadrul site-ului capturat (antetul și
 // subsolul capturate), noindex, niciodată în cache (App\Support\CautareCapturata). Fără cadrul capturat nu face nimic.
 if (\App\Support\CautareCapturata::intercepteaza($cacheDb instanceof PDO ? $cacheDb : null, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),

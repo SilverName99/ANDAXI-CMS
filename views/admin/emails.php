@@ -993,7 +993,9 @@ if (count($taburiEmail) > 1) {
                                 <?php
                                 // Starea pe înțeles: „neconfirmat” = a cerut abonarea din
                                 // formular și n-a apăsat încă linkul din email.
-                                $subEticheta = ['active' => 'abonat', 'unsubscribed' => 'dezabonat', 'pending' => 'neconfirmat'][$subStatus] ?? $subStatus;
+                                // „inactiv” și „sărit”: stările importate din MailPoet (nu primesc newslettere).
+                                $subEticheta = ['active' => 'abonat', 'unsubscribed' => 'dezabonat', 'pending' => 'neconfirmat', 'inactive' => 'inactiv',
+                                    'bounced' => 'sărit'][$subStatus] ?? $subStatus;
                                 if ($subStatus === 'unsubscribed' && !empty($subscriber['pending_at'])) {
                                     $subEticheta .= ' · a cerut reabonarea';
                                 }
@@ -1003,7 +1005,7 @@ if (count($taburiEmail) > 1) {
                                 ?>
                                 <td><span class="status-pill <?= $subStatus === 'active' ? 'ok' : 'off' ?>" <?= $subTitlu !== '' ? 'title="' . htmlspecialchars($subTitlu, ENT_QUOTES) . '"' : '' ?>><?= htmlspecialchars($subEticheta, ENT_QUOTES) ?></span></td>
                                 <td class="template-actions">
-                                    <?php if ($subStatus !== 'pending'): ?>
+                                    <?php if (!in_array($subStatus, ['pending', 'bounced'], true)): ?>
                                     <form method="post" action="/admin/emails" style="display:inline;"
                                         <?php if ($subStatus !== 'active'): ?>onsubmit="return confirm('Această persoană s-a dezabonat. Reactiveaz-o doar dacă ți-a cerut explicit să primească din nou newslettere. Continui?');"<?php endif; ?>>
                                         <input type="hidden" name="section" value="newsletter-subscriber-toggle">
@@ -1542,6 +1544,9 @@ if (count($taburiEmail) > 1) {
                     &nbsp;&nbsp;|&nbsp;&nbsp;
                     <strong>Listă:</strong> <?= htmlspecialchars((string) ($statsCampaignDetail['list_name'] ?? '—'), ENT_QUOTES) ?>
                 </p>
+                <?php if ((string) ($statsCampaignDetail['sursa'] ?? '') === 'mailpoet'): ?>
+                <p>Arhivă MailPoet: deschiderile sunt unice (MailPoet a păstrat doar prima deschidere a fiecărui abonat).</p>
+                <?php endif; ?>
             </div>
 
             <!-- KPI cards -->

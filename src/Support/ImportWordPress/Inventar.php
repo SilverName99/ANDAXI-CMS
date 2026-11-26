@@ -52,7 +52,9 @@ final class Inventar
         // planul spune NU cât site-ul are date în ele (Inventar::$altele), afară de --fara-<parte>.
         'woocommerce' => ['ce' => 'magazinul (produse, comenzi, clienți)', 'cum' => 'NEIMPORTAT încă (pluginul magazin)', 'parte' => 'magazin'],
         'woocommerce-gateway-stripe' => ['ce' => 'plăți Stripe', 'cum' => 'setările plăților se fac în admin (pluginul plata_stripe)', 'parte' => 'magazin'],
-        'mailpoet' => ['ce' => 'newsletter', 'cum' => 'NEIMPORTAT încă (pluginul newsletter)', 'parte' => 'newsletter'],
+        // MailPoet (pista E): abonații, listele, arhiva campaniilor și setările, în pluginul newsletter (ImportWordPress\MailPoet); automatizările:
+        // pista J (până atunci NU, afară de --fara-automatizari).
+        'mailpoet' => ['ce' => 'newsletter', 'cum' => 'abonații, listele, arhiva și setările în pluginul newsletter (automatizările: încă nu)', 'parte' => 'newsletter'],
     ];
 
     /** Temele știute și ce se întâmplă cu ele (Flatsome, cu UX Builder, la pasul 17). */

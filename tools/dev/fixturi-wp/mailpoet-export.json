@@ -1,0 +1,27 @@
+{
+    "format": "andaxi-mailpoet-export/1",
+    "_despre": "Fixtura exportului MailPoet (forma scrisă de exportator, PLAN §7.1, în site/privat/mailpoet-export.json): randările cu codurile pe loc ale emailurilor fără corp păstrat în coadă (campania 32) și ale emailurilor automatizărilor (35, 36), identificatorul adresei publice a campaniei partajabile (31; cel al campaniei 32 are alt hash, deci nu se ia), plus emailul de confirmare. Date INVENTATE.",
+    "newslettere": {
+        "31": {
+            "partajare": "aa11bb22cc33-scrisoarea-de-proba-unu"
+        },
+        "32": {
+            "html": "<!DOCTYPE html><html><head><title>Scrisoarea doi</title><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css?family=Lato\"></head><body><p>Bună, [subscriber:firstname | default:prieten]!</p><p><a href=\"[mailpoet_click_data]-6071829304b5\">Despre noi</a> | <a href=\"[mailpoet_click_data]-718293a4b5c6\">Dezabonare</a></p><p>[date:mtext] [date:y]</p><img src=\"[mailpoet_open_data]\" alt=\"\" width=\"1\" height=\"1\"></body></html>",
+            "text": "Bună, [subscriber:firstname | default:prieten]!",
+            "partajare": "ffffffffffff-scrisoarea-de-proba-doi"
+        },
+        "35": {
+            "html": "<p>Bun venit, [subscriber:firstname | default:prieten]!</p>",
+            "text": "Bun venit!"
+        },
+        "36": {
+            "html": "<p>A doua scrisoare, [subscriber:firstname | default:prieten].</p>",
+            "text": "A doua scrisoare."
+        }
+    },
+    "confirmare": {
+        "subiect": "Ultimul pas pentru abonarea la [site:title]",
+        "html": "<!DOCTYPE html><html><body><p>[newsletter:subject]</p><p>Salut [subscriber:firstname | default:prieten],</p><p>Te-ai abonat la [lists_to_confirm].</p><p><a href=\"[activation_link]\" style=\"background:#333;color:#fff\">Confirm</a></p><p><a href=\"[site:homepage_url]\">[site:title]</a></p></body></html>",
+        "text": "Salut [subscriber:firstname | default:prieten], confirmă: [activation_link]"
+    }
+}

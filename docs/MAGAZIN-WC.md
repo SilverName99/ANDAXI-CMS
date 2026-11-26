@@ -139,8 +139,8 @@ schimbă.
 Trei pluginuri noi în catalog, fără rute, meniu sau cronuri până la pista lor ([PLUGINURI.md](PLUGINURI.md)): `descarcari` (cere
 `magazin`), `automatizari` (cere `newsletter`), `date_evenimente` (cere `catalog`), cu tabelele migrărilor lor. Tabelele noi ale
 pluginurilor existente sunt și ele în catalog (`order_item_meta`, `order_notes` la `magazin`; `metode_plata_salvate`,
-`parole_setare` la `conturi_clienti`; `newsletter_mailpoet_cozi`, `newsletter_mailpoet_linkuri`, `buget_trimitere` la
-`newsletter`). Numerele migrărilor sunt fixate de acum, ca pistele să nu se ciocnească:
+`parole_setare` la `conturi_clienti`; `newsletter_mailpoet_cozi`, `newsletter_mailpoet_linkuri`, `buget_trimitere`,
+`newsletter_dezabonari`, `newsletter_mailpoet_nepotriviri` la `newsletter`). Numerele migrărilor sunt fixate de acum, ca pistele să nu se ciocnească:
 
 | Nr | Migrarea | Pista |
 |---|---|---|
@@ -155,6 +155,21 @@ pluginurilor existente sunt și ele în catalog (`order_item_meta`, `order_notes
 | 0080 | `cupoane/0080_cupoane_wc` | D |
 | 0081 | `plata_stripe/0081_stripe_oc` (de rezervă: retras în `migrari.lock` dacă pista H nu are nevoie de un tabel) | H |
 
+### Ce dă pista E celorlalte piste (newsletter-ul MailPoet)
+
+Totul în [PLUGINURI.md](PLUGINURI.md), „Newsletter” → „Pe un site mutat de pe MailPoet”. Pe scurt, ce cheamă alte piste, fără să
+schimbe codul pistei E:
+
+| Pentru | Ce | Unde |
+|---|---|---|
+| D, L (conturile) | un cont nou → lista utilizatorilor WordPress | `MailPoetCompat\Sincronizare::contCreat($db, $contId, $email, $prenume, $nume, $ip)` |
+| D, I, L (comenzile) | fiecare comandă cu adresa de facturare (și a unui client cu cont) → clientul WooCommerce, lista clienților, prenumele și numele din facturare | `Sincronizare::comanda($db, $email, $prenume, $nume, $contId)` |
+| L (checkout) | bifa `mailpoet_woocommerce_checkout_optin` (eticheta, listele și `activ` în setarea `mailpoet_optin_checkout`; cu `activ` oprit, checkout-ul n-o arată și nicio valoare trimisă nu abonează), la plasarea comenzii, în locul lui `comanda()` (o cheamă ea) | `Sincronizare::optinCheckout($db, $email, $prenume, $nume, $bifata, $ip, $setari, $contId)` |
+| J (automatizările), oricine trimite | bugetul comun (limita de trimitere importată din MailPoet) | `BugetTrimitere::ia($db)` înaintea unui email care poate aștepta, `consuma($db)` după unul care nu |
+| J | momentul „abonare confirmată” (o listă nouă a unui abonat activ) | punctul `abonare.confirmata` din `config/hooks.php` (`NewsletterService::abonareConfirmata`) |
+| J | cozile și linkurile emailurilor automatizărilor (adresele vechi merg) | `newsletter_mailpoet_cozi` (`tip` = `automatizare`; `email_automatizare_id` îl scrie J), `newsletter_mailpoet_linkuri` |
+| C (antetul, subsolul) | formularele de abonare Divi | `divi4/v1/abonare.js` + `AbonareCapturata` ([DEPLOY.md](DEPLOY.md), „Formularele de abonare”) |
+
 ### Licența de dezvoltare și pachetul
 
 `config/plugins.php` → `licente_dev` → `ateliere`: `catalog`, `magazin`, `plata_stripe`, `cupoane`, `conturi_clienti`, `blog`,
@@ -164,7 +179,8 @@ un serviciu; `migrare_wordpress` se adaugă doar pe durata mutării). `tools/dev
 Pachetul `site-uri/ateliere/` (numele e neutru): `tema/tema.json` (cadrul capturat, `divi4@1`, seturile `comportament`,
 `magazin_wc`, `calendar`), `wp-compat.json` (ca la `pensiune`, plus `magazin_wc` și `mailpoet`), `import-wordpress.json` (drumul
 capturat cu dialectul `divi4` și regulile `regiuni` cu selectori neutri: clasele modulelor Divi și WooCommerce, doar pe adresele
-WooCommerce ale coșului, checkout-ului și contului, pe paginile de produs și pe documentele-șablon), `seo.json`, `ce-se-schimba.md`
+WooCommerce ale coșului, checkout-ului și contului, pe paginile de produs, pe documentele-șablon și pe cadrul R al paginilor
+MailPoet: `head > title` → jetonul titlului, `h1.entry-title` și `div.entry-content` → `mailpoet:pagina` 0 și 1), `seo.json`, `ce-se-schimba.md`
 și `README.md`. Tot ce ține de site (regulile pe paginile al căror nume e al site-ului, adresele șabloanelor, scripturile scoase,
 trackerele) stă în `privat/` (git-ignorat), al cărui exemplu, cu valori inventate, îl descrie README-ul pachetului.
 

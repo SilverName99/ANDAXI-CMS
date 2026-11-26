@@ -52,6 +52,8 @@ final class Plan
      * răspunsurile înghețate, formularele, galeriile. O scrie ScriereCapturata, în tranzacția importului; null pe drumul necapturat.
      */
     public ?PlanCapturat $capturata = null;
+    /** Partea `newsletter` a unui site cu MailPoet (pista E: MailPoet\PlanMailPoet), sau null (fără MailPoet sau cu --fara-newsletter). */
+    public ?MailPoet\PlanMailPoet $newsletter = null;
     /**
      * Rândurile editate de om de la importul de dinainte (corectura 1.9, Amprente::conflicte): la --aplica refuzate fără
      * --suprascrie. Le pune scripts/importa-wordpress.php, din baza site-ului.
@@ -92,7 +94,9 @@ final class Plan
     public const COMPATIBILE_CAPTURAT = [['metoda' => 'GET', 'cale' => '/wp-json/oembed/1.0/embed']];
 
     /**
-     * @param array{fara?: list<string>} $optiuni fara: părțile pe care proprietarul a ales să nu le importe (magazin, newsletter, articole)
+     * @param array{fara?: list<string>, planificate?: list<string>} $optiuni fara: părțile pe care proprietarul a ales să nu le importe (magazin,
+     *        newsletter, articole); planificate: părțile pe care le planifică alt planificator (ImportWordPress::planifica: `newsletter`, cu
+     *        MailPoet\PlanMailPoet), deci fără NU-ul „nu e făcut încă” de aici
      */
     public static function fa(Inventar $i, Context $ctx, array $optiuni = []): self
     {
@@ -101,7 +105,7 @@ final class Plan
         $p->hartaWp = $i->harta;
         $p->capturat = $ctx->capturat();
         $fara = array_values(array_unique((array) ($optiuni['fara'] ?? [])));
-        $p->verificaSite($i, $ctx, $fara);
+        $p->verificaSite($i, $ctx, $fara, array_values(array_unique((array) ($optiuni['planificate'] ?? []))));
         $p->planificaPagini($i, $ctx);
         $p->planificaArticole($i, $ctx, $fara);
         $p->planificaResturi($i, $ctx);
@@ -119,8 +123,11 @@ final class Plan
         return $p;
     }
 
-    /** @param list<string> $fara */
-    private function verificaSite(Inventar $i, Context $ctx, array $fara): void
+    /**
+     * @param list<string> $fara
+     * @param list<string> $planificate
+     */
+    private function verificaSite(Inventar $i, Context $ctx, array $fara, array $planificate = []): void
     {
         $this->info[] = 'site-ul WordPress: „' . $i->site['nume'] . '” la ' . $i->site['url'] . ' (WordPress ' . ($i->site['versiune_wp'] ?: '?')
             . ', tema ' . ($i->site['tema']['stylesheet'] ?: '?') . ')';
@@ -142,6 +149,9 @@ final class Plan
             'newsletter' => ['abonati_newsletter' => 'abonați la newsletter'],
         ];
         foreach ($parti as $parte => $chei) {
+            if (in_array($parte, $planificate, true)) {
+                continue; // planificată de altcineva (newsletter-ul unui site cu MailPoet: MailPoet\PlanMailPoet), cu NU-urile ei
+            }
             $ce = [];
             foreach ($chei as $k => $nume) {
                 if ((int) ($i->altele[$k] ?? 0) > 0) {
@@ -675,6 +685,7 @@ final class Plan
             'harta_wp' => count($this->hartaWp) . ' rânduri', 'conflicte' => $this->conflicte,
             'meniu' => $this->meniu, 'design' => array_map(static fn (string $v): string => strlen($v) . ' octeți', $this->design),
             'media' => ['fisiere' => count($this->media['fisiere']), 'octeti' => $this->media['octeti'], 'lipsa' => $this->media['lipsa'], 'sarite' => $this->media['sarite']],
-            'probleme' => $this->probleme, 'avertismente' => $this->avertismente, 'info' => $this->info, 'capturat' => $this->capturata?->raport()];
+            'probleme' => $this->probleme, 'avertismente' => $this->avertismente, 'info' => $this->info, 'capturat' => $this->capturata?->raport(),
+            'newsletter' => $this->newsletter?->raport()];
     }
 }

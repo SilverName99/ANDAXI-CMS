@@ -1045,10 +1045,158 @@ dispar, iar linkurile spre el se scot din pagini.
   logo și paleta neutră; fără catalogul pe site, fără carduri de produs; fără magazin, fără prețuri). Componentele adminului
   folosite de pași (`views/admin/componente/`) sunt ale nucleului ([ui/README.md](ui/README.md)). Tabelele și coloanele noi:
   migrarea `newsletter/0040`. Testele: `tools/dev/test-newsletter.php`.
-- **Pe un site mutat de pe MailPoet** (`wp-compat.json` → `mailpoet`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista A): cheile
-  mereu deschise `/?mailpoet_router…` și `/?mailpoet_page=…` (adresele din emailurile trimise de MailPoet; proprietarul,
-  `MailPoetCompat\Router`, îl scrie pista E; până atunci 404) și regiunea `mailpoet:pagina`. Tabelele migrării rezervate
-  `newsletter/0077`: `newsletter_mailpoet_cozi`, `newsletter_mailpoet_linkuri`, `buget_trimitere`.
+- **Pe un site mutat de pe MailPoet** (`wp-compat.json` → `mailpoet`; [MAGAZIN-WC.md](MAGAZIN-WC.md), pista E;
+  specificația din dosarul mutării, `mailpoet.md`). Pe orice alt site nu se schimbă nimic din ce se vede: stările noi nu există,
+  rândurile vechi ale listelor au implicit `subscribed`, bugetul lipsește (nicio limită), setarea ștergerii neconfirmaților lipsește
+  (30 de zile, ca înainte), punctul `abonare.confirmata` n-are legături, lista internă „Toți abonații” rămâne ca înainte. Ce se schimbă
+  acolo fără să se vadă: fiecare confirmare și fiecare reactivare din admin scrie și `last_subscribed_at`; proba bugetului comun
+  (`BugetTrimitere`, fără rândul lui: nicio limită) adaugă 3 instrucțiuni SQL la fiecare rulare a cronului campaniilor (6765 → 6768 în
+  diferențialul pe fiecare pachet) și una pe proces la emailurile de confirmare și ale linkului de dezabonare; curățarea neconfirmaților citește și setarea
+  `newsletter_sterge_neconfirmati_zile`; pagina statisticilor din admin diferă doar prin spațiile din HTML.
+  - **Importul** (`ImportWordPress\MailPoet`: `SursaMailPoet` citește baza WordPress doar pentru citire, `PlanMailPoet` planifică cu
+    NU-urile lui, `ScriereMailPoet` scrie în tranzacția importului, înaintea documentelor capturate; doar numere în ieșire): abonații
+    cu `mailpoet_id` (subscribed → `active`, unconfirmed → `pending`, `unsubscribed`, `inactive`, `bounced`), dovada
+    consimțământului (`subscribed_ip`, `confirmed_ip`, `confirmed_at`, `last_subscribed_at`, `source`), amprenta jetonului MailPoet
+    (`mailpoet_token_hash` = sha256, `mailpoet_token_len`, `mailpoet_token6_hash` al primelor 6 caractere ale unui jeton actualizat;
+    jetonul nu se scrie nicăieri), cei din coș pe lista „nu trimite” (`mailpoet_cos`); listele (`tip`: `static`, `wp_users`,
+    `woocommerce_users`; `afisare_gestionare`), apartenența cu starea pe listă (`newsletter_list_subscribers.status`); arhiva
+    campaniilor trimise (`sursa` = `mailpoet`, doar citire: nicio modificare, niciun test, nicio trimitere, nicio duplicare), cu
+    HTML-ul păstrat (codurile MailPoet pe loc), trimiterile procesate, deschiderile (MailPoet ține doar prima: „deschideri unice”),
+    clicurile, cozile (`newsletter_mailpoet_cozi`, și ale emailurilor automatizărilor) și linkurile lor (`newsletter_mailpoet_linkuri`);
+    dezabonările (`newsletter_dezabonari`, un rând pe rândul MailPoet, după `mailpoet_id`); setările `mailpoet_*` (și nivelul urmăririi,
+    `tracking.level` → `mailpoet_nivel_urmarire`: full, partial sau basic; altă valoare e NU) și bugetul.
+    Randările emailurilor fără corp păstrat și emailul de confirmare din editor vin din exportul MailPoet (`--export-mailpoet=`,
+    formatul `andaxi-mailpoet-export/1`, cu identificatorii de partajare ai campaniilor; [DEPLOY.md](DEPLOY.md)). Datele MailPoet
+    (UTC): în coloanele `DATETIME` ora Bucureștiului, cu regula orei de vară pentru fiecare valoare; în cele `TIMESTAMP` același
+    moment (`FROM_UNIXTIME`). Un nume (prenume și nume) peste 190 de caractere se taie în `name` și se numără; prenumele și numele
+    rămân întregi. NU și pentru: o etichetă a editorului nou (`[mailpoet/…]`, `[woocommerce/…]`, și ca `<!--[…]-->`, `%5B…%5D`,
+    `&#91;…&#93;`) în corpul, textul sau subiectul unei campanii, în emailul de confirmare ori în adresa unui link urmărit (codul comun
+    nu le rezolvă încă); o adresă de link mai lungă de 2048 de caractere (cât păstrează statisticile clicurilor); autorul paginilor
+    MailPoet capturate într-o formă necunoscută (mai jos). MailPoet instalat, dar fără niciun abonat, nu e NU: nimic de importat (o
+    informație). Avertismente, doar cu numere: valorile din dovada acordului care nu sunt adrese IP (o listă de proxy-uri, un port; nu
+    se importă, câmpul rămâne gol), jetoanele MailPoet mai scurte de 32 de caractere (le apără numărul de nepotriviri, mai jos). Cu
+    baza site-ului (`PlanMailPoet::verificaSite`, după plan, doar citire): expeditorul MailPoet (numele, adresa, Reply-To) față de
+    Admin → Emailuri — ce diferă e un avertisment cu numele câmpului, fără nicio adresă, iar doar fără nicio diferență rămâne
+    amintirea expeditorului; o adresă din MailPoet care e deja a altui abonat al site-ului e NU, doar cu id-urile (și scrierea, dacă
+    ajunge acolo, se oprește cu o eroare cu id-urile); abonații păstrați la o nouă aplicare (mai jos), un avertisment cu perechile de
+    id-uri. Rândul NU al unei erori neașteptate a scriptului are doar clasa, codul SQLSTATE și locul ei, niciodată mesajul bazei (care
+    citează valoarea unei chei unice, adică o adresă).
+  - **Autorul paginilor MailPoet** (`ImportWordPress\MailPoet\CadreMailPoet`, VC-MP-25): în cadrele P și R (documentele capturate cu
+    adresa `/?mailpoet_page=…`), linia `p.post-meta` a temei pierde cuvântul dinaintea autorului, spanul `author vcard` cu legătura
+    spre `/author/…` și separatorul ` | ` de după el; rămâne data (fără nimic după autor, dispare tot paragraful). Paragraful trebuie
+    să stea o singură dată, cu aceiași octeți, în document și în bucățile lui, în afara regiunilor; dovada: bucățile tăierii noi refac
+    exact documentul nou și în el nu mai rămâne niciun `/author/` și niciun `class="author vcard"`. Orice altă formă e NU, cu adresa
+    documentului: importul nu scrie o pagină care ar arăta numele (adesea adresa de email) contului care a instalat pluginul.
+  - **O nouă aplicare** (a doua adoptare, revenirea; `ScriereMailPoet::pastrati`): fiecare rând se scrie din nou după cheia lui
+    MailPoet, afară de deciziile luate pe site-ul nou. Un abonat „păstrat” primește din MailPoet doar legătura cu adresele vechi
+    (`mailpoet_id`, amprentele jetonului, contul WordPress), nu și starea, dovada acordului, numele sau listele; e păstrat dacă:
+    s-a abonat direct pe site-ul nou cu aceeași adresă (un rând fără `mailpoet_id`); s-a dezabonat pe site-ul nou (un rând în
+    `newsletter_dezabonari` fără `mailpoet_id`); starea lui e o retragere (dezabonat, sărit), cea din MailPoet nu, iar acordul din
+    MailPoet nu e mai nou decât ultima schimbare a rândului de pe site; și-a dat acordul pe site-ul nou (ultimul `confirmed_at` /
+    `last_subscribed_at` după cel din MailPoet); rândul lui s-a schimbat pe site-ul nou după ultima lui schimbare din MailPoet
+    (`updated_at`: aplicarea scrie exact momentul MailPoet, orice schimbare de pe site îl mută înainte); un rând al listelor lui
+    importate are altă stare decât rândul MailPoet (sau lipsește din MailPoet) și e scris după el. Regulile compară rândul site-ului cu
+    datele lui de acum din MailPoet, fără un moment al ultimului import, deci țin la oricâte aplicări. O retragere din MailPoet mai nouă
+    decât acordul de pe site se aplică și unui abonat păstrat (dezabonat sau sărit, cu `updated_at`-ul MailPoet după ultimul acord al
+    site-ului; la o listă, rândul MailPoet dezabonat mai nou decât rândul site-ului): o retragere nu se pierde niciodată. Protecția
+    greșește doar spre retragere și păstrare: o schimbare oarecare a rândului pe site (o deschidere sau un clic urmărit, legarea de un
+    cont de client) păstrează și ea abonatul, care din MailPoet mai primește atunci doar retragerile; un rând MailPoet al unui abonat
+    retras acolo, schimbat după acordul dat pe site-ul nou, aduce retragerea din nou (nu se știe dacă e mai veche). Fără nicio schimbare
+    pe site-ul nou, a doua aplicare dă aceleași rânduri și aceleași numere.
+  - **Lista internă „Toți abonații”** (`newsletter_lists.is_default`): pe un site mutat de pe MailPoet nu primește pe nimeni — nici la
+    import (rândurile ei de la un import mai vechi, ale abonaților importați, se scot), nici la abonare (formularele Divi, administrarea,
+    un cont nou, checkout-ul) — și nu e o țintă: lipsește din listele formularelor de campanie din admin (deci nu e aleasă dinainte),
+    iar o campanie care o are printre liste nu trimite prin ea. Fiecare abonare e pe lista ei, cu acordul ei, ca la MailPoet.
+  - **Adresele vechi** (cheile `/?mailpoet_router…` și `/?mailpoet_page=…`, mereu deschise; `MailPoetCompat\Router`): capetele
+    `subscription` (confirmarea, administrarea cu formularul MailPoet, dezabonarea cu pagina de confirmare și „cu un clic” RFC 8058,
+    sondajul de după dezabonare, oprirea urmăririi, reangajarea), `track` (clicul doar spre adresa importată, deschiderea: mereu
+    GIF-ul de 43 de octeți; un abonat inactiv care deschide sau dă clic redevine abonat pe loc, afară de un clic pe un link al
+    abonamentului: dezabonarea, administrarea, oprirea urmăririi) și `view_in_browser` (arhiva, cu un CSP propriu fără scripturi; un
+    hash de link necunoscut duce la prima pagină; adresele linkurilor păstrate intră cum sunt, o entitate HTML din ele nu se codează a
+    doua oară; fără fonturile Google ale emailului: legătura lor se scoate, iar CSP-ul nu le permite, deci nicio cerere la Google, cu
+    fonturile de rezervă ale emailului); antetele lui MailPoet (`no-store`; `noindex` și `no-referrer` pe paginile abonamentului, pe
+    200-ul gol al dezabonării „cu un clic” și pe 403-ul unui formular). Bugetul: 60 de cereri pe minut de pe aceeași rețea pentru tot
+    routerul (`BugetRouter`: un rând în `register_submit_logs`, starea `l:mailpoet`, cu o amprentă HMAC a rețelei în locul adresei, fără
+    user agent; rândurile mai vechi de o oră se șterg la fiecare cerere); peste el, un GET primește răspunsul unui jeton greșit, iar orice
+    POST pe `track/click` același 200 gol, fără ca jetonul să fie cântărit (un POST pe linkul de dezabonare al cozii dezabonează și
+    atunci). Retragerile nu țin seama de buget: dezabonarea „cu un clic”, paginile dezabonării și butonul lor, oprirea urmăririi.
+    Jetoanele: prefixul jetonului MailPoet (regula 5.45), cele 6 caractere vechi cât ține perioada de grație
+    (`mailpoet_jetoane_vechi_pana_la`, cel mult 10 încercări greșite în 24 de ore), un jeton păstrat mai scurt de 32 de caractere doar
+    cât abonatul are sub 10 nepotriviri în 24 de ore (apoi, 24 de ore, nici cel bun), jetonul CMS `ax1.` (HMAC, fără să expire) în
+    linkurile noi. Paginile sunt regiunea `mailpoet:pagina` a cadrului capturat R (`RandarePagina`), cu textele pachetului ro_RO, fără
+    trackerele site-ului (adresa lor poartă adresa de email și jetonul abonatului; VC-MP-23). POST-urile routerului nu pornesc sesiunea
+    (`SesiuneLaNevoie`: niciun cookie de la un clic dintr-un email). Formularele paginilor (sondajul, oprirea urmăririi, administrarea)
+    cer originea site-ului (`Sec-Fetch-Site`, altfel `Origin`), cu o excepție: `Origin: null` fără `Sec-Fetch-Site` (browserele mai vechi,
+    după `Referrer-Policy: no-referrer`) trece mai departe la nonce-ul formularului, care rămâne obligatoriu. Previzualizarea urmează
+    regula lui MailPoet, doar pe `data`: `preview` adevărat și niciun `token` → pagina dezabonării (un `preview` în adresă nu contează);
+    butonul paginii de confirmare a dezabonării, în previzualizare → pagina dezabonării, 200, fără să caute pe cineva. Confirmarea:
+    un HEAD nu confirmă nimic (VC-MP-24), iar o confirmare scoate adresa de pe lista „nu trimite”, ca linkul de confirmare al CMS-ului.
+    Oprirea urmăririi (`urmarire_refuzata`): campaniile site-ului pleacă spre acel abonat fără pixel și fără linkuri urmărite, iar
+    deschiderile și clicurile lui nu se notează; cu nivelul MailPoet „basic”, pentru toți. `[site:title]` intră scăpat în HTML.
+  - **Sondajul de după dezabonare** (`Abonati::textSimplu`): textul liber (cu „Altele”, dacă setarea îl permite) devine text simplu
+    după regula lui MailPoet pentru acest câmp, scrisă aici în cuvinte: întâi dispare fiecare bloc `<script…>…</script>` și
+    `<style…>…</style>` cu tot conținutul lui (numele etichetei fără deosebire între litere mari și mici, oricare atribute, până la
+    prima etichetă de închidere scrisă exact `</script>` sau `</style>`; un bloc neînchis rămâne, iar eticheta lui pleacă la pasul
+    următor), apoi restul etichetelor, apoi fiecare șir de spații, tab-uri și rânduri noi devine un singur spațiu, iar spațiile de la
+    capete pleacă; în baza site-ului ajung cel mult 500 de caractere, fără caracterele de control. Un al doilea răspuns îl înlocuiește
+    pe primul.
+  - **Codurile scurte** (`Shortcoduri`, în emailurile importate: arhiva, emailul de confirmare, linkurile cozilor): un cod e `[`,
+    categoria (un cuvânt: litere ASCII, cifre, `_`), `:`, apoi orice până la primul `]` de pe același rând; `[cuvânt://` nu e un cod (o
+    adresă între paranteze drepte). Codurile nu se suprapun: după un cod, căutarea continuă după `]`-ul lui. În cod, acțiunea e cuvântul
+    de imediat după `:`; urmează fie `]`, fie, după primul `|`, argumentul (primul cuvânt urmat direct de `:`) și valoarea lui (restul,
+    până la `]`). Un cod cu un `[` în el se citește de la primul `[` de la care are această formă. Altă formă: un cod fără categorie și
+    acțiune, care rămâne cum e.
+  - **Clicurile din emailurile vechi** (`Urmarire`): un clic duce doar la adresa importată a linkului, după înlocuirea codurilor
+    abonatului, și doar dacă rezultatul începe cu partea fixă a adresei importate (citită din adresa așa cum e păstrată sau din forma
+    ei decodată: procentele, apoi entitățile HTML); altfel, la prima pagină. Partea fixă: la o adresă cu gazdă (`schemă://gazdă…` sau
+    `//gazdă…`), totul până la primul `/`, `?` sau `#` de după gazdă, inclusiv (dacă după gazdă vine altceva, un cod de exemplu, gazda
+    nu e fixă și contează doar regulile următoare); la `mailto:`, `tel:`, `sms:`, schema; la altă schemă fără gazdă (nu http sau https),
+    schema și primul caracter de după ea, dacă nu e `/`, `\` sau un spațiu. Schema e o literă urmată de litere, cifre, `+`, `.` sau `-`,
+    apoi `:`. O adresă fără parte fixă nu se poate schimba deloc. Acțiunea unui link de abonament e textul dintre `[link:` și primul `]`
+    de după el, fără spațiile de la capete.
+  - **Formularul de administrare**: numele și starea; abonat → dezabonat schimbă doar starea globală (cu dezabonarea sursei
+    `manage`, listele rămân); orice altă stare → abonat, fără dubla confirmare (ca MailPoet). Cu starea finală abonat, listele
+    vizibile bifate devin `subscribed`, cele nebifate `unsubscribed`, cele ascunse nu se ating. Evenimentul `abonare.confirmata`:
+    doar pentru listele vizibile bifate al căror rând nu era `subscribed` (și la o reabonare globală). Emailul „Abonat nou la …”
+    către administrator: la o reabonare globală cu toate listele abonate acum (și cele ascunse), altfel cu listele vizibile nou
+    bifate; listele în ordinea id-urilor lor MailPoet; cu limitele lui (mai jos).
+  - **Abonarea din formularele Divi** (`et_pb_signup`, furnizorul MailPoet): clientul `divi4/v1/abonare.js` (setul `comportament`),
+    serverul `AbonareCapturata` (`POST /_andaxi/abonare/{n}`, fără sesiune; [DEPLOY.md](DEPLOY.md), „Formularele de abonare”): lista
+    din documentul capturat, dubla confirmare cu emailul MailPoet (`mailpoet_email_confirmare`). Emailul de confirmare: cel din editor
+    (randat de exportator), cu `[activation_link]` → adresa de confirmare și `[lists_to_confirm]` → numele fiecărei liste pe care
+    abonatul are un rând, oricare ar fi starea lui; în modul simplu (fără cheia `use_mailpoet_editor`, ca MailPoet) subiectul și corpul
+    din setări, ca ConfirmationEmailMailer: `nl2br`, numele listelor în `<strong>`, legătura de confirmare cu `target="_blank"`,
+    spațiile strânse. Partea text a emailului o face trimiterea din HTML. O adresă deja abonată care se abonează din nou primește
+    doar listele cerute (evenimentul pentru cele noi), iar administratorul emailul „Abonat nou la <listele cerute>”, ca
+    API::subscribeToLists al lui MailPoet (și când era deja abonată la ele), cu limitele lui (mai jos).
+  - **Listele automate și bifa din checkout** (`MailPoetCompat\Sincronizare`, un singur serviciu pentru pistele D, I, L):
+    `contCreat()` (lista utilizatorilor WordPress), `comanda()` (lista clienților, ca MailPoet; prenumele și numele din facturare la
+    fiecare comandă, peste cele de dinainte, fiecare doar nevid și fără `<` sau `>`), `optinCheckout()` (câmpul
+    `mailpoet_woocommerce_checkout_optin`, sursa `woocommerce_checkout`, listele din `mailpoet_optin_checkout`, doar cu bifa pornită
+    acolo, `activ`: altfel nicio abonare și niciun email, oricare ar fi câmpul trimis): un abonat activ primește listele pe loc (și,
+    dacă n-avea nicio dovadă a confirmării, IP-ul și momentul de acum), oricare altă stare dubla confirmare, cu limitele formularelor
+    publice.
+  - **Bugetul comun al trimiterilor** (`App\Support\BugetTrimitere`, tabelul `buget_trimitere`): campaniile, automatizările și
+    emailul „Abonat nou” iau un jeton (`ia()`; fără jeton, lotul se oprește și se reia la cronul următor, iar emailul „Abonat nou” nu
+    pleacă), confirmările și linkul de dezabonare cerut din pagină se numără (`consuma()`). Importul îl pune din limita de trimitere a
+    MailPoet (câte emailuri în câte minute).
+  - **Momentul „abonare confirmată”**: `NewsletterService::abonareConfirmata()` cheamă punctul `abonare.confirmata`
+    (`Hooks::PUNCTE`; argumentele: baza, abonatul, lista, sursa), pentru fiecare listă nouă a unui abonat activ (confirmare,
+    administrare, cont, checkout); pista J se leagă acolo din `config/hooks.php`, fără să schimbe codul. Emailul „Abonat nou la …”
+    (setarea `mailpoet_notificare_abonat_nou`, adresa `mailpoet_notificare_adresa` din MailPoet; fără adresă, niciunul): la
+    confirmare cu fiecare listă pe care abonatul are un rând. Limitele lui (oricine poate retrimite un formular de abonare cu adresa
+    unui abonat activ; VC-MP-26): o listă anunțată pentru un abonat nu se mai anunță 24 de ore; după 60 de perechi (abonat, listă)
+    anunțate în ultima oră pe tot site-ul nu mai pleacă niciunul; fiecare ia un jeton din bugetul comun (bugetul nu coboară sub zero).
+    Evidența: `newsletter_cereri_confirmare`, felul `notificare`, un rând pe pereche, cu amprenta perechii (nicio adresă).
+  - **Stările** `inactive` („inactiv”) și `bounced` („sărit”) nu primesc niciodată campanii; un abonat sărit nu se reactivează din
+    admin. Curățarea neconfirmaților urmează `newsletter_sterge_neconfirmati_zile` (0 = niciodată, ca MailPoet fără setarea lui) și
+    nu șterge niciodată un neconfirmat cu cont (`wp_user_id`) sau client al magazinului (`is_woocommerce_user`), ca MailPoet.
+    Regula inactivității a MailPoet (un abonat fără nicio deschidere în `mailpoet_zile_inactiv` zile devine inactiv) nu rulează
+    încă pe site-ul mutat: abonații vin cu starea lor din MailPoet, iar setarea se păstrează pentru ea.
+  Regulile scrise mai sus în cuvinte (codurile scurte, partea fixă a unei adrese, textul sondajului) sunt descrierea după care e scris
+  codul, fără cod MailPoet sau WordPress copiat. Tabelele și coloanele: migrarea `newsletter/0077` ([MIGRARI.md](MIGRARI.md)). Testele:
+  `tools/dev/test-import-mailpoet.php` (G-mp-import), `tools/dev/test-mailpoet-compat.php` (G-mailpoet-compat), cazul `abonare` din
+  G-compat.
 - **Are nevoie de**: nimic.
 - **Se oprește**: campaniile pornite se termină (cronul le duce la capăt); „Trimite
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile

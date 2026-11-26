@@ -23,6 +23,12 @@ final class NewsletterService
      */
     public const ESECURI_LA_RAND_PAUZA = 5;
 
+    /**
+     * Campaniile importate din MailPoet (`sursa` = `mailpoet`, pista E) sunt arhiva emailurilor trimise: se văd (statisticile, „vezi în
+     * browser”), dar nu se editează, nu se trimit, nu se testează și nu se duplică (HTML-ul lor are legăturile MailPoet ale cozii lor).
+     */
+    public const MESAJ_ARHIVA_MAILPOET = 'Newsletterul e din arhiva importată din MailPoet: se poate doar vedea (nu se editează, nu se trimite și nu se duplică).';
+
     /** Stările unei campanii, cu numele arătat în admin. */
     public const STARI = [
         'draft' => 'Ciornă',
@@ -473,9 +479,19 @@ final class NewsletterService
      * proxy de încredere (pe Hostinger/LiteSpeed e deja IP-ul real al clientului);
      * X-Forwarded-For se poate falsifica.
      *
+     * Starea pe listă (migrarea newsletter/0077): lista cerută devine `subscribed` (și când rândul ei era `unsubscribed`: o cerere nouă a
+     * omului însuși), iar lista internă rămâne legată ca înainte (INSERT IGNORE). Un abonat activ care primește o listă nouă: evenimentul
+     * `abonare.confirmata` pentru ea (abonareConfirmata()).
+     *
+     * `$extra` (pista E, un site mutat de pe MailPoet): `sursa` (`api` din formularele Divi, `woocommerce_checkout` din checkout,
+     * `wordpress_user` la un cont nou; scrisă la un abonat nou), `prenume`, `nume`; `liste` (alte liste cerute deodată, ca bifa din
+     * checkout). Pe un site cu `wp-compat.json` → `mailpoet` se mai scrie IP-ul cererii ca dovadă a abonării (`subscribed_ip`, la un abonat
+     * nou), iar emailul de confirmare e cel importat din MailPoet (emailConfirmareMailPoet()), cu linkul în forma MailPoet.
+     *
+     * @param array{sursa?: string, prenume?: string, nume?: string, liste?: list<int>} $extra
      * @return array{stare: string, email: string} stare: trimis | deja_activ | limita_adresa | limita_ip | limita_globala | ocupat
      */
-    public static function cerereAbonare(PDO $db, int $listId, string $email, string $name, string $ip, array $settings): array
+    public static function cerereAbonare(PDO $db, int $listId, string $email, string $name, string $ip, array $settings, array $extra = []): array
     {
         self::ensureSchema($db);
         $email = strtolower(trim($email));
@@ -491,14 +507,52 @@ final class NewsletterService
         if ($listId <= 0) {
             $listId = self::defaultListId($db);
         }
-        $leaga = function (int $id) use ($db, $listId): void {
-            $link = $db->prepare('INSERT IGNORE INTO newsletter_list_subscribers (list_id, subscriber_id) VALUES (:l, :s)');
-            $link->execute(['l' => self::defaultListId($db), 's' => $id]);
-            $link->execute(['l' => $listId, 's' => $id]);
+        $liste = array_values(array_unique(array_filter(array_merge([$listId], array_map('intval', (array) ($extra['liste'] ?? []))), static fn (int $x): bool => $x > 0)));
+        // Pe un site mutat de pe MailPoet, lista internă „Toți abonații” nu primește pe nimeni (E-LEG-02): fiecare abonare e pe lista ei,
+        // cu acordul ei (MailPoet nu are o listă a tuturor).
+        $faraImplicita = WpCompat::mailpoet();
+        if ($faraImplicita) {
+            $implicitaMp = self::defaultListId($db);
+            $liste = array_values(array_filter($liste, static fn (int $x): bool => $x !== $implicitaMp));
+        }
+        /** Leagă abonatul de listele cerute; întoarce listele care nu erau `subscribed` înainte. @return list<int> */
+        $leaga = function (int $id) use ($db, $liste, $faraImplicita): array {
+            if (!$faraImplicita) {
+                $db->prepare('INSERT IGNORE INTO newsletter_list_subscribers (list_id, subscriber_id) VALUES (:l, :s)')
+                    ->execute(['l' => self::defaultListId($db), 's' => $id]);
+            }
+            $stare = $db->prepare('SELECT status FROM newsletter_list_subscribers WHERE list_id = :l AND subscriber_id = :s');
+            $leg = $db->prepare("INSERT INTO newsletter_list_subscribers (list_id, subscriber_id, status, updated_at) VALUES (:l, :s, 'subscribed', NOW())
+                ON DUPLICATE KEY UPDATE updated_at = IF(status <> 'subscribed', NOW(), updated_at), status = 'subscribed'");
+            $noi = [];
+            foreach ($liste as $l) {
+                $stare->execute(['l' => $l, 's' => $id]);
+                $inainte = $stare->fetchColumn();
+                if ($inainte !== 'subscribed') {
+                    $leg->execute(['l' => $l, 's' => $id]);
+                    $noi[] = $l;
+                }
+            }
+            return $noi;
+        };
+        /** Un abonat deja activ: doar listele cerute, fără email de confirmare. */
+        $dejaActiv = function (int $id) use ($db, $leaga, $liste, $extra): void {
+            // Deja abonat (și deci confirmat): doar listele din formular; o listă nouă e o abonare nouă (evenimentul ei). Pe un site mutat
+            // de pe MailPoet pleacă și emailul „Abonat nou la <listele cerute>”, și pentru listele la care era deja abonat (ca
+            // API::subscribeToLists al lui MailPoet, care îl trimite cu listele cerute; fără nicio listă MailPoet cerută, niciunul).
+            foreach ($leaga($id) as $l) {
+                self::abonareConfirmata($db, $id, $l, (string) ($extra['sursa'] ?? 'formular'));
+            }
+            if (WpCompat::mailpoet()) {
+                $implicita = self::defaultListId($db);
+                $cerute = array_values(array_filter($liste, static fn (int $l): bool => $l !== $implicita));
+                if ($cerute !== []) {
+                    self::notificareAbonatNou($db, $id, $cerute);
+                }
+            }
         };
         if (is_array($existent) && (string) $existent['status'] === 'active') {
-            // Deja abonat (și deci confirmat): doar lista din formular, fără email.
-            $leaga((int) $existent['id']);
+            $dejaActiv((int) $existent['id']);
             return ['stare' => 'deja_activ', 'email' => $email];
         }
 
@@ -508,6 +562,9 @@ final class NewsletterService
         }
 
         $acum = date('Y-m-d H:i:s');
+        $mailpoet = WpCompat::mailpoet();
+        $prenume = mb_substr(trim((string) ($extra['prenume'] ?? '')), 0, 255);
+        $numeFamilie = mb_substr(trim((string) ($extra['nume'] ?? '')), 0, 255);
         $rand->execute(['email' => $email]);
         $existent = $rand->fetch();
         if (!is_array($existent)) {
@@ -515,6 +572,12 @@ final class NewsletterService
                 $db->prepare('INSERT INTO newsletter_subscribers (email, name, status, pending_at) VALUES (:e, :n, "pending", :p)')
                     ->execute(['e' => $email, 'n' => $name, 'p' => $acum]);
                 $id = (int) $db->lastInsertId();
+                if ($mailpoet && $id > 0) {
+                    // Dovada abonării (ca MailPoet: IP-ul și sursa cererii, numele pe părți), doar pe un site mutat de pe MailPoet.
+                    $db->prepare('UPDATE newsletter_subscribers SET subscribed_ip = :ip, source = :src, first_name = :p, last_name = :n WHERE id = :id')
+                        ->execute(['ip' => $ip !== '' ? mb_substr($ip, 0, 45) : null, 'src' => mb_substr((string) ($extra['sursa'] ?? 'api'), 0, 30),
+                            'p' => $prenume, 'n' => $numeFamilie, 'id' => $id]);
+                }
             } catch (Throwable) {
                 // Rândul a apărut între timp (altă cerere pentru aceeași adresă).
                 $rand->execute(['email' => $email]);
@@ -523,10 +586,10 @@ final class NewsletterService
         } else {
             $id = (int) $existent['id'];
             if ((string) $existent['status'] === 'active') {
-                $leaga($id);
+                $dejaActiv($id);
                 return ['stare' => 'deja_activ', 'email' => $email];
             }
-            // „pending” rămâne „pending”; „unsubscribed” rămâne dezabonat până la clic.
+            // „pending” rămâne „pending”; „unsubscribed” (și „inactive”, „bounced”) rămâne cum e până la clic.
             $db->prepare('UPDATE newsletter_subscribers SET pending_at = :p, name = CASE WHEN :gol = 1 THEN name ELSE :n END WHERE id = :id')
                 ->execute(['p' => $acum, 'gol' => $name === '' ? 1 : 0, 'n' => $name, 'id' => $id]);
         }
@@ -535,12 +598,15 @@ final class NewsletterService
         }
         $leaga($id);
 
-        $url = self::urlConfirmare($id, $email, (int) strtotime($acum));
-        $numeMagazin = Brand::numeExpeditor($settings);
-        $subiect = 'Confirmă abonarea la newsletterul ' . $numeMagazin;
-        $html = self::renderHtmlFromBlocks(NewsletterSabloane::emailConfirmare($url, $numeMagazin), $subiect, false);
+        $mesaj = $mailpoet ? self::emailConfirmareMailPoet($db, $id, $email, (int) strtotime($acum), $liste) : null;
+        if ($mesaj === null) {
+            $url = self::urlConfirmare($id, $email, (int) strtotime($acum));
+            $numeMagazin = Brand::numeExpeditor($settings);
+            $mesaj = ['subiect' => 'Confirmă abonarea la newsletterul ' . $numeMagazin,
+                'html' => self::renderHtmlFromBlocks(NewsletterSabloane::emailConfirmare($url, $numeMagazin), 'Confirmă abonarea la newsletterul ' . $numeMagazin, false)];
+        }
         try {
-            OrderMailer::sendCustom($email, $subiect, $html, $settings, $db, [
+            OrderMailer::sendCustom($email, $mesaj['subiect'], $mesaj['html'], $settings, $db, [
                 'email_type' => 'newsletter_confirmare',
                 'source' => 'newsletter_optin',
                 'meta' => ['subscriber_id' => $id],
@@ -549,7 +615,58 @@ final class NewsletterService
             self::anuleazaRezervarea($db);
             throw $exception instanceof RuntimeException ? $exception : new RuntimeException($exception->getMessage());
         }
+        // Bugetul comun al trimiterilor (doar cu rândul lui, pe un site mutat): confirmarea pleacă oricum, dar se numără.
+        BugetTrimitere::consuma($db);
         return ['stare' => 'trimis', 'email' => $email];
+    }
+
+    /**
+     * Emailul de confirmare importat din MailPoet (setarea `mailpoet_email_confirmare`: subiectul, HTML-ul și textul randate de exportator,
+     * cu codurile scurte la locul lor), cu linkul de confirmare în forma MailPoet (`action=confirm`, jetonul CMS-ului legat de momentul
+     * cererii, valabil ZILE_CONFIRMARE zile) în locul lui `[activation_link]`, numele listelor cerute în locul lui `[lists_to_confirm]` și
+     * celelalte coduri scurte (MailPoetCompat\Shortcoduri). Null fără șablon (atunci pleacă emailul de confirmare al CMS-ului).
+     *
+     * @param list<int> $liste
+     * @return array{subiect: string, html: string}|null
+     */
+    public static function emailConfirmareMailPoet(PDO $db, int $id, string $email, int $moment, array $liste): ?array
+    {
+        $q = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+        $q->execute(['k' => 'mailpoet_email_confirmare']);
+        $sablon = json_decode((string) ($q->fetchColumn() ?: ''), true);
+        if (!is_array($sablon) || !is_string($sablon['html'] ?? null) || trim((string) $sablon['html']) === '' || !is_string($sablon['subiect'] ?? null)) {
+            return null;
+        }
+        $abonat = MailPoetCompat\Abonati::dupaId($db, $id) ?? ['id' => $id, 'email' => $email];
+        $jeton = MailPoetCompat\Jetoane::ax1Confirmare($id, $email, $moment);
+        if ($jeton === '') {
+            return null;
+        }
+        $url = MailPoetCompat\Url::abonare($db, 'confirm', $abonat, $jeton, null, true, ['t' => $moment]);
+        // `[lists_to_confirm]`: fiecare listă pe care abonatul are un rând, oricare ar fi starea lui, nu doar cele ale cererii (ca
+        // ConfirmationEmailMailer al lui MailPoet, cu SubscriberEntity::getSegments); `$liste` rămâne pentru un apel fără rânduri.
+        $nume = self::numeleListelor($db, array_values(array_unique(array_merge(self::listeleAbonatului($db, $id), $liste))));
+        $ctx = ['abonat' => $abonat, 'jeton' => MailPoetCompat\Jetoane::ax1($id, $email)];
+        // Adresa și numele listelor intră escapate (MailPoet le pune așa cum sunt; în HTML înseamnă același lucru).
+        $e = static fn (string $t): string => htmlspecialchars($t, ENT_QUOTES | ENT_HTML401, 'UTF-8');
+        if (($sablon['mod'] ?? '') === 'simplu') {
+            // Modul simplu, ca ConfirmationEmailMailer::getMailBody: nl2br pe corpul din setări, numele listelor în <strong>, apoi
+            // `[activation_link]…[/activation_link]` ca legătură cu target="_blank" și spațiile strânse (Helpers::replaceLinkTags);
+            // `[lists_to_confirm]` din subiect rămâne cum e.
+            $html = str_replace('[lists_to_confirm]', '<strong>' . $e(implode(', ', $nume)) . '</strong>', nl2br((string) $sablon['html']));
+            $html = (string) preg_replace('/\s+/', ' ', str_replace(['[activation_link]', '[/activation_link]'], ['<a target="_blank" href="' . $e($url) . '">', '</a>'], $html));
+            $subiectBrut = (string) $sablon['subiect'];
+        } else {
+            $html = str_replace(['http://[activation_link]', 'https://[activation_link]', '[activation_link]'], $e($url), (string) $sablon['html']);
+            $html = str_replace('[lists_to_confirm]', $e(implode(', ', $nume)), $html);
+            $subiectBrut = str_replace('[lists_to_confirm]', implode(', ', $nume), (string) $sablon['subiect']);
+        }
+        $subiect = MailPoetCompat\Shortcoduri::inlocuieste($db, $subiectBrut, $ctx + ['text' => true]);
+        // `[newsletter:subject]` din corp: subiectul emailului de confirmare (MailPoet: subiectul newsletterului de confirmare).
+        return [
+            'subiect' => $subiect,
+            'html' => MailPoetCompat\Shortcoduri::inlocuieste($db, $html, $ctx + ['campanie' => ['subject' => $subiect]]),
+        ];
     }
 
     /**
@@ -603,6 +720,7 @@ final class NewsletterService
             self::anuleazaRezervarea($db);
             return 'eroare';
         }
+        BugetTrimitere::consuma($db);
         return 'gata';
     }
 
@@ -671,14 +789,162 @@ final class NewsletterService
         if (!$rezultat['ok']) {
             return $rezultat;
         }
-        $db->prepare(
-            'UPDATE newsletter_subscribers
-             SET status = "active", confirmed_at = NOW(), pending_at = NULL
-             WHERE id = :id AND status IN ("pending", "unsubscribed") AND pending_at IS NOT NULL'
-        )->execute(['id' => $rezultat['id']]);
+        self::confirmaAbonat($db, (int) $rezultat['id'], ['pending', 'unsubscribed', 'inactive', 'bounced'], IpClient::adresa(), 'newsletter', true);
         $db->prepare('DELETE FROM newsletter_suprimate WHERE email_hash = :h')
             ->execute(['h' => self::amprentaAdresa($rezultat['email'])]);
         return $rezultat;
+    }
+
+    /**
+     * Momentul confirmării unei abonări (dubla confirmare: linkul CMS-ului, linkul în forma MailPoet; pista E), un singur loc: abonatul
+     * cu una din `$stari` devine `active`, cu `confirmed_at` și `last_subscribed_at` acum și cererea închisă (`pending_at` NULL); pe un
+     * site mutat de pe MailPoet se scrie și IP-ul clicului (`confirmed_ip`, dovada acordului) și pleacă, dacă e pornit
+     * (`mailpoet_notificare_abonat_nou`), emailul „Abonat nou la …” către administrator (`mailpoet_notificare_adresa`; fără adresă,
+     * nimic, ca MailPoet). Apoi, pentru fiecare listă a abonatului care e
+     * `subscribed`, evenimentul `abonare.confirmata` (abonareConfirmata()). `$cuPending`: doar o cerere deschisă (`pending_at` setat).
+     * Întoarce true dacă abonatul s-a schimbat (altfel nimic, niciun eveniment).
+     *
+     * @param list<string> $stari
+     */
+    public static function confirmaAbonat(PDO $db, int $id, array $stari, string $ip, string $sursa, bool $cuPending = false): bool
+    {
+        $stari = array_values(array_intersect($stari, ['pending', 'unsubscribed', 'inactive', 'bounced']));
+        if ($id <= 0 || $stari === []) {
+            return false;
+        }
+        $mailpoet = WpCompat::mailpoet();
+        $q = $db->prepare('UPDATE newsletter_subscribers SET status = "active", confirmed_at = NOW(), last_subscribed_at = NOW(), pending_at = NULL'
+            . ($mailpoet ? ', confirmed_ip = ?' : '') . ' WHERE id = ? AND status IN (' . implode(',', array_fill(0, count($stari), '?')) . ')'
+            . ($cuPending ? ' AND pending_at IS NOT NULL' : ''));
+        $q->execute(array_merge($mailpoet ? [$ip !== '' ? mb_substr($ip, 0, 45) : null] : [], [$id], $stari));
+        if ($q->rowCount() === 0) {
+            return false;
+        }
+        $liste = $db->prepare("SELECT ls.list_id FROM newsletter_list_subscribers ls INNER JOIN newsletter_lists l ON l.id = ls.list_id
+            WHERE ls.subscriber_id = ? AND ls.status = 'subscribed' AND l.is_default = 0 ORDER BY ls.list_id");
+        $liste->execute([$id]);
+        $idListe = array_map('intval', $liste->fetchAll(PDO::FETCH_COLUMN));
+        if ($mailpoet) {
+            // Ca Pages::confirm al lui MailPoet: emailul „Abonat nou la …” numește fiecare listă pe care abonatul are un rând, oricare ar fi
+            // starea rândului (SubscriberEntity::getSegments).
+            self::notificareAbonatNou($db, $id, self::listeleAbonatului($db, $id));
+        }
+        foreach ($idListe as $l) {
+            self::abonareConfirmata($db, $id, $l, $sursa);
+        }
+        return true;
+    }
+
+    /**
+     * Listele pe care abonatul are un rând (oricare ar fi starea lui), fără lista internă a CMS-ului, în ordinea în care le-a primit
+     * (ca SubscriberEntity::getSegments al lui MailPoet). @return list<int>
+     */
+    public static function listeleAbonatului(PDO $db, int $id): array
+    {
+        $q = $db->prepare('SELECT ls.list_id FROM newsletter_list_subscribers ls INNER JOIN newsletter_lists l ON l.id = ls.list_id
+            WHERE ls.subscriber_id = ? AND l.is_default = 0 ORDER BY ls.created_at, ls.list_id');
+        $q->execute([$id]);
+        return array_map('intval', $q->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /** Punctul de legătură al confirmării (App\Support\Hooks): o abonare confirmată pe o listă. */
+    public const PUNCT_ABONARE_CONFIRMATA = 'abonare.confirmata';
+
+    /**
+     * Evenimentul „abonare confirmată pe lista L” (pista E; îl ascultă automatizările, pista J, prin config/hooks.php, punctul
+     * `abonare.confirmata`, cu argumentele `$db`, id-ul abonatului, id-ul listei CMS și sursa: `newsletter`, `mailpoet`, `formular`, `api`,
+     * `manage`, `cont`, `woocommerce_checkout`). Se cheamă doar când abonatul e activ și lista tocmai a devenit `subscribed` pentru el, sau
+     * când abonatul tocmai a devenit activ (pentru fiecare listă `subscribed`), ca `mailpoet_segment_subscribed`. O agățare care aruncă nu
+     * oprește abonarea (rândul din jurnal, fără date personale).
+     */
+    public static function abonareConfirmata(PDO $db, int $abonatId, int $listaId, string $sursa): void
+    {
+        if ($abonatId <= 0 || $listaId <= 0) {
+            return;
+        }
+        try {
+            Hooks::ruleaza(self::PUNCT_ABONARE_CONFIRMATA, $db, $abonatId, $listaId, $sursa);
+        } catch (Throwable $e) {
+            error_log('ANDAXI-CMS: newsletter: o agățare a lui abonare.confirmata a aruncat ' . get_class($e) . ' (abonatul ' . $abonatId . ', lista ' . $listaId . ')');
+        }
+    }
+
+    /**
+     * Câte perechi (abonat, listă) se anunță pe oră pe tot site-ul înainte ca emailurile „Abonat nou” să se oprească (SEC-E-01): un
+     * email anunță cel puțin o pereche, deci pleacă cel mult atâtea emailuri pe oră.
+     */
+    public const LIMITA_NOTIFICARI_ORA = 60;
+
+    /**
+     * Emailul „Abonat nou la <liste>” către administrator (ca MailPoet, NewSubscriberNotificationMailer): la o confirmare și la listele
+     * noi alese în formularul de administrare (MailPoetCompat\Abonati::actualizeaza), doar cu setarea `mailpoet_notificare_abonat_nou`
+     * pornită și adresa ei (`mailpoet_notificare_adresa`). Nu oprește confirmarea sau salvarea dacă nu pleacă.
+     *
+     * Limitele (SEC-E-01; oricine poate retrimite formularul de abonare cu adresa unui abonat activ): cel mult un email pe abonat și listă
+     * în 24 de ore (o listă anunțată de curând nu se mai anunță); niciun email nou după ce în ultima oră s-au anunțat
+     * LIMITA_NOTIFICARI_ORA perechi (abonat, listă) pe tot site-ul (un email cu k liste numără k perechi, deci pleacă cel mult atâtea
+     * emailuri pe oră); și doar cu un jeton din bugetul comun al trimiterilor (BugetTrimitere::ia: bugetul nu coboară niciodată sub zero
+     * pentru el; fără jeton, emailul nu pleacă). Evidența: `newsletter_cereri_confirmare`, felul `notificare`, un rând pe pereche
+     * anunțată, cu amprenta perechii în locul amprentei adresei; se curăță după 2 zile, ca restul jurnalului.
+     *
+     * @param list<int> $liste listele CMS (numele lor în subiect și în text)
+     */
+    public static function notificareAbonatNou(PDO $db, int $id, array $liste): void
+    {
+        try {
+            $setari = Settings::all($db);
+            if (!in_array((string) ($setari['mailpoet_notificare_abonat_nou'] ?? ''), ['1', 'true'], true)) {
+                return;
+            }
+            // Adresa din setările MailPoet (scrisă de import); fără ea nimic, ca MailPoet (NewSubscriberNotificationMailer::isDisabled).
+            $catre = trim((string) ($setari['mailpoet_notificare_adresa'] ?? ''));
+            if ($catre === '' || !filter_var($catre, FILTER_VALIDATE_EMAIL)) {
+                return;
+            }
+            $amprenta = static fn (int $l): string => hash('sha256', 'notificare|' . $id . '|' . $l);
+            $recent = $db->prepare("SELECT 1 FROM newsletter_cereri_confirmare WHERE tip = 'notificare' AND email_hash = ? AND created_at > NOW() - INTERVAL 1 DAY LIMIT 1");
+            $deAnuntat = [];
+            foreach (array_values(array_unique(array_filter(array_map('intval', $liste), static fn (int $l): bool => $l > 0))) as $l) {
+                $recent->execute([$amprenta($l)]);
+                if ($recent->fetchColumn() === false) {
+                    $deAnuntat[] = $l;
+                }
+            }
+            if ($deAnuntat === []) {
+                return;
+            }
+            $peOra = (int) $db->query("SELECT COUNT(*) FROM newsletter_cereri_confirmare WHERE tip = 'notificare' AND created_at > NOW() - INTERVAL 1 HOUR")->fetchColumn();
+            if ($peOra >= self::LIMITA_NOTIFICARI_ORA || !BugetTrimitere::ia($db)) {
+                return;
+            }
+            $q = $db->prepare('SELECT email FROM newsletter_subscribers WHERE id = ?');
+            $q->execute([$id]);
+            $email = (string) ($q->fetchColumn() ?: '');
+            $nume = self::numeleListelor($db, $deAnuntat);
+            $e = static fn (string $t): string => htmlspecialchars($t, ENT_QUOTES | ENT_HTML401, 'UTF-8');
+            $html = '<p>Salutare,</p><p>Abonatul ' . $e($email) . ' s-a abonat la lista ta ' . $e(implode(', ', $nume)) . '!</p><p>Noroc,</p>';
+            $nota = $db->prepare("INSERT INTO newsletter_cereri_confirmare (email_hash, ip, tip, created_at) VALUES (?, NULL, 'notificare', NOW())");
+            foreach ($deAnuntat as $l) {
+                $nota->execute([$amprenta($l)]);
+            }
+            OrderMailer::sendCustom($catre, sprintf(MailPoetCompat\Texte::ABONAT_NOU, implode(', ', $nume)), $html, $setari, $db, [
+                'email_type' => 'newsletter_abonat_nou', 'source' => 'newsletter_optin', 'meta' => ['subscriber_id' => $id]]);
+        } catch (Throwable $e) {
+            error_log('ANDAXI-CMS: newsletter: emailul „Abonat nou” n-a plecat (' . get_class($e) . ')');
+        }
+    }
+
+    /** Numele listelor date, în ordinea lor (fără lista internă a CMS-ului). @param list<int> $liste @return list<string> */
+    private static function numeleListelor(PDO $db, array $liste): array
+    {
+        $liste = array_values(array_unique(array_filter(array_map('intval', $liste), static fn (int $l): bool => $l > 0)));
+        if ($liste === []) {
+            return [];
+        }
+        $q = $db->prepare('SELECT id, name FROM newsletter_lists WHERE is_default = 0 AND id IN (' . implode(',', array_fill(0, count($liste), '?')) . ')');
+        $q->execute($liste);
+        $dupaId = $q->fetchAll(PDO::FETCH_KEY_PAIR);
+        return array_values(array_map('strval', array_filter(array_map(static fn (int $l): ?string => $dupaId[$l] ?? null, $liste), 'is_string')));
     }
 
     /**
@@ -689,17 +955,34 @@ final class NewsletterService
     public static function curataCereriExpirate(PDO $db): int
     {
         $prag = date('Y-m-d H:i:s', time() - self::ZILE_CONFIRMARE * 86400);
-        $db->prepare(
-            'DELETE ls FROM newsletter_list_subscribers ls
-             INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
-             WHERE s.status = "pending" AND (s.pending_at IS NULL OR s.pending_at < :p)'
-        )->execute(['p' => $prag]);
-        $sterse = $db->prepare('DELETE FROM newsletter_subscribers WHERE status = "pending" AND (pending_at IS NULL OR pending_at < :p)');
-        $sterse->execute(['p' => $prag]);
+        // Câte zile stă un abonat neconfirmat (setarea site-ului `newsletter_sterge_neconfirmati_zile`; implicit ZILE_CONFIRMARE, ca
+        // înainte). 0 = niciodată (ca MailPoet fără setarea lui de ștergere): nimeni nu se șterge, doar cererile vechi ale celor care nu
+        // sunt „pending” se închid.
+        $q = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+        $q->execute(['k' => 'newsletter_sterge_neconfirmati_zile']);
+        $setare = $q->fetchColumn();
+        $zile = is_string($setare) && preg_match('/^\d{1,4}$/D', trim($setare)) === 1 ? (int) trim($setare) : self::ZILE_CONFIRMARE;
+        $sterse = 0;
+        if ($zile > 0) {
+            $pragSterse = date('Y-m-d H:i:s', time() - $zile * 86400);
+            // Pe un site mutat de pe MailPoet, ca SubscribersRepository::removeOldUnconfirmed: un neconfirmat cu cont (wp_user_id) sau
+            // client al magazinului (is_woocommerce_user) nu se șterge niciodată (abonații făcuți de conturi și de comenzi).
+            $faraConturi = WpCompat::mailpoet() ? ' AND s.wp_user_id IS NULL AND s.is_woocommerce_user = 0' : '';
+            $db->prepare(
+                'DELETE ls FROM newsletter_list_subscribers ls
+                 INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
+                 WHERE s.status = "pending" AND (s.pending_at IS NULL OR s.pending_at < :p)' . $faraConturi
+            )->execute(['p' => $pragSterse]);
+            $q = $db->prepare('DELETE s FROM newsletter_subscribers s WHERE s.status = "pending" AND (s.pending_at IS NULL OR s.pending_at < :p)' . $faraConturi);
+            $q->execute(['p' => $pragSterse]);
+            $sterse = $q->rowCount();
+        }
         $db->prepare('UPDATE newsletter_subscribers SET pending_at = NULL WHERE status <> "pending" AND pending_at < :p')
             ->execute(['p' => $prag]);
         $db->exec('DELETE FROM newsletter_cereri_confirmare WHERE created_at < NOW() - INTERVAL 2 DAY');
-        return $sterse->rowCount();
+        // Jetoanele vechi MailPoet de 6 caractere, după perioada lor de grație (doar pe un site mutat, cu setarea ei).
+        MailPoetCompat\Jetoane::curataJetoaneVechi($db);
+        return $sterse;
     }
 
     /**
@@ -828,6 +1111,16 @@ final class NewsletterService
             return ['ok' => false, 'email' => ''];
         }
 
+        if (WpCompat::mailpoet()) {
+            // Un site mutat de pe MailPoet: dezabonarea lui MailPoet (fiecare listă `unsubscribed`, afară de utilizatorii WordPress și
+            // lista internă; rândul din `newsletter_dezabonari`), ca pe adresele vechi.
+            $abonat = MailPoetCompat\Abonati::dupaId($db, $subscriberId);
+            if ($abonat !== null) {
+                MailPoetCompat\Abonati::dezaboneaza($db, $abonat, 'newsletter', 'unknown');
+            }
+            return ['ok' => true, 'email' => $email];
+        }
+
         $update = $db->prepare(
             'UPDATE newsletter_subscribers
              SET status = "unsubscribed"
@@ -923,6 +1216,9 @@ final class NewsletterService
         if (!is_array($campaign)) {
             throw new RuntimeException('Campanie invalidă.');
         }
+        if ((string) ($campaign['sursa'] ?? 'cms') === 'mailpoet') {
+            throw new RuntimeException(self::MESAJ_ARHIVA_MAILPOET);
+        }
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
             throw new RuntimeException('Email test invalid.');
         }
@@ -995,11 +1291,20 @@ final class NewsletterService
         if (!is_array($campaign)) {
             throw new RuntimeException('Campanie invalidă.');
         }
+        if ((string) ($campaign['sursa'] ?? 'cms') === 'mailpoet') {
+            throw new RuntimeException(self::MESAJ_ARHIVA_MAILPOET);
+        }
         if ((string) ($campaign['status'] ?? '') === 'sent') {
             throw new RuntimeException('Newsletterul a fost deja trimis. Ca să-l trimiți din nou, fă o copie (Duplică).');
         }
 
         $listIds = self::campaignListIds($campaign);
+        // Pe un site mutat de pe MailPoet, lista internă „Toți abonații” nu e o țintă (E-LEG-02): acordul e pe fiecare listă.
+        $mailpoet = WpCompat::mailpoet();
+        if ($mailpoet) {
+            $implicita = self::defaultListId($db);
+            $listIds = array_values(array_filter($listIds, static fn (int $l): bool => $l !== $implicita));
+        }
         if (empty($listIds)) {
             throw new RuntimeException('Campania nu are listă de abonați.');
         }
@@ -1074,6 +1379,9 @@ final class NewsletterService
             }
 
             $recipients = self::remainingRecipients($db, $campaignId, $listIds, $limit);
+            // Urmărirea (E-LEG-01), doar pe un site mutat de pe MailPoet: niciun pixel și niciun link urmărit pentru cine a refuzat-o
+            // (`urmarire_refuzata`), iar cu nivelul MailPoet „basic” (setarea `mailpoet_nivel_urmarire`) pentru nimeni.
+            $faraUrmarire = $mailpoet ? self::faraUrmarireMailPoet($db, array_map(static fn (array $r): int => (int) ($r['id'] ?? 0), $recipients)) : [];
             $sent = 0;
             $failed = 0;
             $oprit = false;
@@ -1112,6 +1420,12 @@ final class NewsletterService
                 if ($subscriberId <= 0 || $email === '') {
                     continue;
                 }
+                // Bugetul comun al trimiterilor (BugetTrimitere; doar pe un site care îl are): fără jeton, lotul se oprește aici și
+                // cronul îl continuă la rularea următoare, ca la sfârșitul timpului.
+                if (!BugetTrimitere::ia($db)) {
+                    $oprit = true;
+                    break;
+                }
                 if (!self::revendicaDestinatar($db, $campaignId, $subscriberId, $email)) {
                     continue;
                 }
@@ -1120,7 +1434,7 @@ final class NewsletterService
                     $unsubscribeUrl = self::unsubscribeUrlForSubscriber($recipient);
                     $baseUrl = self::appBaseUrl();
                     $emailHtml = self::withNewsletterFooter((string) ($campaign['html_content'] ?? '<p>Newsletter</p>'), $unsubscribeUrl);
-                    if ($baseUrl !== '') {
+                    if ($baseUrl !== '' && !isset($faraUrmarire[$subscriberId]) && !isset($faraUrmarire[0])) {
                         $emailHtml = self::injectTrackingPixel($emailHtml, $campaignId, $subscriberId, $baseUrl);
                         $emailHtml = self::injectClickTracking($emailHtml, $campaignId, $subscriberId, $baseUrl);
                     }
@@ -1294,6 +1608,35 @@ final class NewsletterService
         return true;
     }
 
+    /** Setarea nivelului urmăririi importat din MailPoet (`tracking.level`: full, partial, basic; fără ea, full). */
+    public const CHEIE_NIVEL_URMARIRE = 'mailpoet_nivel_urmarire';
+
+    /**
+     * Pe un site mutat de pe MailPoet: abonații dintre `$idUri` fără urmărire (au refuzat-o: `urmarire_refuzata` = 1), ca chei; cu
+     * nivelul „basic” al MailPoet, cheia 0 (nimeni nu e urmărit). Pe celelalte site-uri nu se cheamă (nicio interogare în plus).
+     *
+     * @param list<int> $idUri
+     * @return array<int, true>
+     */
+    public static function faraUrmarireMailPoet(PDO $db, array $idUri): array
+    {
+        $q = $db->prepare('SELECT `value` FROM settings WHERE `key` = ? LIMIT 1');
+        $q->execute([self::CHEIE_NIVEL_URMARIRE]);
+        if ((string) $q->fetchColumn() === 'basic') {
+            return [0 => true];
+        }
+        $idUri = array_values(array_unique(array_filter($idUri, static fn (int $i): bool => $i > 0)));
+        $rez = [];
+        foreach (array_chunk($idUri, 1000) as $bucata) {
+            $r = $db->prepare('SELECT id FROM newsletter_subscribers WHERE urmarire_refuzata = 1 AND id IN (' . implode(',', array_fill(0, count($bucata), '?')) . ')');
+            $r->execute($bucata);
+            foreach ($r->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $rez[(int) $id] = true;
+            }
+        }
+        return $rez;
+    }
+
     /** Listele unei campanii: `subscriber_list_ids` (JSON), altfel lista unică. */
     public static function campaignListIds(array $campaign): array
     {
@@ -1341,9 +1684,14 @@ final class NewsletterService
      */
     public static function poateFiModificata(PDO $db, int $campaignId): bool
     {
-        $stmt = $db->prepare('SELECT status FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+        $stmt = $db->prepare('SELECT status, sursa FROM newsletter_campaigns WHERE id = :id LIMIT 1');
         $stmt->execute(['id' => $campaignId]);
-        $status = (string) ($stmt->fetchColumn() ?: '');
+        $rand = $stmt->fetch() ?: [];
+        $status = (string) ($rand['status'] ?? '');
+        // Arhiva campaniilor trimise de MailPoet (pista E): doar de citit (fără editare, trimitere sau test).
+        if ((string) ($rand['sursa'] ?? 'cms') === 'mailpoet') {
+            return false;
+        }
         if (in_array($status, ['draft', 'scheduled'], true)) {
             return true;
         }
@@ -1534,7 +1882,7 @@ final class NewsletterService
             'SELECT s.id, s.email, s.name, s.status
              FROM newsletter_list_subscribers ls
              INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
-             WHERE ls.list_id = :list_id AND s.status = "active"
+             WHERE ls.list_id = :list_id AND s.status = "active" AND ls.status = "subscribed"
              ORDER BY s.id ASC
              LIMIT :limit'
         );
@@ -1571,6 +1919,7 @@ final class NewsletterService
                     ON cs.campaign_id = ? AND cs.subscriber_id = s.id
              WHERE ls.list_id IN ($placeholders)
                AND s.status = 'active'
+               AND ls.status = 'subscribed'
                AND (cs.id IS NULL OR (cs.status = 'failed' AND cs.attempts < " . self::MAX_INCERCARI . "))
              ORDER BY s.id ASC
              LIMIT " . max(1, min(50000, $limit))
@@ -1591,7 +1940,7 @@ final class NewsletterService
             "SELECT COUNT(DISTINCT s.id)
              FROM newsletter_list_subscribers ls
              INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
-             WHERE ls.list_id IN ($placeholders) AND s.status = 'active'"
+             WHERE ls.list_id IN ($placeholders) AND s.status = 'active' AND ls.status = 'subscribed'"
         );
         $stmt->execute($listIds);
         return (int) $stmt->fetchColumn();
@@ -1613,6 +1962,7 @@ final class NewsletterService
                     ON cs.campaign_id = ? AND cs.subscriber_id = s.id
              WHERE ls.list_id IN ($placeholders)
                AND s.status = 'active'
+               AND ls.status = 'subscribed'
                AND (cs.id IS NULL OR (cs.status = 'failed' AND cs.attempts < " . self::MAX_INCERCARI . "))"
         );
         $stmt->execute(array_merge([$campaignId], $listIds));
@@ -1630,7 +1980,7 @@ final class NewsletterService
             "SELECT DISTINCT s.id, s.email, s.name, s.status
              FROM newsletter_list_subscribers ls
              INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
-             WHERE ls.list_id IN ($placeholders) AND s.status = 'active'
+             WHERE ls.list_id IN ($placeholders) AND s.status = 'active' AND ls.status = 'subscribed'
              ORDER BY s.id ASC
              LIMIT " . max(1, min(50000, $limit))
         );
@@ -1642,7 +1992,7 @@ final class NewsletterService
     {
         $stmt = $db->prepare(
             'SELECT id, name, subject, html_content, blocks_json, subscriber_list_id, subscriber_list_ids, status,
-                    total_sent, total_failed
+                    total_sent, total_failed, sursa
              FROM newsletter_campaigns
              WHERE id = :id
              LIMIT 1'
@@ -1737,6 +2087,10 @@ final class NewsletterService
         if (self::semnaturaBuna("open|{$campaignId}|{$subscriberId}", $token) === null) {
             return base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
         }
+        // Pe un site mutat de pe MailPoet, nimic notat pentru cine a refuzat urmărirea (sau cu nivelul „basic”; E-LEG-01).
+        if (WpCompat::mailpoet() && self::faraUrmarireMailPoet($db, [$subscriberId]) !== []) {
+            return base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+        }
 
         try {
             $sendStmt = $db->prepare(
@@ -1793,6 +2147,10 @@ final class NewsletterService
         // Emailurile trimise înainte de reparația de mai sus au semnat adresa
         // cu „&amp;” în ea; semnătura lor rămâne bună, iar adresa se curăță aici.
         $destUrl = html_entity_decode($destUrl, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Pe un site mutat de pe MailPoet, cine a refuzat urmărirea ajunge la adresă fără ca clicul să se noteze (E-LEG-01).
+        if (WpCompat::mailpoet() && self::faraUrmarireMailPoet($db, [$subscriberId]) !== []) {
+            return $destUrl;
+        }
 
         try {
             $sendStmt = $db->prepare(
@@ -2121,6 +2479,19 @@ final class NewsletterService
         $url = (string) ($config['url'] ?? '');
         $dbName = (string) ($config['db']['database'] ?? '');
         return hash('sha256', 'newsletter-unsubscribe|' . $url . '|' . $dbName . '|' . $sare);
+    }
+
+    /**
+     * Cheile derivate din cheia SECRETĂ a newsletterului (NEWSLETTER_SECRET sau `newsletter_cheie_semnare`) pentru un scop anume (pista E:
+     * jetonul `ax1.` al adreselor în forma MailPoet, MailPoetCompat\Jetoane): HMAC-SHA256 al scopului, câte una pe cheie acceptată (cea
+     * curentă întâi, ca la verificarea semnăturilor). Niciodată din cheia veche, ghicibilă (cheieDerivata). [] dacă nicio cheie nu se
+     * poate citi: linkurile nu se pot face și nici verifica (fail-closed).
+     *
+     * @return list<string>
+     */
+    public static function cheiScop(string $scop): array
+    {
+        return array_values(array_map(static fn (string $c): string => hash_hmac('sha256', 'scop|' . $scop, $c, true), self::cheiNoi()));
     }
 
     /** Sarea derivării: site.json → newsletter_sare_semnatura, altfel LICENTA_SITE. */

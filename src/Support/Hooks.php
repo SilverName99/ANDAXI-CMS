@@ -26,6 +26,9 @@ namespace App\Support;
  *    → `membri`;
  *  - `cont.stare($db, $utilizator)` → `{insigna, ton, card}` sau null: starea contului în pagina contului cu antet (tema →
  *    `pagina_cont: antet`): insigna de sub nume și cardul de stare din „Profilul meu” → `membri`;
+ *  - `abonare.confirmata($db, int $abonatId, int $listaId, string $sursa)`: un abonat activ tocmai a devenit abonat pe o listă (o
+ *    confirmare din email, o listă nouă a unui abonat activ, reabonarea din pagina de gestionare MailPoet, un cont nou pe lista
+ *    utilizatorilor; NewsletterService::abonareConfirmata) → automatizările (pista J);
  *  - `continut.membru_activ($db, $utilizator)` → bool: are cont activ? (App\Support\AccesMembri) → `membri`;
  *  - `continut.nota($db, $utilizator, $titlu)` → HTML-ul paginii „acces restricționat” (AccesMembri) → `membri`;
  *  - `editor.pagina.campuri`, `editor.articol.campuri` (HTML, cu rândul editat): câmpuri în editorul paginii și al
@@ -67,6 +70,8 @@ final class Hooks
         'confirmare.dupa', 'logare.blocata', 'cont.profil', 'continut.nota_titlu', 'admin.utilizatori.coloane',
         // Pagina contului cu antet (tema vertij, `pagina_cont: antet`): starea membrului sub nume și în „Profilul meu”.
         'cont.stare',
+        // Newsletterul (pista E a mutării unui site WooCommerce): o abonare confirmată pe o listă (NewsletterService::abonareConfirmata).
+        'abonare.confirmata',
     ];
 
     /** @var array<string, list<array{plugin: string, fn: callable, stare: string}>>|null */

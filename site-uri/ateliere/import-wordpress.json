@@ -1,5 +1,5 @@
 {
-    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md, „Adoptarea unui site WordPress”; docs/MAGAZIN-WC.md). Drumul capturat cu dialectul divi4. regiuni: regiunile dinamice ale documentelor capturate (CadruCapturat\\Regiuni), doar cu selectori neutri (clasele modulelor Divi și WooCommerce; la coș și clasa modulelor produselor și totalurilor, care primesc et_pb_wc_cart_empty la coșul gol) și doar pe adresele WooCommerce ale coșului, ale checkout-ului și ale contului, pe paginile de produs și pe documentele-șablon; scheletul pistei A, verificat de fiecare pistă pe captura reală (dovada regiunilor) când își construiește randatorul. Regulile pe paginile al căror nume ține de site (magazinul, calendarul), adresele documentelor-șablon (sabloane), sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json.",
+    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md, „Adoptarea unui site WordPress”; docs/MAGAZIN-WC.md). Drumul capturat cu dialectul divi4. regiuni: regiunile dinamice ale documentelor capturate (CadruCapturat\\Regiuni), doar cu selectori neutri (clasele modulelor Divi și WooCommerce; la coș și clasa modulelor produselor și totalurilor, care primesc et_pb_wc_cart_empty la coșul gol) și doar pe adresele WooCommerce ale coșului, ale checkout-ului și ale contului, pe paginile de produs, pe documentele-șablon și pe cadrul R al paginilor MailPoet (adresa paginii MailPoet, aceeași pe orice site, în previzualizarea administrării; clasele temei Divi ale articolului: titlul din head, H1-ul și conținutul; pista E); scheletul pistei A, verificat de fiecare pistă pe captura reală (dovada regiunilor) când își construiește randatorul. Regulile pe paginile al căror nume ține de site (magazinul, calendarul), adresele documentelor-șablon (sabloane), sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json.",
     "continut": "capturat",
     "dialect": "divi4",
     "regiuni": [
@@ -17,6 +17,9 @@
         {"document": "/checkout/", "selector": "div.et_pb_wc_checkout_payment_info > div.et_pb_module_inner", "regiune": "wc:checkout_plata"},
         {"document": "/my-account/", "selector": "div.et_pb_text_inner > div.woocommerce", "regiune": "wc:cont"},
         {"document": "/my-account/", "jeton": "clase_body"},
+        {"document": "/?mailpoet_page=subscriptions&mailpoet_router&endpoint=subscription&action=manage&data=eyJwcmV2aWV3IjoxfQ", "selector": "head > title", "jeton": "titlu"},
+        {"document": "/?mailpoet_page=subscriptions&mailpoet_router&endpoint=subscription&action=manage&data=eyJwcmV2aWV3IjoxfQ", "selector": "h1.entry-title", "regiune": "mailpoet:pagina"},
+        {"document": "/?mailpoet_page=subscriptions&mailpoet_router&endpoint=subscription&action=manage&data=eyJwcmV2aWV3IjoxfQ", "selector": "div.entry-content", "regiune": "mailpoet:pagina"},
         {"document": "sablon:articol", "selector": "div.et_pb_post_title > div.et_pb_title_container", "regiune": "articol:titlu"},
         {"document": "sablon:articol", "selector": "div.et_pb_post_title > div.et_pb_title_featured_container", "regiune": "articol:meta"},
         {"document": "sablon:articol", "selector": "div.et_pb_post_content", "regiune": "articol:continut"},
