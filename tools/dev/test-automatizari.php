@@ -562,6 +562,14 @@ $emailuriInactivi = array_column($rulari($aInactiv), 'email');
 $verifica('client inactiv de 90 de zile: intră cel cu ultima comandă acum 95 de zile; nu cel de acum 200 (în afara ferestrei de 30), nu cel recent, nu neabonatul',
     $n === 1 && $emailuriInactivi === ['inactiv.automat@exemplu.ro'], json_encode($emailuriInactivi));
 $verifica('scanarea clienților inactivi rulează cel mult o dată pe oră', Declansatoare::scaneazaInactivi($db) === 0);
+// „Permite reintrarea” bifat pe o automatizare care a rulat deja: cine a intrat pentru aceeași ultimă comandă nu intră iar
+// (altfel al doilea „Ne e dor de tine”, poate cu încă un cod, pentru același răstimp fără comenzi).
+$db->prepare('UPDATE automatizari SET permite_reintrarea = 1 WHERE id = :a')->execute(['a' => $aInactiv]);
+Settings::save($db, ['automatizari_scanare_inactivi' => '']);
+$n = Declansatoare::scaneazaInactivi($db);
+$verifica('reintrarea bifată după prima scanare: același client, aceeași ultimă comandă → nicio rulare nouă', $n === 0 && count($rulari($aInactiv)) === 1,
+    $n . ' ' . json_encode(array_column($rulari($aInactiv), 'email')));
+$db->prepare('UPDATE automatizari SET permite_reintrarea = 0 WHERE id = :a')->execute(['a' => $aInactiv]);
 
 // B6. Cont nou de client, prin înregistrarea adevărată (POST /register).
 $aCont = $automatizare('cont_creat', [], [['cheie' => 'p1', 'tip' => 'email', 'setari' => ['email' => 'e1']]], ['e1' => ['Contul tău e gata', 'Text']]);

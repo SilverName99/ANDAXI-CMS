@@ -215,6 +215,8 @@ final class Declansatoare
     /**
      * Clienții fără comandă de X zile (cron, cel mult o dată pe oră): abonații activi a căror ultimă comandă (nu anulată) a
      * trecut de X zile în ultimele 30 de zile. Cu reintrarea, cheia e ultima comandă: după o comandă nouă și alte X zile, din nou.
+     * Oricum ar fi bifată reintrarea (și dacă se schimbă după ce automatizarea a rulat), cine a intrat după ultima lui comandă
+     * nu intră a doua oară pentru același răstimp fără comenzi.
      */
     public static function scaneazaInactivi(PDO $db, int $limita = 200, bool $oricand = false): int
     {
@@ -248,6 +250,8 @@ final class Declansatoare
                  JOIN newsletter_subscribers s ON s.email = u.email AND s.status = 'active'
                  WHERE u.ultima <= :prag AND u.ultima >= :fereastra
                    AND NOT EXISTS (SELECT 1 FROM automatizari_rulari r WHERE r.automatizare_id = :a AND r.cheie_unica = {$cheieSql})
+                   AND NOT EXISTS (SELECT 1 FROM automatizari_rulari r2 WHERE r2.automatizare_id = :a2 AND r2.email = u.email
+                       AND r2.intrata_la >= u.ultima)
                  ORDER BY u.ultima ASC
                  LIMIT {$limita}"
             );
@@ -255,6 +259,7 @@ final class Declansatoare
                 'prag' => Ceas::sql($acum->modify('-' . $zile . ' days')),
                 'fereastra' => Ceas::sql($acum->modify('-' . ($zile + self::ZILE_FEREASTRA_INACTIV) . ' days')),
                 'a' => (int) $a['id'],
+                'a2' => (int) $a['id'],
             ]);
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $client) {
                 $comanda = self::comanda($db, (int) $client['ultima_id']);
