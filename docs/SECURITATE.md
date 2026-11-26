@@ -262,6 +262,10 @@ Galerie. Ce l-a făcut sigur:
   schemă (și cu spații, octeți de control sau majuscule) devine „#” (înainte, `<a href="javascript:…">` dintr-un text ajungea ca
   atare în email și în previzualizare). Un link cu „&” în adresă e recunoscut (înainte rămânea text). Într-un bloc Text, un link
   pus de editor nu mai e luat drept adresă de transformat în link (ieșea HTML stricat).
+- **Pânza desenează textul cu aceleași reguli** (aceeași funcție, în JavaScript), deci un text scris în panou cu `<img onerror>`,
+  `<b onmouseover>` sau `javascript:` nu rulează pe pagina adminului (înainte, `safeRich` lăsa atributele etichetelor permise).
+  Lipirea pe pânză aduce doar text simplu; ce se scrie pe pânză trece înapoi în bloc printr-o funcție care păstrează doar
+  etichetele de mai sus. Previzualizarea rămâne în cadrul izolat (N1a).
 - **Încărcarea pozelor din builder** (`POST /admin/gallery/bulk-upload` cu `raspuns=json`) folosește aceeași verificare a fișierului
   ca Galeria (`handleMediaUpload`: extensia, conținutul, numele), doar pentru poze (JPG, PNG, WebP, GIF), și cere jetonul `AdminCsrf`
   (antetul `X-CSRF-Token`; altfel 403), pe lângă garda originii (N2) și dreptul rolului la Galerie. Răspunde JSON, fără
@@ -270,4 +274,5 @@ Galerie. Ce l-a făcut sigur:
   (garda rutelor și `guard()`); arată doar produse active.
 
 Testele: `tools/dev/test-newsletter.php`, H8 (curățarea pe server, și prin previzualizare), H9–H10 (ruta produselor, încărcarea:
-fără jeton, cu alt jeton, un fișier care nu e poză, un PDF, fără admin).
+fără jeton, cu alt jeton, un fișier care nu e poză, un PDF, fără admin) și G7–G9 în Chromium (scrisul și lipirea pe pânză, codul
+din panou care nu rulează, pozele trase și lipite).

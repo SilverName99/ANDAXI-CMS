@@ -1100,7 +1100,25 @@ dispar, iar linkurile spre el se scot din pagini.
   mărime), și în pasul Verificare, nu mai crește la fiecare clic. Un titlu (Header) tras într-o coloană a unei secțiuni pornește cu
   textul închis (`#1f2937`): fără fundal propriu, textul alb implicit era alb pe coloana albă (nevăzut pe pânză și în email); titlurile
   puse deja așa își păstrează culoarea.
-  **Emailul newsletterului: blocurile noi, produsele, subsolul (26 nov 2026)** (pentru builderul „C – clasic, curățat”):
+  **Builderul, varianta „C – clasic, curățat” (26 nov 2026, aprobată de proprietar)** — `views/admin/emails/builder.php` (așezarea,
+  stilul) și `builder-script.php` (scriptul, tot în pagină); același pentru newslettere, șabloanele lor și emailurile comenzilor:
+  - **Așezarea.** Bara de sus: ← Înapoi, numele, starea (Ciornă…), starea salvării, Anulează / Refă, Editez / Desktop / Mobil,
+    Salvează, Continuă la destinatari (pașii newsletterului rămân sub ea). Stânga, paleta de 260 px cu căutare și trei grupuri:
+    Magazin (Logo, Meniu, Produse — cu catalogul pe site —, Cod reducere — cu magazinul), Conținut (Titlu, Text, Imagine, Buton,
+    Video, Citat), Așezare (2 coloane, 3 coloane, Separator, Spațiu) și „Mai mult” (coloanele 60/40, 40/60, 70/30, 30/70, Social
+    media). Un bloc se adaugă cu clic (după blocul ales; într-o coloană, dacă e ales un bloc din ea) sau trăgându-l în email ori într-o
+    coloană. Mijloc: subiectul și emailul de 680 px (lățimea emailului pe calculator), desenat cu același HTML ca
+    `NewsletterService::renderBlock` (varianta de calculator), blocurile lipite, fără benzi gri între ele (o linie albă de sus a unei
+    poze se vede ca în inbox), subsolul automat dedesubt. Blocul ales are chenar, eticheta lui (și într-o coloană) și ⠿ (tragere)
+    ↑ ↓ Duplică Șterge. Desktop / Mobil arată în același loc emailul randat de server (`/admin/emails/builder/preview`) la 680 / 375
+    px (sub 641 px emailul își pune singur mărimile de telefon, deci „Desktop” e 680, nu 640 ca în machetă). Dreapta, panoul de 340
+    px cu Conținut / Aspect / Afișare (fără bloc ales: subiectul, numele și setările șablonului). Sub 1600 px meniul adminului se
+    strânge singur (dacă omul nu l-a deschis anume), ca la 1366 px să încapă emailul și cele două panouri.
+  - **Scrisul pe pânză.** Textul, titlul și citatul blocului ales se scriu direct în email (contenteditable), cu bara mică B / I / U /
+    link / culoare / scoate formatarea; Enter = rând nou. Textul ajunge în bloc în formatul de până acum (text cu rânduri noi și
+    etichetele editorului; culoarea ca `<span style="color:#rrggbb">`), câmpul „Textul” din panou rămâne. Lipirea aduce doar text.
+    Pânza desenează textul ca serverul: totul scăpat, apoi doar etichetele editorului (`allowRichTags`), deci un text cu cod nu rulează
+    în admin ([SECURITATE.md](SECURITATE.md), „Builderul newsletterului”).
   - **Logo** — logo-ul site-ului (tema pachetului `tema.json` → `newsletter.logo`, ca șabloanele; altfel `email_logo_url`, apoi
     `store_logo_url`; fără niciunul, numele magazinului scris mare) pe fundal alb, cu mărimea (lățimea în px), alinierea, linkul (prima
     pagină) și o altă poză, opțional. **Meniu** — categoriile catalogului cu adresele lor (`/categorie/<slug>`), alese din listă,
@@ -1126,9 +1144,14 @@ dispar, iar linkurile spre el se scot din pagini.
     `gdpr_operator_cui`); fără denumire apare numele magazinului, un câmp gol lipsește. Cât lipsește ceva, builderul arată sub bară
     „Subsolul automat al newsletterului nu are încă: …” (cu linkul spre Datele firmei pentru administratorul general). Singura schimbare
     a emailurilor deja făcute e subsolul: în rest ies octet cu octet ca înainte (testul H1).
-  - **Încărcarea pozelor din builder**: `POST /admin/gallery/bulk-upload` cu `raspuns=json` (aceeași verificare ca Galeria, doar JPG,
-    PNG, WebP, GIF, cu jetonul `AdminCsrf`; răspuns JSON).
-  - Blocurile noi (`logo`, `menu`, `products`, `coupon`) le
+  - **Pozele**: „Trage poza aici” (panoul blocului Imagine, Logo, coperta video) și fereastra „Alege imagine” primesc o poză trasă din
+    calculator, aleasă sau lipită (Ctrl+V, și pe blocul ales); o poză trasă pe pânză face un bloc Imagine (sau o pune în blocul de
+    sub ea). Se încarcă în Galerie prin aceeași rută și aceeași verificare ca acolo (`POST /admin/gallery/bulk-upload` cu
+    `raspuns=json`: doar JPG, PNG, WebP, GIF, cu jetonul `AdminCsrf`).
+  - **Restul**: Anulează / Refă (butoane, Ctrl+Z / Ctrl+Y), Ctrl+S, salvarea automată a ciornei unui newsletter și a unui șablon
+    de newsletter (la 4 s după ultima schimbare, aceeași rută cu `ajax=1`; emailurile comenzilor se salvează doar cu „Salvează”,
+    fiindcă pleacă pe loc), starea salvării lângă butoane, tastatura (butoane adevărate cu nume, blocurile se aleg cu Tab și Enter,
+    Alt+↑/↓ le mută, Esc iese din scris, tab-urile panoului cu săgețile). Blocurile noi (`logo`, `menu`, `products`, `coupon`) le
     normalizează și randează `NewsletterService` (un cod mai vechi le-ar face text). Șabloanele magazinului (`NewsletterSabloane`)
     încep cu blocul Logo, au blocul Produse („Aleg eu”, cu cele mai noi produse) și un Cod reducere, fără blocul de text de subsol
     (subsolul e automat).

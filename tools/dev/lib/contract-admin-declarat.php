@@ -456,9 +456,57 @@ return [
         'politica-generare' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:hidden action = genereaza_politica_cookie$',
             'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'acțiunea butonului „Generează pagina Politica de cookie-uri”'],
     ],
-    // Builderul newsletterului, varianta „C – clasic, curățat” (26 nov 2026; docs/PLUGINURI.md, „Newsletter”): caseta „Datele
-    // firmei” din Setări site → General (subsolul newsletterelor). Ce trimite verifică tools/dev/test-newsletter.php (H12).
+    // Builderul newsletterului, varianta „C – clasic, curățat” (26 nov 2026; docs/PLUGINURI.md, „Newsletter”): pagina e refăcută,
+    // dar trimite aceeași cerere ca înainte (formularul #eb-form, aceleași câmpuri, aceeași adresă; salvarea automată e același POST
+    // cu ajax=1). Se schimbă atributele data-* (și cele din șabloanele JavaScript ale pânzei și ale panoului, pe care contractul le
+    // citește din script) și linkurile desenate cu href="#" pe pânză. Plus caseta „Datele firmei” din Setări site → General
+    // (subsolul newsletterelor). Ce trimit le verifică tools/dev/test-newsletter.php (H, G).
     'builder-c' => [
+        'builder-c-date-noi' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^data (data\\-act \\= dup|data\\-act \\= jos|data\\-act \\= sterge|data\\-act \\= sus|data\\-act \\= trage|data\\-adauga\\-cat \\=|data\\-adauga\\-link \\=|data\\-adau'
+            . 'ga\\-prod \\= \\$\\{p\\.id\\}|data\\-alege\\-fisier \\=|data\\-alege\\-galerie \\= \\$\\{k\\}|data\\-alege\\-galerie \\= bg_image|data\\-alege\\-sub \\= \\$\\{ci\\}\\.\\$\\{cbi\\'
+            . '}|data\\-arata \\= \\$\\{k\\}|data\\-arata \\= _o|data\\-arata \\= _v|data\\-block\\-type \\= coupon|data\\-block\\-type \\= logo|data\\-block\\-type \\= menu|data\\-blo'
+            . 'ck\\-type \\= products|data\\-cat\\-noua \\=|data\\-cauta \\= 2 coloane sectiune 50|data\\-cauta \\= 3 coloane sectiune 33|data\\-cauta \\= buton link apasa|data'
+            . '\\-cauta \\= citat parere client|data\\-cauta \\= cod reducere cupon voucher discount|data\\-cauta \\= coloane 30 \\/ 70 sectiune|data\\-cauta \\= coloane 40 \\'
+            . '/ 60 sectiune|data\\-cauta \\= coloane 60 \\/ 40 sectiune|data\\-cauta \\= coloane 70 \\/ 30 sectiune|data\\-cauta \\= imagine poza foto banner|data\\-cauta \\='
+            . ' logo sigla antet|data\\-cauta \\= meniu categorii linkuri navigare|data\\-cauta \\= produse produs recomandate vandute noi reduse|data\\-cauta \\= separato'
+            . 'r linie|data\\-cauta \\= social media facebook instagram retele|data\\-cauta \\= spațiu gol distanta|data\\-cauta \\= text paragraf scris|data\\-cauta \\= ti'
+            . 'tlu header antet titlul|data\\-cauta \\= video tiktok youtube vimeo|data\\-cauta\\-produs \\=|data\\-cmd \\= bold|data\\-cmd \\= italic|data\\-cmd \\= link|data\\'
+            . '-cmd \\= removeFormat|data\\-cmd \\= underline|data\\-col\\-adauga \\= \\$\\{ci\\}|data\\-col\\-i \\= \\$\\{cale\\}|data\\-col\\-tip \\= \\$\\{ci\\}|data\\-culoare \\= \\$\\{c'
+            . '\\}|data\\-culori \\= \\$\\{k\\}|data\\-dir \\= \\-1|data\\-dir \\= 1|data\\-drop\\-poza \\= \\$\\{k\\}|data\\-grup \\= asezare|data\\-grup \\= continut|data\\-grup \\= maga'
+            . 'zin|data\\-grup \\= mai\\-mult|data\\-ik \\= label|data\\-ik \\= url|data\\-inapoi\\-sectiune \\=|data\\-item \\= \\$\\{j\\}|data\\-item\\-mut \\= \\$\\{j\\}|data\\-item\\-s'
+            . 'terge \\= \\$\\{j\\}|data\\-k \\= \\$\\{k\\}|data\\-k \\= bg_size|data\\-k \\= categorie_id|data\\-k \\= code|data\\-k \\= content|data\\-k \\= font_family|data\\-k \\= su'
+            . 'rsa|data\\-k\\-culoare \\= \\$\\{k\\}|data\\-kc \\= \\$\\{k\\}|data\\-logo\\-site \\=|data\\-pad \\= o|data\\-pad \\= v|data\\-prod\\-mut \\= \\$\\{j\\}|data\\-prod\\-sterge \\='
+            . ' \\$\\{j\\}|data\\-rezultate\\-produse \\=|data\\-seg \\= \\$\\{k\\}|data\\-sk \\= platform|data\\-sk \\= url|data\\-social \\= \\$\\{j\\}|data\\-social\\-adauga \\=|data\\-s'
+            . 'ocial\\-sterge \\= \\$\\{j\\}|data\\-stare \\= salvat|data\\-sub \\= \\$\\{c\\}|data\\-tab \\= afisare|data\\-tab \\= aspect|data\\-tab \\= continut|data\\-unelte \\=|dat'
+            . 'a\\-val \\= \\$\\{attr\\(val\\)\\}) ?$',
+            'motiv' => 'atributele data-* ale builderului „C – clasic, curățat” (paleta, pânza, panoul Conținut / Aspect / Afișare, bara de text, încărcarea pozelor; multe în șabloanele JavaScript ale panoului)'],
+        'builder-c-date-scoase' => ['ce' => 'scos', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^data (data\\-action \\= down|data\\-action \\= dup|data\\-action \\= remove|data\\-action \\= up|data\\-align\\-key \\= \\$\\{key\\}|data\\-block\\-i \\= \\$\\{blockIdx'
+            . '\\}|data\\-cbi \\= \\$\\{cbi\\}|data\\-checkkey \\= hide_desktop|data\\-checkkey \\= hide_mobile|data\\-checkkey \\= hide_tablet|data\\-col \\= \\$\\{ci\\}|data\\-col\\-'
+            . 'add \\= \\$\\{ci\\}|data\\-col\\-add\\-type \\= \\$\\{ci\\}|data\\-col\\-move \\= \\$\\{ci\\}\\-\\$\\{cbi\\}\\-down|data\\-col\\-move \\= \\$\\{ci\\}\\-\\$\\{cbi\\}\\-up|data\\-col\\-re'
+            . 'move \\= \\$\\{ci\\}\\-\\$\\{cbi\\}|data\\-color\\-target \\= \\$\\{key\\}|data\\-drop\\-index \\= \\$\\{i\\+1\\}|data\\-drop\\-index \\= 0|data\\-index \\= \\$\\{i\\}|data\\-key \\'
+            . '= \\$\\{key\\}|data\\-key \\= bg_size|data\\-key \\= border_radius|data\\-key \\= btn_pad_h|data\\-key \\= btn_pad_v|data\\-key \\= font_family|data\\-key \\= height'
+            . '|data\\-key \\= padding_bottom|data\\-key \\= padding_left|data\\-key \\= padding_right|data\\-key \\= padding_top|data\\-key \\= width|data\\-link\\-index \\= \\$\\'
+            . '{j\\}|data\\-rich\\-tag \\= b|data\\-rich\\-tag \\= i|data\\-rich\\-tag \\= s|data\\-rich\\-tag \\= u|data\\-social\\-add \\= \\$\\{blockIndex\\}|data\\-social\\-key \\= pl'
+            . 'atform|data\\-social\\-key \\= url|data\\-social\\-remove \\= \\$\\{j\\}|data\\-subalign \\= \\$\\{cheie\\}|data\\-subbgcolor \\=|data\\-subbgnone \\=|data\\-subcheckkey'
+            . ' \\= hide_desktop|data\\-subcheckkey \\= hide_mobile|data\\-subcheckkey \\= hide_tablet|data\\-subimg\\-pick \\=|data\\-subkey \\= \\$\\{k\\}|data\\-subkey \\= btn_p'
+            . 'ad_h|data\\-subkey \\= btn_pad_v|data\\-subkey \\= content|data\\-subkey \\= font_family|data\\-subkey \\= padding_bottom|data\\-subkey \\= padding_left|data\\-s'
+            . 'ubkey \\= padding_right|data\\-subkey \\= padding_top|data\\-subkey \\= width|data\\-subrich\\-link \\=|data\\-subrich\\-tag \\= b|data\\-subrich\\-tag \\= i|data\\-'
+            . 'subrich\\-tag \\= s|data\\-subrich\\-tag \\= u|data\\-subwidth\\-label \\=|data\\-val \\= center|data\\-val \\= left|data\\-val \\= right) ?$',
+            'motiv' => 'atributele data-* ale builderului de dinainte (zonele de lăsare dintre blocuri, panoul vechi, câmpurile coloanelor)'],
+        'builder-c-linkuri' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^link (\\#|\' \\+ esc\\(adresa\\) \\+ \'|\' \\+ h \\+ \') ?$',
+            'motiv' => 'linkurile din șabloanele JavaScript ale pânzei (butoanele, meniul, produsele se desenează cu href="#", ca să nu ducă nicăieri din editor)'],
+        'builder-c-link-firma' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^link (\\/admin\\/settings\\/store\\?tab\\=general\\#setari\\-firma) ?$',
+            'motiv' => 'avertismentul „Subsolul automat … nu are încă” și panoul subsolului duc la Setări site → Datele firmei'],
+        'builder-c-link-scos' => ['ce' => 'scos', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^link (\\$\\{url\\}) ?$',
+            'motiv' => 'linkul din șablonul JavaScript al builderului de dinainte'],
+        'builder-c-celula' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^celula (\\$\\{h\\}) ?$',
+            'motiv' => 'celula tabelului unui card de produs, în șablonul JavaScript al pânzei (ca ProduseEmail::html)'],
         'date-firma' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/store$', 'rol' => 'adm',
             'rand' => '^camp (POST \\/admin\\/settings\\/store input\\:hidden action \\= save_date_firma|POST \\/admin\\/settings\\/store input\\:text account_gdpr_url|POST \\/admin\\/'
             . 'settings\\/store input\\:text gdpr_operator_cui|POST \\/admin\\/settings\\/store input\\:text gdpr_operator_nume|POST \\/admin\\/settings\\/store input\\:text g'

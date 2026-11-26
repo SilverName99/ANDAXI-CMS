@@ -25,15 +25,16 @@ declare(strict_types=1);
  * F. Statistici newsletter, comenzile atribuite unei campanii (20 nov 2026): aceeași condiție ca totalul din card, cele mai noi
  *    întâi, paginile, linkul spre comandă (și spre coș), etichetele listei comenzilor, textul scris ca text; fără comenzi nimic
  *    nou; rolul emailuri și un site fără pluginul magazin nu văd panoul (nici datele clienților).
- * H. Emailul newsletterului (26 nov 2026), pe server: emailurile făcute cu builderul de dinainte (fiecare tip vechi de bloc,
+ * H. Builderul „C – clasic, curățat” (26 nov 2026), pe server: emailurile făcute cu builderul de dinainte (fiecare tip vechi de bloc,
  *    campaniile și șabloanele demo) ies octet cu octet ca la codul a4e8547 (NewsletterService de atunci, din git, sub alt nume), în
  *    afara subsolului; subsolul cu datele firmei, linkul de dezabonare și politica de confidențialitate; blocurile noi (logo, meniu,
  *    cod, produse); produsele „Automat” față de interogări scrise separat; recomandările pe abonat la o trimitere adevărată; curățarea
- *    textului; ruta produselor; încărcarea pozelor din builder (CSRF, doar poze); Setări site → Datele firmei.
- * G. Builderul în Chromium (tools/dev/newsletter-builder-browser.cjs, 26 nov 2026), pe un newsletter nou, nesalvat: Desktop → Mobil →
- *    Editare → Desktop → Mobil → Desktop arată de fiecare dată emailul, într-un cadru izolat nou; înălțimea e a emailului (nu crește
- *    la fiecare clic); doar ultimul clic se pune; o eroare se spune; panoul îngust se derulează în lateral; titlul (Header) pus într-o
- *    coloană a unei secțiuni se vede, pe pânză și în email. Fără Chromium: --fara-browser.
+ *    textului; ruta produselor; încărcarea pozelor din builder (CSRF, doar poze); paleta; Setări site → Datele firmei.
+ * G. Builderul în Chromium (tools/dev/newsletter-builder-browser.cjs), pe un newsletter nou, nesalvat: Desktop → Mobil → Editez →
+ *    Desktop → Mobil → Desktop arată de fiecare dată emailul (680 / 375 px), într-un cadru izolat nou; înălțimea e a emailului; doar
+ *    ultimul clic se pune; o eroare se spune; titlul pus într-o coloană se vede, cu eticheta lui; pânza e lipită și de aceeași înălțime
+ *    ca emailul randat; scrisul pe pânză (bara de text, lipirea) și codul din panou care nu rulează; pozele trase și lipite; Anulează /
+ *    Refă; tastatura; salvarea automată; 1366 px. Fără Chromium: --fara-browser.
  *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, sesiunile și emailurile
  * capturate. Raportul: $CMS_DEV_DIR/test-newsletter-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -644,7 +645,7 @@ $verifica('F9 fără pluginul magazin (fără Admin → Comenzi): cardul ca text
 
 // =====================================================================
 $scrie('');
-$scrie('== H. Emailul newsletterului pe server: emailurile vechi, blocurile noi, produsele, subsolul, încărcarea (26 nov 2026)');
+$scrie('== H. Builderul „C – clasic, curățat” pe server: emailurile vechi, blocurile noi, produsele, subsolul, încărcarea (26 nov 2026)');
 /** Partea HTML a unui email capturat: corpul după antete (mail()) sau partea base64 din MIME (OrderMailer, SMTP). */
 $corpMail = static function (string $eml): string {
     $parti = preg_split("/\r?\n\r?\n/", $eml, 2);
@@ -934,6 +935,22 @@ $verifica('H10 încărcarea din builder (POST /admin/gallery/bulk-upload, raspun
     && $faraJeton['cod'] === 403 && $jetonGresit['cod'] === 403 && ($fals['ok'] ?? true) === false && str_contains((string) ($fals['mesaj'] ?? ''), 'doar poze')
     && ($doc['ok'] ?? true) === false && $anonimUp['cod'] === 401 && (int) $unu('SELECT COUNT(*) FROM gallery_images') === $randuriGalerie + 1,
     json_encode([$bun['cod'], $bunJ, $faraJeton['cod'], $jetonGresit['cod'], $fals, $doc, $anonimUp['cod']], JSON_UNESCAPED_UNICODE));
+// Pagina builderului: paleta (cele trei grupuri și „Mai mult”), avertismentul datelor firmei doar când lipsesc, șabloanele cu blocurile noi.
+$setare('gdpr_operator_sediu', '');
+$cuAvertisment = $cerere('GET', '/admin/emails/builder?type=campaign&id=' . $cH, $jarAdmin)['corp'];
+$setare('gdpr_operator_sediu', 'Str. Exemplu 10, Cluj-Napoca');
+$faraAvertisment = $paginaBuilder;
+$verifica('H11 builderul: paleta Magazin (Logo, Meniu, Produse, Cod reducere), Conținut, Așezare și „Mai mult” (secțiunile 60/40…, social); '
+    . 'avertismentul „Subsolul automat … nu are încă: sediul” doar cu date lipsă; șabloanele magazinului încep cu blocul Logo și au blocul Produse, '
+    . 'fără blocul de text de subsol (subsolul e automat)', str_contains($faraAvertisment, '<h3 class="eb-grup-titlu">Magazin</h3>')
+    && str_contains($faraAvertisment, '<h3 class="eb-grup-titlu">Conținut</h3>') && str_contains($faraAvertisment, '<h3 class="eb-grup-titlu">Așezare</h3>')
+    && count(array_filter(['logo', 'menu', 'products', 'coupon', 'header', 'text', 'image', 'button', 'video', 'quote', 'columns_2', 'columns_3', 'divider',
+        'spacer', 'columns_2_6040', 'columns_2_4060', 'columns_2_7030', 'columns_2_3070', 'social'],
+        static fn (string $t): bool => str_contains($faraAvertisment, 'data-block-type="' . $t . '"'))) === 19
+    && !str_contains($faraAvertisment, 'id="eb-avertisment-firma"') && str_contains($cuAvertisment, 'id="eb-avertisment-firma"')
+    && str_contains($cuAvertisment, 'nu are încă: sediul (adresa).')
+    && str_contains($faraAvertisment, '"noutati":[{"type":"logo"') && str_contains($faraAvertisment, '{"type":"products","mod":"manual"')
+    && !str_contains($faraAvertisment, 'Primești acest email pentru că te-ai abonat'));
 // Datele firmei se completează din Setări site → Datele firmei.
 $salvareFirma = $cerere('POST', '/admin/settings/store', $jarAdmin, ['action' => 'save_date_firma', 'gdpr_operator_nume' => '  Altă  Firma SRL ',
     'gdpr_operator_sediu' => 'Str. Test 1', 'gdpr_operator_regcom' => 'J40/1/2020', 'gdpr_operator_cui' => 'RO1', 'account_gdpr_url' => '/politica-de-confidentialitate']);
@@ -948,7 +965,7 @@ $ns::uitaDateSubsol();
 // =====================================================================
 if (!$faraBrowser) {
     $scrie('');
-    $scrie('== G. Builderul în Chromium: previzualizarea Desktop / Mobil, titlul dintr-o coloană (26 nov 2026)');
+    $scrie('== G. Builderul în Chromium: Desktop / Mobil, pânza, scrisul pe pânză, pozele, tastatura (26 nov 2026)');
     $dosarCapturi = $dosarDev . '/newsletter-builder';
     @mkdir($dosarCapturi, 0775, true);
     $env = ['CMS_DEV_URL=' . $baza, 'CMS_DEV_ADMIN_EMAIL=' . $adminEmail, 'CMS_DEV_PAROLA=' . $parolaAdmin, 'CMS_DEV_CAPTURI=' . $dosarCapturi,
