@@ -292,11 +292,13 @@ Pluginul `automatizari` ([PLUGINURI.md](PLUGINURI.md), „Automatizări newslett
   deci „Administrator email-uri” nu poate face coduri (de exemplu 90% pentru o adresă a lui); altfel 403, nimic salvat.
 - **Emailurile**: codurile (`{{prenume}}` …) se scapă la înlocuirea în HTML; conținutul trece prin același randat ca newsletterul
   (`NewsletterService::renderHtmlFromBlocks`, cu `allowRichTags` și linkurile filtrate). Subsolul de dezabonare e obligatoriu, cu
-  linkul semnat al abonatului.
+  linkul semnat al abonatului. Anunțul „Anunță-mă” către administrator pleacă ca document întreg, cu `<title>` scăpat: subiectul
+  lui poate avea `{{prenume}}`, adică numele scris de vizitator în coș sau în comandă.
 - **Linkurile de urmărire**: semnate HMAC-SHA256 cu cheia secretă a newsletterului (`NewsletterService::semneaza`; doar cheile noi,
   nu cea veche, ghicibilă), pe un mesaj cu prefixul lor (`automatizare|d|…`, `automatizare|c|<trimitere>|<adresa>`), deci nu pot
   semna altceva și o semnătură nu merge pentru altă trimitere. Clicul duce doar la adresa semnată (altfel pagina 404: nicio
   redirecționare deschisă), un link relativ în site, altă schemă decât http(s) la prima pagină; nu pune niciun cookie de urmărire.
 - **Datele personale**: jurnalul automatizărilor nu are adrese de email (id-uri, pași, motive); erorile din jurnalul PHP doar clasa
-  și locul, fără date. Doar abonații activi intră, iar refuzul urmăririi (`fara_urmarire`) e respectat. Pe copia de verificare
+  și locul, fără date. Doar abonații activi intră, iar refuzul urmăririi (`fara_urmarire`) e respectat, și pentru emailurile trimise înainte de
+  refuz (pixelul și clicurile lui nu se mai numără). Pe copia de verificare
   tabelele vin doar cu structura.
