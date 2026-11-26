@@ -418,6 +418,23 @@ Ceas::avanseaza('+20 minutes');
 $tura();
 $verifica('după confirmarea plății emailul pleacă; comanda anulată iese din flux („comanda_anulata”), fără email', $trimise($aPlasataCat) === 2
     && $unu('SELECT motiv_iesire FROM automatizari_rulari WHERE comanda_id = :c', ['c' => $cAnulata]) === 'comanda_anulata');
+// Anulată mai târziu (după ce fluxul a pornit, într-o așteptare): iese înaintea emailului, nu mulțumește pentru o comandă anulată.
+Flux::schimbaStarea($db, $aPlasataCat, 'oprita');
+$aPlasataAsteapta = $automatizare('comanda_plasata', [], [['cheie' => 'p1', 'tip' => 'asteapta', 'setari' => ['cat' => 1, 'unitate' => 'zile']],
+    ['cheie' => 'p2', 'tip' => 'email', 'setari' => ['email' => 'e1']]], ['e1' => ['Cum ți se pare comanda {{numar_comanda}}?', 'Text']]);
+$abonat('anulata.tarziu@exemplu.ro');
+$cTarziu = $comanda('anulata.tarziu@exemplu.ro', 'pending', 70.0, [$produsA]);
+Hooks::ruleaza('comanda.plasata', $db, $cTarziu);
+$tura();
+$pasInainte = $unu('SELECT pas_curent FROM automatizari_rulari WHERE comanda_id = :c AND automatizare_id = :a', ['c' => $cTarziu, 'a' => $aPlasataAsteapta]);
+$db->exec("UPDATE orders SET status = 'cancelled' WHERE id = {$cTarziu}");
+Ceas::avanseaza('+2 days');
+$tura();
+$verifica('comandă plasată, anulată în timpul unei așteptări: iese („comanda_anulata”) înaintea emailului', $pasInainte === 'p1'
+    && $unu('SELECT motiv_iesire FROM automatizari_rulari WHERE comanda_id = :c AND automatizare_id = :a', ['c' => $cTarziu, 'a' => $aPlasataAsteapta]) === 'comanda_anulata'
+    && $trimise($aPlasataAsteapta) === 0, $pasInainte . ' ' . json_encode($rulari($aPlasataAsteapta)));
+Flux::schimbaStarea($db, $aPlasataAsteapta, 'oprita');
+Flux::schimbaStarea($db, $aPlasataCat, 'activa');
 
 // B3. Comandă finalizată, din Admin → Comenzi (POST /admin/orders/{id}/status), doar prima comandă.
 $aFinalizata = $automatizare('comanda_finalizata', ['doar_prima' => true], [['cheie' => 'p1', 'tip' => 'email', 'setari' => ['email' => 'e1']]],

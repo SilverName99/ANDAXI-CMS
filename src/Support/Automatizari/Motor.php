@@ -139,7 +139,16 @@ final class Motor
                 $raport['iesite']++;
                 return;
             }
-            // „Comandă plasată” cu plata încă neconfirmată (card, OP): fluxul pornește abia după confirmare.
+            // „Comandă plasată”: comanda anulată (sau ștearsă) iese înaintea oricărui pas, oricând (nu se mulțumește pentru o
+            // comandă anulată după o așteptare); cu plata încă neconfirmată (card, OP) fluxul pornește abia după confirmare.
+            if ((string) $automatizare['declansator'] === 'comanda_plasata' && !empty($rulare['context']['plata_ok'])) {
+                $plata = self::verificaPlata($db, $rulare);
+                if ($plata === 'comanda_anulata' || $plata === 'comanda_stearsa') {
+                    Rulari::iese($db, $rulare, $plata, $jeton);
+                    $raport['iesite']++;
+                    return;
+                }
+            }
             if ((string) $automatizare['declansator'] === 'comanda_plasata' && empty($rulare['context']['plata_ok'])) {
                 $plata = self::verificaPlata($db, $rulare);
                 if ($plata === 'asteapta') {

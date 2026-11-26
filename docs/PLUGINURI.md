@@ -1241,7 +1241,7 @@ poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum)
   - **Abonat nou (confirmat)** — după dubla confirmare (`NewsletterService::confirmaAbonare`), opțional doar pentru o listă;
   - **Comandă plasată** — după tranzacția comenzii din checkout, opțional doar cu anumite produse sau categorii (principală sau
     suplimentară); o comandă plătită cu cardul sau prin OP așteaptă confirmarea plății (cel mult 3 zile, apoi iese:
-    `plata_neconfirmata`), una anulată iese (`comanda_anulata`);
+    `plata_neconfirmata`), una anulată iese (`comanda_anulata`), oricând, înaintea pasului următor (și după o așteptare);
   - **Comanda e livrată / finalizată** — statusul trece în „Finalizată” (`completed`: din Comenzi, la generarea AWB-ului, din
     ERP), cu produse / categorii și „Doar la prima comandă a clientului” (nicio comandă neanulată mai veche pe aceeași adresă);
   - **Coș abandonat** — coșul (`cart_abandonments`) unui abonat activ, nevăzut de N minute / ore (cel mult 168), dar trecut de ele de cel mult 3 zile, fără o
