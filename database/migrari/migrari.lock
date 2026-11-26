@@ -61,7 +61,9 @@
         "donatii/0064_donatii_rambursari": "7396c786f0e59afc9bcd07fe1a576541cf170d8b445681075ead2f4ff86169d4",
         "membri/0065_membri_rambursari": "148354c065707e1db15ae99ca19a2b9c094717c3a28ad6413148e429f476bc6b",
         "campanii/0066_campanii_produs_ascuns": "436ebbdab4ccfdeaca195beaad8ca6461d31a560602c45083f1c64788e407419",
-        "nucleu/0067_continut_emailuri": "94b1091eda7fa853ae07f5f7c2be1118a8d65bf605202650817c089a63b856fd"
+        "nucleu/0067_continut_emailuri": "94b1091eda7fa853ae07f5f7c2be1118a8d65bf605202650817c089a63b856fd",
+        "automatizari/0078_automatizari": "8df9003b7e4f6c178cb42ebff11740c96894b570ff9ae8bcc0e75629bbd07268",
+        "newsletter/0082_etichete_abonati": "ad1306313ac5592bb4aabd787648b9cf5a1b18378bb8f7dd26d5ade95de55e9c"
     },
     "retrase": {}
 }

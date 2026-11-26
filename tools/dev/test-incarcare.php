@@ -280,7 +280,10 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     // documentele lor și plățile cotizației.
     'donations', 'professions', 'profession_fields', 'account_verifications', 'account_verification_documents', 'account_activations',
     // Regulile Bioscem 26 (nucleu/0067): conținutul păstrat al emailurilor trimise („Vezi” din Emailuri trimise).
-    'email_send_bodies'];
+    'email_send_bodies',
+    // Regulile Bioscem 27 (automatizari/0078, newsletter/0082): automatizările newsletterului și etichetele abonaților.
+    'automatizari', 'automatizari_pasi', 'automatizari_emailuri', 'automatizari_rulari', 'automatizari_trimiteri', 'automatizari_jurnal',
+    'newsletter_etichete', 'newsletter_abonati_etichete'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',

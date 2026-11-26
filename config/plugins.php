@@ -485,7 +485,36 @@ return [
                 // Codul vechi e2e2d77…739f58c (migrarea newsletter/0040): lista „nu trimite” și jurnalul cererilor de
                 // confirmare; coloanele noi ale abonaților, campaniilor și trimiterilor.
                 'newsletter_suprimate', 'newsletter_cereri_confirmare', 'newsletter_subscribers.pending_at',
-                'newsletter_subscribers.confirmed_at', 'newsletter_campaigns.last_error', 'newsletter_campaign_sends.attempts'],
+                'newsletter_subscribers.confirmed_at', 'newsletter_campaigns.last_error', 'newsletter_campaign_sends.attempts',
+                // 26 nov 2026 (newsletter/0082): etichetele abonaților și refuzul urmăririi pe abonat (App\Support\NewsletterEtichete;
+                // le pun și le citesc automatizările).
+                'newsletter_etichete', 'newsletter_abonati_etichete', 'newsletter_subscribers.fara_urmarire'],
+        ],
+
+        // Cerut de proprietar (26 nov 2026), generic, pentru orice site cu newsletter: fluxuri automate (un declanșator, apoi
+        // pași în ordine, cu ramuri „Dacă / altfel”), în editorul vizual din Marketing → Automatizări newsletter. Motorul
+        // rulează în cronul newsletterului (scripts/newsletter-campaigns.php), cu același buget de trimiteri ca și campaniile.
+        // Oprit pe orice site până îl pune CRM-ul în licență; nu e în niciun pachet și în nicio licență de dezvoltare.
+        // App\Support\Automatizari\*, AutomatizariController; docs/PLUGINURI.md, „Automatizări newsletter”.
+        'automatizari' => [
+            'nume' => 'Automatizări newsletter',
+            'descriere' => 'Fluxuri automate de emailuri: bun venit, coș abandonat, mulțumire după comandă, clienți inactivi; '
+                . 'așteptări, ramuri „Dacă / altfel”, coduri de reducere unice, etichete și liste.',
+            'necesita' => ['newsletter'],
+            'rute_admin' => ['/admin/automatizari', '/admin/automatizari/*'],
+            'rute_publice' => ['/automatizari/*'],
+            // Pixelul de deschidere și linkurile din emailurile deja trimise de un flux (semnate): merg mereu, ca linkurile
+            // newsletterului; cu pluginul oprit nu se mai numără nimic, iar un link nesemnat dă 404.
+            'rute_mereu_deschise' => [
+                'GET /automatizari/d/{trimitere}/{token}',
+                'GET /automatizari/c/{trimitere}/{token}',
+            ],
+            'meniu' => [
+                ['grup' => 'marketing', 'ordine' => 85, 'eticheta' => 'Automatizări newsletter', 'href' => '/admin/automatizari',
+                    'icon' => 'automation', 'activ' => ['/admin/automatizari']],
+            ],
+            'tabele' => ['automatizari', 'automatizari_pasi', 'automatizari_emailuri', 'automatizari_rulari',
+                'automatizari_trimiteri', 'automatizari_jurnal'],
         ],
 
         'chat_live' => [
@@ -717,10 +746,13 @@ return [
         ],
         'GET /admin/emails/builder' => [
             [['get.type' => ['ecommerce']], 'magazin'],
+            // 26 nov 2026: conținutul unui email dintr-o automatizare (același builder).
+            [['get.type' => ['automatizare']], 'automatizari'],
             [[], 'newsletter'],
         ],
         'POST /admin/emails/builder' => [
             [['post.builder_type' => ['ecommerce']], 'magazin'],
+            [['post.builder_type' => ['automatizare']], 'automatizari'],
             [[], 'newsletter'],
         ],
         'POST /admin/emails/builder/preview' => [

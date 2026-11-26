@@ -106,7 +106,10 @@ return [
     // Stripe golite.
     // 26 (nucleu/0067, „Vezi” din Emailuri trimise): conținutul păstrat al emailurilor trimise (HTML-ul lor comprimat: nume,
     // adrese, comenzi), doar structura; istoricul (`email_send_history`) rămâne cum era, anonimizat.
-    'versiune' => 26,
+    // 27 (automatizari/0078, newsletter/0082, 26 nov 2026): automatizările newsletterului (fluxurile, emailurile lor, rulările
+    // cu adresele abonaților, trimiterile, jurnalul) și etichetele abonaților, doar structura (o copie nu trimite fluxuri); pe
+    // abonați, fanionul refuzului urmăririi (`fara_urmarire`, o stare, nu o dată personală) păstrat.
+    'versiune' => 27,
     'schema' => 'Nou-site-bioscem@c47f270 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -180,6 +183,15 @@ return [
         // WP-R din 30 oct (newsletter/0040). Lista „nu trimite” ține doar amprenta SHA-256 a adresei unui abonat șters: o adresă
         // cunoscută se poate verifica împotriva ei, deci e o dată personală (pseudonimă); pe copie nu trebuie (fail-closed).
         'newsletter_suprimate' => ['mod' => 'doar_structura', 'motiv' => 'lista „nu trimite”: amprenta SHA-256 a adresei fiecărui abonat șters'],
+        // 27: automatizările newsletterului și etichetele abonaților.
+        'automatizari' => ['mod' => 'doar_structura', 'motiv' => 'fluxurile automate: o copie nu trimite emailuri'],
+        'automatizari_pasi' => ['mod' => 'doar_structura', 'motiv' => 'pașii fluxurilor'],
+        'automatizari_emailuri' => ['mod' => 'doar_structura', 'motiv' => 'conținutul emailurilor fluxurilor'],
+        'automatizari_rulari' => ['mod' => 'doar_structura', 'motiv' => 'trecerea abonaților prin fluxuri: adresa de email, comanda, prenumele'],
+        'automatizari_trimiteri' => ['mod' => 'doar_structura', 'motiv' => 'emailurile trimise de fluxuri, cu deschiderile și clicurile'],
+        'automatizari_jurnal' => ['mod' => 'doar_structura', 'motiv' => 'jurnalul fluxurilor'],
+        'newsletter_etichete' => ['mod' => 'doar_structura', 'motiv' => 'etichetele abonaților'],
+        'newsletter_abonati_etichete' => ['mod' => 'doar_structura', 'motiv' => 'ce etichete are fiecare abonat'],
         'newsletter_cereri_confirmare' => ['mod' => 'doar_structura', 'motiv' => 'cererile de abonare și de link de dezabonare: amprenta adresei și IP-ul (2 zile)'],
         // WP-38 (nucleu/0047): adresele negăsite ale site-ului live (fără IP, dar o cale poate avea orice a scris cineva).
         'seo_404_log' => ['mod' => 'doar_structura', 'motiv' => 'adresele cerute pe site-ul live care au dat 404 (texte scrise de vizitatori)'],
@@ -478,7 +490,8 @@ return [
         // ── Newsletterul ──
         'newsletter_lists' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'description', 'is_default', 'created_at'],
             'motive' => ['name' => 'numele listei'], 'emailuri_publice' => 'descrierile listelor, scrise de magazin'],
-        'newsletter_subscribers' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at'],
+        'newsletter_subscribers' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at',
+            'fara_urmarire'],
             'transforma' => [
                 'email' => ['email'],
                 'name' => ['nume_abonat'],

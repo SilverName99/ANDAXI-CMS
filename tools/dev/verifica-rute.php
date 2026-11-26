@@ -69,7 +69,9 @@ $cheiHotarate = ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_eup
     // Pluginul nou cerut de proprietar pe 5 nov 2026 (campaniile de pe site, pentru Biovitality; docs/PLUGINURI.md).
     'campanii',
     // Pluginul nou cerut de proprietar pe 8 nov 2026 (statisticile site-ului, fără cookie-uri; docs/PLUGINURI.md).
-    'statistici'];
+    'statistici',
+    // Pluginul nou cerut de proprietar pe 26 nov 2026 (automatizările newsletterului; docs/PLUGINURI.md).
+    'automatizari'];
 $lipsa = array_diff($cheiHotarate, array_keys($pluginuri));
 $inPlus = array_diff(array_keys($pluginuri), $cheiHotarate);
 if ($lipsa !== []) {
