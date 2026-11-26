@@ -249,3 +249,25 @@ spre calea curată fără query și scrie doar intrarea paginii fără parametri
 `/magazin?sort=price_desc` rămâne MISS, sortată price_desc; „#” fără reparație, forma absolută, o cheie repetată, „=…”: pagina, fără
 cache; HEAD pe adresele fără cale: 404, nicio intrare), în poarta G-seo. Pe codul de dinainte verificările noi pică (6 din 334):
 `/magazin?sort=price_desc` venea HIT, cu lista sortată alfabetic.
+
+## Builderul newsletterului: textul scris pe pânză și încărcarea pozelor (26 noiembrie 2026)
+
+Builderul „C – clasic, curățat” ([PLUGINURI.md](PLUGINURI.md), „Newsletter”) scrie textul direct pe pânză și încarcă poze în
+Galerie. Ce l-a făcut sigur:
+
+- **Textul se curăță la randare, ca înainte, mai strict.** Conținutul blocurilor rămâne text cu etichetele editorului; serverul
+  (`NewsletterService::allowRichTags`) scapă totul și redă doar `<b>`, `<i>`, `<u>`, `<s>`, `<strike>`, `<del>`, `<strong>`, `<em>`,
+  `<a href="…">` și, nou, `<span style="color:#rgb…#rrggbbaa">` (culoarea din bara de text), exact în această formă. Nou: adresa unui
+  link trebuie să fie fără schemă (o cale, „#”, un `{{token}}`) sau http(s), mailto, tel; `javascript:`, `data:` și orice altă
+  schemă (și cu spații, octeți de control sau majuscule) devine „#” (înainte, `<a href="javascript:…">` dintr-un text ajungea ca
+  atare în email și în previzualizare). Un link cu „&” în adresă e recunoscut (înainte rămânea text). Într-un bloc Text, un link
+  pus de editor nu mai e luat drept adresă de transformat în link (ieșea HTML stricat).
+- **Încărcarea pozelor din builder** (`POST /admin/gallery/bulk-upload` cu `raspuns=json`) folosește aceeași verificare a fișierului
+  ca Galeria (`handleMediaUpload`: extensia, conținutul, numele), doar pentru poze (JPG, PNG, WebP, GIF), și cere jetonul `AdminCsrf`
+  (antetul `X-CSRF-Token`; altfel 403), pe lângă garda originii (N2) și dreptul rolului la Galerie. Răspunde JSON, fără
+  redirecționare. Încărcarea din pagina Galerie rămâne neschimbată.
+- **Ruta nouă** `GET /admin/emails/builder/produse` (JSON) cere un admin logat cu acces la newslettere sau la emailurile magazinului
+  (garda rutelor și `guard()`); arată doar produse active.
+
+Testele: `tools/dev/test-newsletter.php`, H8 (curățarea pe server, și prin previzualizare), H9–H10 (ruta produselor, încărcarea:
+fără jeton, cu alt jeton, un fișier care nu e poză, un PDF, fără admin).

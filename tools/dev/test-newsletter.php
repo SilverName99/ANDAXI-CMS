@@ -25,6 +25,11 @@ declare(strict_types=1);
  * F. Statistici newsletter, comenzile atribuite unei campanii (20 nov 2026): aceeași condiție ca totalul din card, cele mai noi
  *    întâi, paginile, linkul spre comandă (și spre coș), etichetele listei comenzilor, textul scris ca text; fără comenzi nimic
  *    nou; rolul emailuri și un site fără pluginul magazin nu văd panoul (nici datele clienților).
+ * H. Emailul newsletterului (26 nov 2026), pe server: emailurile făcute cu builderul de dinainte (fiecare tip vechi de bloc,
+ *    campaniile și șabloanele demo) ies octet cu octet ca la codul a4e8547 (NewsletterService de atunci, din git, sub alt nume), în
+ *    afara subsolului; subsolul cu datele firmei, linkul de dezabonare și politica de confidențialitate; blocurile noi (logo, meniu,
+ *    cod, produse); produsele „Automat” față de interogări scrise separat; recomandările pe abonat la o trimitere adevărată; curățarea
+ *    textului; ruta produselor; încărcarea pozelor din builder (CSRF, doar poze); Setări site → Datele firmei.
  * G. Builderul în Chromium (tools/dev/newsletter-builder-browser.cjs, 26 nov 2026), pe un newsletter nou, nesalvat: Desktop → Mobil →
  *    Editare → Desktop → Mobil → Desktop arată de fiecare dată emailul, într-un cadru izolat nou; înălțimea e a emailului (nu crește
  *    la fiecare clic); doar ultimul clic se pune; o eroare se spune; panoul îngust se derulează în lateral; titlul (Header) pus într-o
@@ -636,6 +641,309 @@ $licenta('toate');
 $verifica('F9 fără pluginul magazin (fără Admin → Comenzi): cardul ca text, fără panou', $faraMagazin['cod'] === 200
     && str_contains($faraMagazin['corp'], '<div class="nl-kpi-sub">26 comenzi</div>') && !str_contains($faraMagazin['corp'], 'nl-comenzi-panel'),
     (string) $faraMagazin['cod']);
+
+// =====================================================================
+$scrie('');
+$scrie('== H. Emailul newsletterului pe server: emailurile vechi, blocurile noi, produsele, subsolul, încărcarea (26 nov 2026)');
+/** Partea HTML a unui email capturat: corpul după antete (mail()) sau partea base64 din MIME (OrderMailer, SMTP). */
+$corpMail = static function (string $eml): string {
+    $parti = preg_split("/\r?\n\r?\n/", $eml, 2);
+    if (str_contains((string) ($parti[1] ?? ''), '<body')) {
+        return (string) $parti[1];
+    }
+    preg_match_all('/Content-Transfer-Encoding: base64\r?\n\r?\n([A-Za-z0-9+\/=\r\n]+)/', $eml, $m);
+    foreach ($m[1] as $bucata) {
+        $html = (string) base64_decode(preg_replace('/\s+/', '', $bucata), true);
+        if (str_contains($html, '<body')) {
+            return $html;
+        }
+    }
+    return '';
+};
+$faraSubsol = static fn (string $h): string => (string) preg_replace('/<!-- newsletter-unsubscribe-footer:start -->.*?<!-- newsletter-unsubscribe-footer:end -->/s', '', $h);
+// Codul de dinainte de builderul nou (a4e8547, linia comună): NewsletterService de atunci, sub alt nume, în același proces.
+$bazaBuilder = 'a4e8547';
+$codVechi = (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' show ' . $bazaBuilder . ':src/Support/NewsletterService.php 2>/dev/null');
+$areVechi = str_contains($codVechi, 'final class NewsletterService');
+if ($areVechi) {
+    $fisierVechi = $dosarLucru . '/NewsletterServiceBaza.php';
+    // __DIR__ (config/app.php) e al codului de acum: fișierul stă în dosarul testului.
+    file_put_contents($fisierVechi, str_replace(['final class NewsletterService', '__DIR__'],
+        ['final class NewsletterServiceBaza', var_export($radacina . '/src/Support', true)], $codVechi));
+    require_once $fisierVechi;
+}
+$vechi = '\\App\\Support\\NewsletterServiceBaza';
+// Emailuri făcute cu builderul de dinainte: fiecare tip vechi de bloc, cu formele vechi ale coloanelor, textele cu etichetele
+// editorului, linkuri markdown și adrese scrise direct, fonturi, fundaluri cu imagine, ascunderea pe dispozitive, blocuri fără chei.
+$blocuriVechi = [
+    [['type' => 'header', 'content' => "Ofertă <b>specială</b>\nla ceaiuri", 'align' => 'center', 'font_size' => 32, 'font_size_mobile' => 24,
+        'background' => '#2d7d5f', 'text_color' => '#ffffff', 'font_family' => 'georgia', 'padding_top' => 20, 'padding_bottom' => 20],
+     ['type' => 'text', 'content' => "Salut <i>tuturor</i> & <u>bine</u> ați venit!\n[Vezi oferta](https://exemplu.ro/oferta) sau www.exemplu.ro/x\n<s>vechi</s> <strong>nou</strong> <em>e</em>",
+        'align' => 'left', 'font_size' => 16, 'font_size_mobile' => 14, 'background' => '#ffffff', 'text_color' => '#333333', 'padding_left' => 28, 'padding_right' => 28],
+     ['type' => 'image', 'image_url' => '/uploads/demo/ceai-de-menta.png', 'alt' => 'Ceai', 'width' => 80, 'link_url' => '/magazin', 'border_radius' => 6],
+     ['type' => 'button', 'label' => 'Cumpără', 'url' => '/magazin', 'button_color' => '#dc2626', 'btn_pad_v' => 12, 'btn_pad_h' => 30, 'radius' => 4],
+     ['type' => 'divider', 'line_color' => '#cccccc', 'width' => 60, 'thickness' => 2, 'padding_top' => 8],
+     ['type' => 'spacer', 'height' => 18, 'background' => '#f9fafb', 'hide_mobile' => 1],
+     ['type' => 'quote', 'content' => "Cel mai bun <b>ceai</b>\nde până acum", 'author' => 'Ana', 'hide_desktop' => 1],
+     ['type' => 'social', 'links' => [['platform' => 'facebook', 'url' => 'https://facebook.com/x'], ['platform' => 'necunoscut', 'url' => '']], 'icon_size' => 28],
+     ['type' => 'video', 'video_url' => 'https://www.youtube.com/watch?v=abc', 'thumbnail_url' => '/uploads/video-thumbs/x.jpg', 'title' => 'Clip', 'label' => '▶ Vezi'],
+     ['type' => 'text', 'content' => 'Fond', 'bg_image' => '/uploads/demo/ceai-de-menta.png', 'bg_size' => 'contain', 'hide_tablet' => 1]],
+    [['type' => 'columns_2', 'background' => '#f0fdf4', 'padding_left' => 12, 'columns' => [
+        [['type' => 'header', 'content' => 'Stânga', 'background' => '', 'text_color' => '#1f2937', 'align' => 'left'], ['type' => 'image', 'image_url' => '/uploads/demo/ceai-de-tei.png']],
+        [['type' => 'button', 'label' => 'Dreapta', 'url' => 'https://exemplu.ro'], ['type' => 'spacer', 'height' => 8]]]],
+     ['type' => 'columns_3', 'columns_content' => ['unu', ['doi', 'trei'], ['type' => 'text', 'content' => 'patru']]],
+     ['type' => 'columns_2_6040', 'content_columns' => [[['type' => 'text', 'content' => 'Șaizeci']], []]],
+     ['type' => 'columns_2_3070', 'columns' => [[], [['type' => 'divider']]]],
+     ['type' => 'necunoscut', 'content' => 'devine text'],
+     ['content' => 'fără tip'],
+     'nu e bloc'],
+    [],
+];
+$campaniiDemo = $db->query("SELECT subject, blocks_json FROM newsletter_campaigns WHERE blocks_json IS NOT NULL AND blocks_json NOT IN ('', '[]')
+    UNION ALL SELECT subject, blocks_json FROM newsletter_templates WHERE blocks_json IS NOT NULL AND blocks_json NOT IN ('', '[]')")->fetchAll(PDO::FETCH_ASSOC);
+// Doar cele făcute numai din tipurile de dinainte (o campanie făcută între timp cu blocurile noi nu e „veche”).
+$tipuriVechi = ['header', 'text', 'image', 'video', 'button', 'quote', 'social', 'divider', 'spacer', 'columns_2', 'columns_2_6040', 'columns_2_4060',
+    'columns_2_7030', 'columns_2_3070', 'columns_3'];
+$doarVechi = static function (mixed $lista) use (&$doarVechi, $tipuriVechi): bool {
+    foreach (is_array($lista) ? $lista : [] as $bloc) {
+        if (is_array($bloc) && isset($bloc['type']) && (!in_array($bloc['type'], $tipuriVechi, true)
+            || (isset($bloc['columns']) && is_array($bloc['columns']) && !$doarVechi(array_merge(...array_values(array_filter($bloc['columns'], 'is_array'))))))) {
+            return false;
+        }
+    }
+    return true;
+};
+foreach ($campaniiDemo as $rand) {
+    $blocuriDemo = json_decode((string) $rand['blocks_json'], true) ?: [];
+    if ($doarVechi($blocuriDemo)) {
+        $blocuriVechi[] = $blocuriDemo;
+    }
+}
+$identice = 0;
+$diferite = [];
+foreach ($blocuriVechi as $k => $blocuri) {
+    if (!$areVechi) {
+        break;
+    }
+    $cuSubsolV = $vechi::renderHtmlFromBlocks($blocuri, 'Subiect ' . $k);
+    $cuSubsolN = $ns::renderHtmlFromBlocks($blocuri, 'Subiect ' . $k);
+    $faraV = $vechi::renderHtmlFromBlocks($blocuri, 'Subiect ' . $k, false);
+    $faraN = $ns::renderHtmlFromBlocks($blocuri, 'Subiect ' . $k, false);
+    $normV = json_encode($vechi::normalizeBlocks($blocuri));
+    $normN = json_encode($ns::normalizeBlocks($blocuri));
+    if ($faraSubsol($cuSubsolV) === $faraSubsol($cuSubsolN) && $faraV === $faraN && $normV === $normN
+        && substr_count($cuSubsolN, 'newsletter-unsubscribe-footer:start') === 1) {
+        $identice++;
+    } else {
+        $diferite[] = $k;
+    }
+}
+$verifica('H1 emailurile făcute cu builderul de dinainte (' . count($blocuriVechi) . ': fiecare tip vechi de bloc, coloanele în formele vechi, '
+    . 'campaniile și șabloanele demo) ies octet cu octet ca la codul ' . $bazaBuilder . ': HTML-ul fără subsol, emailul de comandă (fără subsol) și '
+    . 'blocurile normalizate; doar subsolul e altul', $areVechi && $diferite === [] && $identice === count($blocuriVechi),
+    $areVechi ? 'diferite: ' . json_encode($diferite) : 'nu găsesc codul ' . $bazaBuilder . ' în git');
+// Subsolul: datele firmei din setări (inventate), linkul de dezabonare personal, politica de confidențialitate doar spre o pagină publicată.
+$setare('gdpr_operator_nume', 'Firma Demo SRL');
+$setare('gdpr_operator_sediu', 'Str. Exemplu 10, Cluj-Napoca');
+$setare('gdpr_operator_regcom', 'J12/0000/2020');
+$setare('gdpr_operator_cui', 'RO00000000');
+$setare('account_gdpr_url', '/politica-de-confidentialitate');
+$ns::uitaDateSubsol();
+$paginaPolitica = (int) $unu("SELECT COUNT(*) FROM pages WHERE slug = 'politica-de-confidentialitate' AND is_published = 1 AND deleted_at IS NULL");
+$linkTest = rtrim((string) getenv('APP_URL'), '/') . '/newsletter/unsubscribe/TOKEN-TEST';
+$subsol = $ns::withNewsletterFooter('<html><body><p>x</p></body></html>', $linkTest);
+$verifica('H2 subsolul automat: denumirea, sediul, Reg. Com., CUI-ul, de ce primește omul emailul, butonul „Dezabonează-mă” cu linkul '
+    . 'personal (neschimbat), politica de confidențialitate spre pagina publicată, între semnele de până acum', $paginaPolitica === 1
+    && str_contains($subsol, '<!-- newsletter-unsubscribe-footer:start -->') && str_contains($subsol, '<!-- newsletter-unsubscribe-footer:end -->')
+    && str_contains($subsol, '<b style="color:#334155;">Firma Demo SRL</b> &middot; Str. Exemplu 10, Cluj-Napoca &middot; Reg. Com. J12/0000/2020 &middot; CUI RO00000000')
+    && str_contains($subsol, 'Primești acest email pentru că adresa ta e abonată la newsletterul')
+    && str_contains($subsol, '<a href="' . htmlspecialchars($linkTest, ENT_QUOTES) . '" style="display:inline-block;padding:8px 14px;border:1px solid #cbd5e1;border-radius:999px;background:#ffffff;color:#334155;font-weight:600;text-decoration:none;">Dezabonează-mă</a>')
+    && str_contains($subsol, 'href="' . rtrim((string) getenv('APP_URL'), '/') . '/politica-de-confidentialitate"'), $subsol);
+$setare('account_gdpr_url', '/pagina-care-nu-exista');
+$setare('gdpr_operator_cui', '');
+$ns::uitaDateSubsol();
+$subsolTest = $ns::withNewsletterFooter('<html><body><p>x</p></body></html>', '#test', true);
+$lipsa = $ns::dateSubsol()['lipsa'];
+$verifica('H3 fără pagina politicii nu apare linkul (nu un link spre 404), un câmp gol lipsește din subsol și e numit în avertisment; emailul '
+    . 'de test: „Email de test – linkul de dezabonare este inactiv.”, fără buton', !str_contains($subsolTest, 'Politica de confidențialitate')
+    && !str_contains($subsolTest, 'CUI') && str_contains($subsolTest, 'Email de test – linkul de dezabonare este inactiv.')
+    && !str_contains($subsolTest, 'Dezabonează-mă') && $lipsa === ['CUI-ul'], json_encode($lipsa, JSON_UNESCAPED_UNICODE));
+$setare('gdpr_operator_cui', 'RO00000000');
+$setare('account_gdpr_url', '/politica-de-confidentialitate');
+$ns::uitaDateSubsol();
+// Blocurile noi: logo, meniu, cod de reducere, produse alese, în HTML de email (stiluri pe elemente, tabele pentru Outlook).
+$produseDemo = $db->query("SELECT id, name, slug, price, image_url FROM products WHERE deleted_at IS NULL AND is_active = 1
+    AND image_url LIKE '/uploads/%' ORDER BY id LIMIT 3")->fetchAll(PDO::FETCH_ASSOC);
+$baza = rtrim((string) getenv('APP_URL'), '/');
+$blocuriNoi = [
+    ['type' => 'logo', 'background' => '#ffffff', 'width' => 150, 'padding_top' => 20, 'padding_bottom' => 16],
+    ['type' => 'logo', 'image_url' => '/uploads/demo/ceai-de-menta.png', 'width' => 120, 'link_url' => '/magazin', 'align' => 'left'],
+    ['type' => 'menu', 'background' => '#0f766e', 'text_color' => '#ffffff', 'items' => [['label' => 'Ceaiuri', 'url' => '/categorie/ceaiuri'],
+        ['label' => 'Rău', 'url' => 'javascript:alert(1)'], ['label' => '', 'url' => '/gol']]],
+    ['type' => 'coupon', 'code' => 'TOAMNA20', 'content' => 'Folosește <b>codul</b>:', 'note' => 'Până duminică', 'border_color' => 'red;background:url(x)'],
+    ['type' => 'products', 'mod' => 'manual', 'pe_rand' => 2, 'title' => 'Alese de noi', 'produse' => array_map(static fn (array $p): array =>
+        ['id' => (int) $p['id'], 'name' => 'nume vechi', 'image_url' => '', 'url' => '', 'price' => 1], $produseDemo)],
+];
+$htmlNoi = $ns::renderHtmlFromBlocks($blocuriNoi, 'Blocuri noi', false);
+$numeSite = \App\Support\BrandedEmail::brandName(Settings::all($db));
+$okProduse = $produseDemo !== [];
+foreach ($produseDemo as $p) {
+    $okProduse = $okProduse && str_contains($htmlNoi, '>' . htmlspecialchars((string) $p['name'], ENT_QUOTES) . '</div>')
+        && str_contains($htmlNoi, 'href="' . $baza . '/produs/' . rawurlencode((string) $p['slug']) . '"')
+        && str_contains($htmlNoi, 'src="' . $baza . (string) $p['image_url'] . '"');
+}
+$verifica('H4 blocurile noi în email: logo-ul site-ului (fără logo, numele magazinului) cu link spre prima pagină, logo ales cu link, meniul '
+    . '(linkurile complete; javascript: → „#”; o etichetă goală nu apare), codul de reducere (o culoare care nu e culoare nu ajunge în stil), '
+    . 'produsele alese cu datele de acum din catalog (numele, poza, linkul), 2 pe rând, cu tabel pentru Outlook, fără script',
+    str_contains($htmlNoi, 'href="' . $baza . '/" target="_blank"') && str_contains($htmlNoi, '>' . htmlspecialchars($numeSite, ENT_QUOTES) . '</span>')
+    && str_contains($htmlNoi, '<img src="' . $baza . '/uploads/demo/ceai-de-menta.png" alt="' . htmlspecialchars($numeSite, ENT_QUOTES) . '" width="120"')
+    && str_contains($htmlNoi, 'href="' . $baza . '/categorie/ceaiuri"') && str_contains($htmlNoi, '<a href="#" target="_blank"') && !str_contains($htmlNoi, 'javascript:')
+    && !str_contains($htmlNoi, '/gol"') && str_contains($htmlNoi, '>TOAMNA20</div>') && str_contains($htmlNoi, 'Folosește <b>codul</b>:')
+    && !str_contains($htmlNoi, 'url(x)') && str_contains($htmlNoi, 'border:2px dashed #2d7d5f')
+    && $okProduse && !str_contains($htmlNoi, 'nume vechi') && str_contains($htmlNoi, 'max-width:300px')
+    && str_contains($htmlNoi, '<!--[if mso]><table role="presentation"') && !str_contains($htmlNoi, '<script'), mb_substr($htmlNoi, 0, 600));
+// Produsele „Automat”: aceeași alegere ca o interogare scrisă separat.
+\App\Support\ProduseEmail::uita();
+$stariFara = "'cancelled','failed','refunded','returned','pending_payment'";
+$cuPoza = "p.image_url IS NOT NULL AND p.image_url <> '' AND p.image_url NOT LIKE '%.svg'";
+$vanduteAsteptat = array_map('intval', $db->query("SELECT p.id FROM products p INNER JOIN (SELECT oi.product_id, SUM(oi.quantity) q FROM order_items oi
+    INNER JOIN orders o ON o.id = oi.order_id WHERE o.deleted_at IS NULL AND o.status NOT IN ($stariFara) AND o.created_at >= NOW() - INTERVAL 365 DAY
+    GROUP BY oi.product_id) v ON v.product_id = p.id WHERE p.deleted_at IS NULL AND p.is_active = 1 AND COALESCE(p.hidden_in_catalog, 0) = 0 AND $cuPoza
+    ORDER BY v.q DESC, p.id DESC LIMIT 4")->fetchAll(PDO::FETCH_COLUMN));
+$noiAsteptat = array_map('intval', $db->query("SELECT p.id FROM products p WHERE p.deleted_at IS NULL AND p.is_active = 1 AND COALESCE(p.hidden_in_catalog, 0) = 0
+    AND $cuPoza ORDER BY p.created_at DESC, p.id DESC LIMIT 4")->fetchAll(PDO::FETCH_COLUMN));
+$catTest = (int) $unu("SELECT p.category_id FROM products p WHERE p.deleted_at IS NULL AND p.is_active = 1 AND p.category_id IS NOT NULL AND $cuPoza
+    GROUP BY p.category_id ORDER BY COUNT(*) DESC LIMIT 1");
+$dinCat = array_map('intval', $db->query("SELECT p.id FROM products p WHERE p.deleted_at IS NULL AND p.is_active = 1 AND (p.category_id = $catTest
+    OR EXISTS (SELECT 1 FROM product_category_links l WHERE l.product_id = p.id AND l.category_id = $catTest))")->fetchAll(PDO::FETCH_COLUMN));
+$idRedus = (int) $unu("SELECT p.id FROM products p WHERE p.deleted_at IS NULL AND p.is_active = 1 AND $cuPoza ORDER BY p.id DESC LIMIT 1");
+$db->exec('UPDATE products SET sale_price = ROUND(price * 0.5, 2) WHERE id = ' . $idRedus);
+$ids = static fn (array $lista): array => array_map(static fn (array $p): int => (int) $p['id'], $lista);
+$rez = static fn (array $bloc): array => \App\Support\ProduseEmail::rezolva($db, $bloc + ['mod' => 'auto', 'numar' => 4]);
+$rVandute = $ids($rez(['sursa' => 'vandute', 'zile' => 365]));
+$rNoi = $ids($rez(['sursa' => 'noi']));
+$rCat = $ids($rez(['sursa' => 'categorie', 'categorie_id' => $catTest]));
+$rReduse = $rez(['sursa' => 'reduse']);
+$verifica('H5 produsele „Automat”, alese la trimitere: cele mai vândute în N zile (fără comenzile anulate, eșuate, rambursate, returnate, '
+    . 'neplătite), cele noi, din categorie (principală sau suplimentară), reduse acum (cea mai mare reducere întâi, cu prețul vechi); doar '
+    . 'active, cu poză', count($vanduteAsteptat) === 4 && $rVandute === $vanduteAsteptat && $rNoi === $noiAsteptat
+    && $rCat !== [] && array_diff($rCat, $dinCat) === [] && ($rReduse[0]['id'] ?? 0) === $idRedus && ($rReduse[0]['old_price'] ?? null) !== null
+    && (float) $rReduse[0]['price'] < (float) $rReduse[0]['old_price'],
+    json_encode([$rVandute, $vanduteAsteptat, $rNoi, $noiAsteptat, $rCat, $ids($rReduse), $idRedus]));
+// Recomandările pe abonat: nlrec1 are o comandă recentă (o comandă demo mutată pe adresa lui), nlrec2 n-are niciuna.
+$comandaRec = (int) $unu("SELECT o.id FROM orders o INNER JOIN order_items oi ON oi.order_id = o.id INNER JOIN products p ON p.id = oi.product_id
+    WHERE o.deleted_at IS NULL AND o.status = 'completed' AND p.category_id IS NOT NULL GROUP BY o.id ORDER BY o.id LIMIT 1");
+$db->exec("UPDATE orders SET billing_email = 'nlrec1@exemplu.ro', created_at = NOW() WHERE id = " . $comandaRec);
+$cumparate = array_map('intval', $db->query('SELECT product_id FROM order_items WHERE order_id = ' . $comandaRec)->fetchAll(PDO::FETCH_COLUMN));
+$categoriiCumparate = array_map('intval', $db->query('SELECT DISTINCT category_id FROM products WHERE id IN (' . implode(',', $cumparate) . ')')->fetchAll(PDO::FETCH_COLUMN));
+$candidati = array_map('intval', $db->query('SELECT p.id FROM products p WHERE p.deleted_at IS NULL AND p.is_active = 1 AND ' . $cuPoza
+    . ' AND p.id NOT IN (' . implode(',', $cumparate) . ') AND (p.category_id IN (' . implode(',', $categoriiCumparate) . ')'
+    . ' OR EXISTS (SELECT 1 FROM product_category_links l WHERE l.product_id = p.id AND l.category_id IN (' . implode(',', $categoriiCumparate) . ')))')->fetchAll(PDO::FETCH_COLUMN));
+$blocRec = ['type' => 'products', 'mod' => 'auto', 'sursa' => 'recomandate', 'numar' => 2, 'pe_rand' => 2, 'title' => 'Pentru tine'];
+$rec1 = $ids(\App\Support\ProduseEmail::rezolva($db, $blocRec, 'NLrec1@exemplu.ro'));
+$rec2 = $ids(\App\Support\ProduseEmail::rezolva($db, $blocRec, 'nlrec2@exemplu.ro'));
+$vandute90 = $ids($rez(['sursa' => 'vandute', 'zile' => 90, 'numar' => 2]));
+$cuSemn = $ns::renderHtmlFromBlocks([$blocRec], 'Rec', true, true);
+$verifica('H6 „Recomandate fiecărui abonat”: din categoriile ultimei lui comenzi, fără ce a cumpărat; fără comenzi, cele mai vândute; la '
+    . 'trimitere emailul are un semn (un comentariu) înlocuit pentru fiecare destinatar, iar previzualizarea arată cele mai vândute',
+    $candidati !== [] && $rec1 !== [] && in_array($rec1[0], $candidati, true) && array_intersect($rec1, $cumparate) === [] && $rec2 === $vandute90
+    && str_contains($cuSemn, '<!--nl-produse-abonat:') && !str_contains($ns::produseAbonat($cuSemn, 'nlrec1@exemplu.ro'), 'nl-produse-abonat')
+    && !str_contains($ns::renderHtmlFromBlocks([$blocRec], 'Rec'), 'nl-produse-abonat'), json_encode([$rec1, $candidati, $cumparate, $rec2, $vandute90]));
+// Trimiterea adevărată (pe serverul de email capturat): fiecare abonat primește produsele lui și subsolul cu linkul lui.
+$db->exec("INSERT INTO newsletter_lists (name, description, is_default) VALUES ('Lista recomandărilor', 'test', 0)");
+$listaRec = (int) $db->lastInsertId();
+foreach (['nlrec1@exemplu.ro', 'nlrec2@exemplu.ro'] as $adresaRec) {
+    $db->prepare('INSERT INTO newsletter_subscribers (email, name, status) VALUES (?, ?, \'active\')')->execute([$adresaRec, 'Rec']);
+    $db->prepare('INSERT INTO newsletter_list_subscribers (list_id, subscriber_id) VALUES (?, ?)')->execute([$listaRec, (int) $db->lastInsertId()]);
+}
+$db->prepare('INSERT INTO newsletter_campaigns (name, template_type, subscriber_list_id, subject, html_content, blocks_json, status)
+    VALUES (\'Test: produse pe abonat\', \'newsletter\', ?, \'Recomandări\', \'\', ?, \'draft\')')
+    ->execute([$listaRec, json_encode([['type' => 'text', 'content' => 'Salut'], $blocRec])]);
+$cH = (int) $db->lastInsertId();
+$mailInainteH = glob($dosarMail . '/*.eml') ?: [];
+$ns::uitaDateSubsol();
+$rH = $ns::sendCampaignNow($db, $cH, $setari, 100, null, 'admin');
+$corpuri = [];
+$antetDezabonare = [];
+foreach ($mailuriNoi($mailInainteH) as $eml) {
+    if (preg_match('/^To:.*?(nlrec[12]@exemplu\.ro)/mi', $eml, $m) === 1) {
+        $corpuri[$m[1]] = $corpMail($eml);
+        $antetDezabonare[$m[1]] = preg_match('/^List-Unsubscribe:\s*<([^>]+)>/mi', $eml, $mu) === 1 ? $mu[1] : '-';
+    }
+}
+$nume = static fn (int $id): string => htmlspecialchars((string) $unu('SELECT name FROM products WHERE id = ' . $id), ENT_QUOTES);
+$verifica('H7 trimiterea: nlrec1 primește recomandările lui, nlrec2 cele mai vândute; fiecare are subsolul cu firma și linkul personal de '
+    . 'dezabonare (același ca în antetul List-Unsubscribe), niciun semn rămas', ($rH['sent'] ?? 0) === 2 && count($corpuri) === 2
+    && str_contains($corpuri['nlrec1@exemplu.ro'] ?? '', $nume($rec1[0])) && str_contains($corpuri['nlrec2@exemplu.ro'] ?? '', $nume($vandute90[0]))
+    && !str_contains(implode('', $corpuri), 'nl-produse-abonat') && substr_count(implode('', $corpuri), 'Firma Demo SRL') === 2
+    && count(array_filter(array_keys($corpuri), static fn (string $a): bool => str_starts_with($antetDezabonare[$a], $baza . '/newsletter/unsubscribe/')
+        && str_contains($corpuri[$a], 'href="' . htmlspecialchars($antetDezabonare[$a], ENT_QUOTES) . '" style="display:inline-block;padding:8px 14px;'))) === 2,
+    json_encode([$rH, array_map(static fn (string $c): int => strlen($c), $corpuri)]));
+// Textul scris pe pânză se curăță la randare, ca înainte: doar etichetele editorului; linkurile doar spre adrese sigure.
+$rau = "a <b onmouseover=\"alert(1)\">x</b> <img src=x onerror=alert(2)> <script>alert(3)</script> <a href=\"javascript:alert(4)\">j</a> "
+    . "<a href=\" JavaScript:alert(5)\">k</a> <span style=\"color:red;background:url(x)\">s</span> <span style=\"color:#ff0000\">roșu</span> "
+    . "<a href=\"https://exemplu.ro/?a=1&b=2\">bun</a> <a href=\"/magazin\">cale</a> <a href=\"mailto:x@exemplu.ro\">m</a>";
+$curat = '';
+foreach (['text', 'header', 'quote'] as $tipRau) {
+    $curat .= $ns::renderHtmlFromBlocks([['type' => $tipRau, 'content' => $rau]], 'x', false);
+}
+$previzRau = json_decode($cerere('POST', '/admin/emails/builder/preview', $jarAdmin, ['blocks_json' => json_encode([['type' => 'text', 'content' => $rau]]),
+    'subject' => 'x'])['corp'], true);
+$verifica('H8 curățarea textului (scris pe pânză sau în panou): fără atribute on…, <img>, <script>, javascript: (și cu spații sau majuscule), '
+    . 'stiluri străine; rămân <b>, <span style="color:#…">, linkurile http(s) (și cu &), căile din site, mailto; la fel în previzualizarea serverului',
+    !preg_match('/<[^>]+\son\w+=/i', $curat) && !str_contains($curat, '<img src=x') && !str_contains($curat, '<script') && !preg_match('/href="\s*javascript/i', $curat)
+    && !preg_match('/style="[^"]*url\(/', $curat) && str_contains($curat, '<span style="color:#ff0000">roșu</span>') && str_contains($curat, '<a href="https://exemplu.ro/?a=1&amp;b=2">bun</a>')
+    && str_contains($curat, '<a href="/magazin">cale</a>') && str_contains($curat, '<a href="mailto:x@exemplu.ro">m</a>') && substr_count($curat, '<a href="#">') === 10
+    && is_array($previzRau) && ($previzRau['ok'] ?? false) === true && !preg_match('/<[^>]+\son\w+=/i', (string) $previzRau['html'])
+    && !str_contains((string) $previzRau['html'], '<script>alert'), mb_substr($curat, 0, 900));
+// Ruta produselor pentru builder și încărcarea pozelor din builder (aceeași rută ca Galerie, cu jetonul CSRF, doar poze, JSON).
+$cautare = json_decode($cerere('GET', '/admin/emails/builder/produse?q=ceai', $jarAdmin)['corp'], true);
+$anonim = $cerere('GET', '/admin/emails/builder/produse?q=ceai');
+$automat = json_decode($cerere('GET', '/admin/emails/builder/produse?sursa=vandute&zile=365&numar=4', $jarAdmin)['corp'], true);
+$verifica('H9 GET /admin/emails/builder/produse: căutarea („ceai”), alegerea automată ca la trimitere; fără admin, nimic',
+    is_array($cautare) && ($cautare['ok'] ?? false) && ($cautare['items'] ?? []) !== []
+    && array_filter($cautare['items'], static fn (array $p): bool => !str_contains(mb_strtolower($p['name']), 'ceai')) === []
+    && $ids($automat['items'] ?? []) === $vanduteAsteptat && $anonim['cod'] === 302 && !str_contains($anonim['corp'], '"items":[{'),
+    json_encode([$cautare['items'][0] ?? null, $anonim['cod']]));
+$paginaBuilder = $cerere('GET', '/admin/emails/builder?type=campaign&id=' . $cH, $jarAdmin)['corp'];
+// Jetonul AdminCsrf al sesiunii (același pe toate paginile): din datele builderului, altfel din bara comenzilor.
+$jeton = preg_match('/"csrf":"([0-9a-f]{64})"/', $paginaBuilder, $m) === 1 ? $m[1]
+    : (preg_match('/name="_csrf" value="([0-9a-f]{64})"/', $cerere('GET', '/admin/orders', $jarAdmin)['corp'], $m) === 1 ? $m[1] : '');
+$png = $dosarLucru . '/poza-test.png';
+$imgTest = imagecreatetruecolor(40, 20);
+imagefill($imgTest, 0, 0, imagecolorallocate($imgTest, 30, 120, 90));
+imagepng($imgTest, $png);
+$falsa = $dosarLucru . '/nu-e-poza.png';
+file_put_contents($falsa, "<?php echo 'x';");
+$pdf = $dosarLucru . '/document.pdf';
+file_put_contents($pdf, "%PDF-1.4\n%test\n");
+$incarca = static fn (array $date, array $antete) => $cerere('POST', '/admin/gallery/bulk-upload', $jarAdmin, $date, $antete);
+$randuriGalerie = (int) $unu('SELECT COUNT(*) FROM gallery_images');
+$bun = $incarca(['raspuns' => 'json', 'image_files[0]' => new CURLFile($png, 'image/png', 'Poza din builder.png')], ['X-CSRF-Token: ' . $jeton]);
+$bunJ = json_decode($bun['corp'], true);
+$faraJeton = $incarca(['raspuns' => 'json', 'image_files[0]' => new CURLFile($png, 'image/png', 'a.png')], []);
+$jetonGresit = $incarca(['raspuns' => 'json', 'image_files[0]' => new CURLFile($png, 'image/png', 'a.png')], ['X-CSRF-Token: ' . str_repeat('0', 64)]);
+$fals = json_decode($incarca(['raspuns' => 'json', 'image_files[0]' => new CURLFile($falsa, 'image/png', 'nu-e-poza.png')], ['X-CSRF-Token: ' . $jeton])['corp'], true);
+$doc = json_decode($incarca(['raspuns' => 'json', 'image_files[0]' => new CURLFile($pdf, 'application/pdf', 'document.pdf')], ['X-CSRF-Token: ' . $jeton])['corp'], true);
+$anonimUp = $cerere('POST', '/admin/gallery/bulk-upload', null, ['raspuns' => 'json', 'image_files[0]' => new CURLFile($png, 'image/png', 'a.png')]);
+$urlUrcat = (string) ($bunJ['imagini'][0]['url'] ?? '');
+$verifica('H10 încărcarea din builder (POST /admin/gallery/bulk-upload, raspuns=json): poza intră în galerie (fișierul și rândul), cu jetonul '
+    . 'CSRF; fără jeton sau cu altul 403; un fișier care nu e poză (și cu nume .png) sau un PDF refuzat cu mesaj; fără admin 401; nimic altceva scris',
+    $bun['cod'] === 200 && ($bunJ['ok'] ?? false) === true && str_starts_with($urlUrcat, '/uploads/gallery/') && is_file(Paths::uploads(substr($urlUrcat, 9)))
+    && (int) $unu('SELECT COUNT(*) FROM gallery_images WHERE image_url = ' . $db->quote($urlUrcat)) === 1
+    && $faraJeton['cod'] === 403 && $jetonGresit['cod'] === 403 && ($fals['ok'] ?? true) === false && str_contains((string) ($fals['mesaj'] ?? ''), 'doar poze')
+    && ($doc['ok'] ?? true) === false && $anonimUp['cod'] === 401 && (int) $unu('SELECT COUNT(*) FROM gallery_images') === $randuriGalerie + 1,
+    json_encode([$bun['cod'], $bunJ, $faraJeton['cod'], $jetonGresit['cod'], $fals, $doc, $anonimUp['cod']], JSON_UNESCAPED_UNICODE));
+// Datele firmei se completează din Setări site → Datele firmei.
+$salvareFirma = $cerere('POST', '/admin/settings/store', $jarAdmin, ['action' => 'save_date_firma', 'gdpr_operator_nume' => '  Altă  Firma SRL ',
+    'gdpr_operator_sediu' => 'Str. Test 1', 'gdpr_operator_regcom' => 'J40/1/2020', 'gdpr_operator_cui' => 'RO1', 'account_gdpr_url' => '/politica-de-confidentialitate']);
+$paginaSetari = $cerere('GET', '/admin/settings/store?tab=general', $jarAdmin)['corp'];
+$verifica('H12 Setări site → Datele firmei: salvează denumirea (spațiile strânse), sediul, Reg. Com., CUI-ul și pagina politicii (aceleași chei ca '
+    . 'operatorul GDPR); caseta e pe pagină', $salvareFirma['cod'] === 302 && $unu("SELECT value FROM settings WHERE `key` = 'gdpr_operator_nume'") === 'Altă Firma SRL'
+    && $unu("SELECT value FROM settings WHERE `key` = 'gdpr_operator_cui'") === 'RO1' && str_contains($paginaSetari, 'id="setari-firma"')
+    && str_contains($paginaSetari, 'name="gdpr_operator_regcom" maxlength="190" value="J40/1/2020"'), (string) $salvareFirma['cod']);
+$setare('gdpr_operator_nume', 'Firma Demo SRL');
+$ns::uitaDateSubsol();
 
 // =====================================================================
 if (!$faraBrowser) {

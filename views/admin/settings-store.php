@@ -133,6 +133,44 @@ admin_componenta('antet-pagina', [
             </form>
             </div>
         </section>
+        <?php
+        // Datele firmei (26 nov 2026): apar în subsolul fiecărui newsletter (NewsletterService::dateSubsol). Aceleași chei ca
+        // datele operatorului din acordurile GDPR, deci se completează o singură dată pe site.
+        $campuriFirma = [
+            ['gdpr_operator_nume', 'Denumirea firmei', 'ex: Firma Demo SRL'],
+            ['gdpr_operator_sediu', 'Sediul (adresa)', 'Strada, numărul, orașul'],
+            ['gdpr_operator_regcom', 'Nr. Registrul Comerțului', 'ex: J40/123/2020'],
+            ['gdpr_operator_cui', 'CUI', 'ex: RO12345678'],
+            ['account_gdpr_url', 'Pagina politicii de confidențialitate', 'ex: /politica-de-confidentialitate'],
+        ];
+        ?>
+        <section class="adm-sectiune" id="setari-firma" aria-labelledby="setari-firma-titlu">
+            <header class="adm-sectiune__antet">
+                <div>
+                    <h2 class="adm-sectiune__titlu" id="setari-firma-titlu">Datele firmei</h2>
+                    <p class="adm-sectiune__descriere">
+                Apar în subsolul fiecărui newsletter, lângă linkul de dezabonare (cine trimite emailul), și în politica de cookie-uri generată. Pagina politicii de
+                confidențialitate apare ca link doar dacă e o pagină publicată a site-ului sau o adresă https.
+                    </p>
+                </div>
+            </header>
+            <div class="adm-sectiune__corp">
+            <form method="post" action="/admin/settings/store">
+                <input type="hidden" name="action" value="save_date_firma">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 16px;max-width:880px;">
+                <?php foreach ($campuriFirma as [$cheieFirma, $etichetaFirma, $exempluFirma]): ?>
+                    <div class="field">
+                        <label for="<?= $cheieFirma ?>"><?= htmlspecialchars($etichetaFirma, ENT_QUOTES) ?></label>
+                        <input id="<?= $cheieFirma ?>" type="text" name="<?= $cheieFirma ?>" maxlength="190" value="<?= htmlspecialchars((string) ($settings[$cheieFirma] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars($exempluFirma, ENT_QUOTES) ?>">
+                    </div>
+                <?php endforeach; ?>
+                </div>
+                <div style="margin-top:10px;">
+                    <button class="btn" type="submit">Salvează datele firmei</button>
+                </div>
+            </form>
+            </div>
+        </section>
         <section class="adm-sectiune" id="setari-pages" aria-labelledby="setari-pages-titlu">
             <header class="adm-sectiune__antet">
                 <div>

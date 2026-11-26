@@ -13,6 +13,19 @@ final class NewsletterService
     private const UNSUBSCRIBE_FOOTER_START = '<!-- newsletter-unsubscribe-footer:start -->';
     private const UNSUBSCRIBE_FOOTER_END = '<!-- newsletter-unsubscribe-footer:end -->';
 
+    /**
+     * Locul unui bloc „Produse” ales pentru fiecare abonat (recomandările după ultima comandă): la trimitere, emailul se
+     * randează o dată, cu acest semn, iar produseAbonat() îl înlocuiește pentru fiecare destinatar. Semnul e un comentariu
+     * HTML cu setările blocului (base64url din JSON); nu ajunge niciodată într-un email trimis.
+     */
+    private const SEMN_PRODUSE_ABONAT = 'nl-produse-abonat:';
+
+    /** Randarea de acum lasă semnul de mai sus în locul blocurilor „pe abonat” (doar trimiterea campaniei și testul ei). */
+    private static bool $cuSemnePeAbonat = false;
+
+    /** @var array<string, mixed>|null datele subsolului (setările firmei), citite o dată pe proces; uitaDateSubsol() le golește */
+    private static ?array $dateSubsol = null;
+
     /** De câte ori se încearcă, cel mult, o adresă care a fost respinsă. */
     public const MAX_INCERCARI = 3;
 
@@ -711,12 +724,19 @@ final class NewsletterService
     public static function renderHtmlFromBlocks(
         array $blocks,
         string $subject,
-        bool $cuFooterDezabonare = true
+        bool $cuFooterDezabonare = true,
+        bool $semnePeAbonat = false
     ): string {
         $normalized = self::normalizeBlocks($blocks);
         $parts = [];
-        foreach ($normalized as $block) {
-            $parts[] = self::wrapDeviceHide($block, self::renderBlock($block));
+        $inainte = self::$cuSemnePeAbonat;
+        self::$cuSemnePeAbonat = $semnePeAbonat;
+        try {
+            foreach ($normalized as $block) {
+                $parts[] = self::wrapDeviceHide($block, self::renderBlock($block));
+            }
+        } finally {
+            self::$cuSemnePeAbonat = $inainte;
         }
         $subjectSafe = self::esc($subject);
 
@@ -931,7 +951,11 @@ final class NewsletterService
         if ($blocksJsonRaw !== '' && $blocksJsonRaw !== '[]') {
             $parsedBlocks = json_decode($blocksJsonRaw, true);
             if (is_array($parsedBlocks) && count($parsedBlocks) > 0) {
-                $campaign['html_content'] = self::renderHtmlFromBlocks($parsedBlocks, (string) ($campaign['subject'] ?? ''));
+                // Blocurile „Produse” alese pe abonat primesc, în test, recomandările adresei de test.
+                $campaign['html_content'] = self::produseAbonat(
+                    self::renderHtmlFromBlocks($parsedBlocks, (string) ($campaign['subject'] ?? ''), true, true),
+                    $to
+                );
             }
         }
 
@@ -1065,11 +1089,13 @@ final class NewsletterService
                 ];
             }
 
+            // Blocurile „Produse” automate se aleg acum, la trimitere (o dată pe lot); cele alese pe abonat rămân semne,
+            // înlocuite mai jos pentru fiecare destinatar (produseAbonat).
             $blocksJsonRaw = trim((string) ($campaign['blocks_json'] ?? ''));
             if ($blocksJsonRaw !== '' && $blocksJsonRaw !== '[]') {
                 $parsedBlocks = json_decode($blocksJsonRaw, true);
                 if (is_array($parsedBlocks) && count($parsedBlocks) > 0) {
-                    $campaign['html_content'] = self::renderHtmlFromBlocks($parsedBlocks, (string) ($campaign['subject'] ?? ''));
+                    $campaign['html_content'] = self::renderHtmlFromBlocks($parsedBlocks, (string) ($campaign['subject'] ?? ''), true, true);
                 }
             }
 
@@ -1119,7 +1145,10 @@ final class NewsletterService
                 try {
                     $unsubscribeUrl = self::unsubscribeUrlForSubscriber($recipient);
                     $baseUrl = self::appBaseUrl();
-                    $emailHtml = self::withNewsletterFooter((string) ($campaign['html_content'] ?? '<p>Newsletter</p>'), $unsubscribeUrl);
+                    $emailHtml = self::withNewsletterFooter(
+                        self::produseAbonat((string) ($campaign['html_content'] ?? '<p>Newsletter</p>'), $email),
+                        $unsubscribeUrl
+                    );
                     if ($baseUrl !== '') {
                         $emailHtml = self::injectTrackingPixel($emailHtml, $campaignId, $subscriberId, $baseUrl);
                         $emailHtml = self::injectClickTracking($emailHtml, $campaignId, $subscriberId, $baseUrl);
@@ -1652,18 +1681,42 @@ final class NewsletterService
         return is_array($row) ? $row : null;
     }
 
+    /**
+     * Subsolul pus automat în fiecare newsletter (26 nov 2026): cine trimite (denumirea firmei, sediul, nr. de la Registrul
+     * Comerțului, CUI-ul), de ce primește omul emailul, butonul „Dezabonează-mă” (obligatoriu, nu se poate scoate) și, dacă
+     * există, linkul spre politica de confidențialitate. Linkul de dezabonare e cel de până acum (personal, semnat; în
+     * emailul de test și fără adresă, textul „Email de test – linkul de dezabonare este inactiv.”), între aceleași semne.
+     * Datele firmei vin din setări (dateSubsol()); un câmp gol nu apare, iar fără denumire apare numele magazinului.
+     */
     private static function buildUnsubscribeFooterHtml(?string $unsubscribeUrl = null, bool $isTest = false): string
     {
         $safeUrl = trim((string) $unsubscribeUrl);
         if ($safeUrl === '') {
             $safeUrl = '#';
         }
+        $date = self::dateSubsol();
+        $firma = '<b style="color:#334155;">' . self::esc((string) $date['firma']) . '</b>';
+        foreach (['adresa', 'regcom', 'cui'] as $cheie) {
+            if ((string) $date[$cheie] !== '') {
+                $firma .= ' &middot; ' . self::esc(($cheie === 'regcom' ? 'Reg. Com. ' : ($cheie === 'cui' ? 'CUI ' : '')) . (string) $date[$cheie]);
+            }
+        }
+        $deCe = 'Primești acest email pentru că adresa ta e abonată la newsletterul ' . (string) $date['marca']
+            . ((string) $date['site'] !== '' ? ' (' . (string) $date['site'] . ')' : '') . '.';
+        $confidentialitate = (string) $date['confidentialitate'] !== ''
+            ? '<p style="margin:10px 0 0;"><a href="' . self::esc((string) $date['confidentialitate']) . '" style="color:#64748b;text-decoration:underline;">'
+                . 'Politica de confidențialitate</a></p>'
+            : '';
+        $inceput = self::UNSUBSCRIBE_FOOTER_START
+            . '<div style="max-width:680px;margin:16px auto 0;padding:14px 16px;text-align:center;color:#64748b;font-size:12px;line-height:1.55;">'
+            . '<p style="margin:0 0 6px;">' . $firma . '</p>'
+            . '<p style="margin:0 0 8px;">' . self::esc($deCe) . '</p>';
 
         // For test emails or when the URL is non-functional, render plain-text notice
         if ($isTest || $safeUrl === '#') {
-            return self::UNSUBSCRIBE_FOOTER_START
-                . '<div style="max-width:680px;margin:16px auto 0;padding:14px 16px;text-align:center;color:#64748b;font-size:12px;line-height:1.55;">'
+            return $inceput
                 . '<p style="margin:0;">Email de test – linkul de dezabonare este inactiv.</p>'
+                . $confidentialitate
                 . '</div>'
                 . self::UNSUBSCRIBE_FOOTER_END;
         }
@@ -1672,14 +1725,144 @@ final class NewsletterService
         $safeButtonLabel = self::esc('Dezabonează-mă');
         $safeText = self::esc('Dacă nu mai vrei să primești email-uri de la noi, te poți dezabona aici ↓');
 
-        return self::UNSUBSCRIBE_FOOTER_START
-            . '<div style="max-width:680px;margin:16px auto 0;padding:14px 16px;text-align:center;color:#64748b;font-size:12px;line-height:1.55;">'
+        return $inceput
             . '<p style="margin:0 0 8px;">' . $safeText . '</p>'
             . '<a href="' . $safeUrl . '" style="display:inline-block;padding:8px 14px;border:1px solid #cbd5e1;border-radius:999px;background:#ffffff;color:#334155;font-weight:600;text-decoration:none;">'
             . $safeButtonLabel
             . '</a>'
+            . $confidentialitate
             . '</div>'
             . self::UNSUBSCRIBE_FOOTER_END;
+    }
+
+    /**
+     * Subsolul așa cum îl vede un abonat, pentru pânza builderului (linkul de dezabonare e un loc gol, „#dezabonare”).
+     */
+    public static function subsolPrevizualizare(): string
+    {
+        return self::buildUnsubscribeFooterHtml('#dezabonare');
+    }
+
+    /**
+     * Datele subsolului: denumirea firmei, sediul, nr. Reg. Com. și CUI-ul din setările firmei (Setări site → Date firmă;
+     * aceleași chei ca operatorul din acordurile GDPR: `gdpr_operator_nume`, `gdpr_operator_sediu`, `gdpr_operator_regcom`,
+     * `gdpr_operator_cui`), numele magazinului (BrandedEmail::brandName) și gazda site-ului, linkul politicii de
+     * confidențialitate (`account_gdpr_url`: o adresă https, ori o pagină publicată a site-ului; altfel fără link).
+     * `lipsa` = etichetele datelor firmei necompletate (avertismentul din builder). Citite o dată pe proces.
+     *
+     * @param array<string, mixed>|null $setari setările site-ului (null = din baza site-ului)
+     * @return array{firma: string, adresa: string, regcom: string, cui: string, marca: string, site: string, confidentialitate: string, lipsa: list<string>}
+     */
+    public static function dateSubsol(?array $setari = null, ?PDO $db = null): array
+    {
+        if ($setari === null && self::$dateSubsol !== null) {
+            return self::$dateSubsol;
+        }
+        $deMemorat = $setari === null;
+        if ($setari === null || $db === null) {
+            try {
+                $config = require __DIR__ . '/../../config/app.php';
+                $db = $db ?? Database::connection($config['db']);
+            } catch (Throwable) {
+                $db = null;
+            }
+        }
+        if ($setari === null) {
+            try {
+                $setari = $db instanceof PDO ? Settings::all($db) : Settings::all(null);
+            } catch (Throwable) {
+                $setari = Settings::all(null);
+            }
+        }
+        $val = static fn (string $cheie): string => trim((string) preg_replace('/\s+/u', ' ', (string) ($setari[$cheie] ?? '')));
+        $marca = BrandedEmail::brandName($setari);
+        $lipsa = [];
+        foreach (['gdpr_operator_nume' => 'denumirea firmei', 'gdpr_operator_sediu' => 'sediul (adresa)',
+            'gdpr_operator_regcom' => 'nr. Registrul Comerțului', 'gdpr_operator_cui' => 'CUI-ul'] as $cheie => $eticheta) {
+            if ($val($cheie) === '') {
+                $lipsa[] = $eticheta;
+            }
+        }
+        $date = [
+            'firma' => $val('gdpr_operator_nume') !== '' ? $val('gdpr_operator_nume') : $marca,
+            'adresa' => $val('gdpr_operator_sediu'),
+            'regcom' => $val('gdpr_operator_regcom'),
+            'cui' => $val('gdpr_operator_cui'),
+            'marca' => $marca,
+            'site' => Brand::gazda(),
+            'confidentialitate' => self::linkConfidentialitate($val('account_gdpr_url'), $db instanceof PDO ? $db : null),
+            'lipsa' => $lipsa,
+        ];
+        if ($deMemorat) {
+            self::$dateSubsol = $date;
+        }
+        return $date;
+    }
+
+    /** Pentru teste și după salvarea datelor firmei: subsolul citește din nou setările. */
+    public static function uitaDateSubsol(): void
+    {
+        self::$dateSubsol = null;
+        self::$setariSite = null;
+    }
+
+    /**
+     * Linkul politicii de confidențialitate din subsol: o adresă https (sau http) e luată ca atare; o cale din site
+     * („/politica-de-confidentialitate”) doar dacă pagina există și e publicată (altfel ar fi un link spre 404), completată cu
+     * adresa site-ului. Altceva sau nimic: fără link.
+     */
+    private static function linkConfidentialitate(string $adresa, ?PDO $db): string
+    {
+        if ($adresa === '') {
+            return '';
+        }
+        if (preg_match('#^https?://[^\s"<>]+$#i', $adresa) === 1) {
+            return $adresa;
+        }
+        if (preg_match('#^/(?!/)[^\s"<>?\#]*$#', $adresa) !== 1 || !$db instanceof PDO) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare('SELECT 1 FROM pages WHERE slug = :slug AND is_published = 1 AND deleted_at IS NULL LIMIT 1');
+            $stmt->execute(['slug' => trim($adresa, '/')]);
+            if ($stmt->fetchColumn() === false) {
+                return '';
+            }
+        } catch (Throwable) {
+            return '';
+        }
+        $baza = self::appBaseUrl();
+        return $baza !== '' ? $baza . $adresa : $adresa;
+    }
+
+    /**
+     * Înlocuiește semnele blocurilor „Produse” alese pe abonat (SEMN_PRODUSE_ABONAT) cu produsele lui: recomandările după
+     * ultima comandă a adresei `$email` (fără comenzi, cele mai vândute). Fără semne, HTML-ul rămâne exact cum e.
+     */
+    public static function produseAbonat(string $html, string $email): string
+    {
+        if (!str_contains($html, '<!--' . self::SEMN_PRODUSE_ABONAT)) {
+            return $html;
+        }
+        $db = null;
+        try {
+            $config = require __DIR__ . '/../../config/app.php';
+            $db = Database::connection($config['db']);
+        } catch (Throwable) {
+            $db = null;
+        }
+        return (string) preg_replace_callback(
+            '/<!--' . preg_quote(self::SEMN_PRODUSE_ABONAT, '/') . '([A-Za-z0-9_-]+)-->/',
+            static function (array $m) use ($db, $email): string {
+                $json = self::base64UrlDecode($m[1]);
+                $bloc = is_string($json) ? json_decode($json, true) : null;
+                if (!is_array($bloc)) {
+                    return '';
+                }
+                return self::randeazaProduse($bloc, ProduseEmail::rezolva($db instanceof PDO ? $db : null, $bloc, $email));
+            },
+            $html
+        );
     }
 
     public static function injectTrackingPixel(string $html, int $campaignId, int $subscriberId, string $baseUrl): string
@@ -2340,6 +2523,81 @@ final class NewsletterService
             }
             return '<div style="background:' . $bg . ';' . $bgStyle . $hPad . $vPad . 'text-align:' . $align . ';">' . ($icons ?: '') . '</div>';
         }
+        if ($type === 'logo') {
+            // Logo-ul site-ului (tema, altfel setările emailurilor sau ale magazinului) pe fundalul blocului (alb implicit);
+            // fără nicio poză, numele magazinului scris mare. O poză aleasă în bloc are întâietate.
+            $siteLogo = self::logoSite();
+            $poza = trim((string) ($block['image_url'] ?? ''));
+            $poza = self::absoluteMediaUrl($poza !== '' ? $poza : (string) $siteLogo['url']);
+            $latime = min(600, max(40, (int) ($block['width'] ?? 160)));
+            $link = self::normalizeLinkUrl((string) ($block['link_url'] ?? '/'));
+            $alt = trim((string) ($block['alt'] ?? ''));
+            $alt = $alt !== '' ? $alt : (string) $siteLogo['alt'];
+            if ($poza !== '') {
+                $interior = '<img src="' . self::esc($poza) . '" alt="' . self::esc($alt) . '" width="' . $latime . '"'
+                    . ' style="width:' . $latime . 'px;max-width:100%;height:auto;border:none;display:inline-block;vertical-align:top;">';
+            } else {
+                $interior = '<span style="display:inline-block;' . $fontStyle . 'color:' . self::esc(self::culoareSigura((string) ($block['text_color'] ?? ''), '#1f2937'))
+                    . ';font-size:' . self::normalizeFontSize((int) ($block['font_size'] ?? 0), 24) . 'px;font-weight:700;letter-spacing:.06em;line-height:1.2;">'
+                    . self::esc((string) $siteLogo['alt']) . '</span>';
+            }
+            if ($link !== '') {
+                $interior = '<a href="' . self::esc($link) . '" target="_blank" style="text-decoration:none;border:none;">' . $interior . '</a>';
+            }
+            return '<div style="' . self::fundal($block) . $bgStyle . $hPad . $vPad . 'text-align:' . self::esc(self::aliniere((string) ($block['align'] ?? 'center'))) . ';">'
+                . $interior . '</div>';
+        }
+        if ($type === 'menu') {
+            // Meniul magazinului: categoriile (sau orice link) pe un rând, care se rupe singur pe telefon.
+            $culoare = self::esc(self::culoareSigura((string) ($block['text_color'] ?? ''), '#1f2937'));
+            $marime = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 14);
+            $linkuri = '';
+            foreach (is_array($block['items'] ?? null) ? $block['items'] : [] as $item) {
+                $eticheta = trim((string) ($item['label'] ?? ''));
+                if ($eticheta === '') {
+                    continue;
+                }
+                $adresa = self::normalizeLinkUrl((string) ($item['url'] ?? ''));
+                $linkuri .= '<a href="' . self::esc($adresa !== '' ? $adresa : '#') . '" target="_blank" style="display:inline-block;padding:6px 12px;'
+                    . $fontStyle . 'color:' . $culoare . ';font-size:' . $marime . 'px;font-weight:600;line-height:1.4;text-decoration:none;">'
+                    . self::esc($eticheta) . '</a>';
+            }
+            if ($linkuri === '') {
+                return '';
+            }
+            return '<div style="' . self::fundal($block) . $bgStyle . $hPad . $vPad . 'text-align:' . self::esc(self::aliniere((string) ($block['align'] ?? 'center'))) . ';">'
+                . $linkuri . '</div>';
+        }
+        if ($type === 'coupon') {
+            $cod = trim((string) ($block['code'] ?? ''));
+            if ($cod === '') {
+                return '';
+            }
+            $culoareText = self::esc(self::culoareSigura((string) ($block['text_color'] ?? ''), '#1f2937'));
+            $text = trim((string) ($block['content'] ?? ''));
+            $nota = trim((string) ($block['note'] ?? ''));
+            return '<div style="' . self::fundal($block) . $bgStyle . $hPad . $vPad . $fontStyle . 'text-align:' . self::esc(self::aliniere((string) ($block['align'] ?? 'center'))) . ';">'
+                . ($text !== '' ? '<div style="color:' . $culoareText . ';font-size:15px;line-height:1.5;margin-bottom:10px;">' . self::allowRichTags(self::newlineToBr(self::esc($text))) . '</div>' : '')
+                . '<div style="display:inline-block;border:2px dashed ' . self::esc(self::culoareSigura((string) ($block['border_color'] ?? ''), '#2d7d5f')) . ';border-radius:8px;'
+                . 'padding:12px 22px;background:' . self::esc(self::culoareSigura((string) ($block['code_background'] ?? ''), '#f0fdf4')) . ';'
+                . 'color:' . self::esc(self::culoareSigura((string) ($block['code_color'] ?? ''), '#14532d')) . ';font-size:' . self::normalizeFontSize((int) ($block['font_size'] ?? 0), 24) . 'px;'
+                . "font-weight:700;letter-spacing:.12em;font-family:'Courier New',Courier,monospace;\">" . self::esc($cod) . '</div>'
+                . ($nota !== '' ? '<div style="color:' . $culoareText . ';font-size:13px;line-height:1.5;margin-top:10px;">' . self::esc($nota) . '</div>' : '')
+                . '</div>';
+        }
+        if ($type === 'products') {
+            if (self::$cuSemnePeAbonat && ProduseEmail::ePeAbonat($block)) {
+                return '<!--' . self::SEMN_PRODUSE_ABONAT . self::base64UrlEncode((string) json_encode($block, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '-->';
+            }
+            $db = null;
+            try {
+                $config = require __DIR__ . '/../../config/app.php';
+                $db = Database::connection($config['db']);
+            } catch (Throwable) {
+                $db = null;
+            }
+            return self::randeazaProduse($block, ProduseEmail::rezolva($db instanceof PDO ? $db : null, $block, null));
+        }
         if (in_array($type, ['columns_2','columns_2_6040','columns_2_4060','columns_2_7030','columns_2_3070','columns_3'])) {
             // Prefer 'columns' (JS key, always updated) over 'columns_content' (normalized legacy)
             $colsRaw = $block['columns'] ?? null;
@@ -2383,6 +2641,81 @@ final class NewsletterService
         }
 
         return '<div style="height:' . max(4, (int) ($block['height'] ?? 24)) . 'px;' . $hPad . self::fundal($block) . $bgStyle . '"></div>';
+    }
+
+    /**
+     * Blocul „Produse” cu produsele lui: fundalul, marginile, titlul (opțional) și cardurile (ProduseEmail::html). Fără
+     * produse, nimic (blocul nu lasă un loc gol în email).
+     *
+     * @param list<array<string, mixed>> $produse
+     */
+    private static function randeazaProduse(array $block, array $produse): string
+    {
+        $carduri = ProduseEmail::html($block, $produse, self::appBaseUrl());
+        if ($carduri === '') {
+            return '';
+        }
+        $pl = max(0, (int) ($block['padding_left'] ?? 0));
+        $pr = max(0, (int) ($block['padding_right'] ?? 0));
+        $hPad = $pl || $pr ? 'padding-left:' . $pl . 'px;padding-right:' . $pr . 'px;' : '';
+        $vPad = 'padding-top:' . max(0, (int) ($block['padding_top'] ?? 0)) . 'px;padding-bottom:' . max(0, (int) ($block['padding_bottom'] ?? 0)) . 'px;';
+        $fontStack = self::fontStack((string) ($block['font_family'] ?? ''));
+        $titlu = trim((string) ($block['title'] ?? ''));
+        return '<div style="' . self::fundal($block) . $hPad . $vPad . 'text-align:center;">'
+            . ($titlu !== '' ? '<div style="' . ($fontStack !== '' ? 'font-family:' . $fontStack . ';' : '') . 'font-size:18px;font-weight:700;line-height:1.3;color:'
+                . self::esc(self::culoareSigura((string) ($block['title_color'] ?? ''), '#1f2937')) . ';padding:4px 12px 6px;">' . self::esc($titlu) . '</div>' : '')
+            . '<div style="font-size:0;text-align:center;">' . $carduri . '</div>'
+            . '</div>';
+    }
+
+    /**
+     * Logo-ul site-ului pentru blocul „Logo”: din tema pachetului (`tema.json` → `newsletter.logo`, ca șabloanele
+     * magazinului), altfel `email_logo_url`, altfel `store_logo_url`; `alt` = textul temei, altfel numele magazinului.
+     *
+     * @return array{url: string, alt: string}
+     */
+    public static function logoSite(): array
+    {
+        $tema = Tema::newsletter();
+        $setari = self::setariSite();
+        $url = $tema['logo'] ?? null;
+        foreach (['email_logo_url', 'store_logo_url'] as $cheie) {
+            if (($url === null || $url === '') && trim((string) ($setari[$cheie] ?? '')) !== '') {
+                $url = trim((string) $setari[$cheie]);
+            }
+        }
+        $alt = trim((string) ($tema['logo_alt'] ?? ''));
+        return ['url' => (string) ($url ?? ''), 'alt' => $alt !== '' ? $alt : BrandedEmail::brandName($setari)];
+    }
+
+    /** @var array<string, mixed>|null */
+    private static ?array $setariSite = null;
+
+    /** Setările site-ului pentru blocurile care le citesc (logo-ul), o dată pe proces (uitaDateSubsol le golește). */
+    private static function setariSite(): array
+    {
+        if (self::$setariSite !== null) {
+            return self::$setariSite;
+        }
+        try {
+            $config = require __DIR__ . '/../../config/app.php';
+            $db = Database::connection($config['db']);
+            return self::$setariSite = Settings::all($db instanceof PDO ? $db : null);
+        } catch (Throwable) {
+            return self::$setariSite = Settings::all(null);
+        }
+    }
+
+    /** O culoare de pus în stil: `#rgb`…`#rrggbbaa`, altfel cea implicită (o valoare ciudată nu ajunge în emailul nou). */
+    private static function culoareSigura(string $valoare, string $implicit): string
+    {
+        $valoare = trim($valoare);
+        return preg_match('/^#[0-9a-fA-F]{3,8}$/', $valoare) === 1 ? $valoare : $implicit;
+    }
+
+    private static function aliniere(string $valoare): string
+    {
+        return in_array($valoare, ['left', 'center', 'right'], true) ? $valoare : 'center';
     }
 
     /**
@@ -2544,6 +2877,74 @@ final class NewsletterService
             $row['font_size'] = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 16);
             return $row;
         }
+        if ($type === 'logo') {
+            $row['image_url'] = (string) ($block['image_url'] ?? '');
+            $row['alt'] = mb_substr((string) ($block['alt'] ?? ''), 0, 190);
+            $row['width'] = min(600, max(40, (int) ($block['width'] ?? 160)));
+            $row['align'] = self::aliniere((string) ($block['align'] ?? 'center'));
+            $row['link_url'] = (string) ($block['link_url'] ?? '/');
+            $row['font_size'] = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 24);
+            return $row;
+        }
+        if ($type === 'menu') {
+            $items = [];
+            foreach (is_array($block['items'] ?? null) ? $block['items'] : [] as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $items[] = [
+                    'label' => mb_substr(trim((string) ($item['label'] ?? '')), 0, 60),
+                    'url' => mb_substr(trim((string) ($item['url'] ?? '')), 0, 500),
+                    'category_id' => max(0, (int) ($item['category_id'] ?? 0)),
+                ];
+            }
+            $row['items'] = array_slice($items, 0, 10);
+            $row['align'] = self::aliniere((string) ($block['align'] ?? 'center'));
+            $row['font_size'] = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 14);
+            return $row;
+        }
+        if ($type === 'coupon') {
+            $row['code'] = mb_substr(trim((string) ($block['code'] ?? '')), 0, 60);
+            $row['content'] = mb_substr((string) ($block['content'] ?? ''), 0, 500);
+            $row['note'] = mb_substr((string) ($block['note'] ?? ''), 0, 300);
+            $row['align'] = self::aliniere((string) ($block['align'] ?? 'center'));
+            $row['font_size'] = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 24);
+            $row['border_color'] = (string) ($block['border_color'] ?? '#2d7d5f');
+            $row['code_background'] = (string) ($block['code_background'] ?? '#f0fdf4');
+            $row['code_color'] = (string) ($block['code_color'] ?? '#14532d');
+            return $row;
+        }
+        if ($type === 'products') {
+            $s = ProduseEmail::setari($block);
+            $copie = [];
+            foreach (is_array($block['produse'] ?? null) ? $block['produse'] : [] as $p) {
+                if (!is_array($p) || (int) ($p['id'] ?? 0) <= 0) {
+                    continue;
+                }
+                $copie[] = [
+                    'id' => (int) $p['id'],
+                    'name' => mb_substr(trim((string) ($p['name'] ?? '')), 0, 190),
+                    'image_url' => mb_substr(trim((string) ($p['image_url'] ?? '')), 0, 500),
+                    'url' => mb_substr(trim((string) ($p['url'] ?? '')), 0, 500),
+                    'price' => round(max(0.0, (float) ($p['price'] ?? 0)), 2),
+                    'old_price' => isset($p['old_price']) && $p['old_price'] !== null && (float) $p['old_price'] > 0 ? round((float) $p['old_price'], 2) : null,
+                ];
+            }
+            $row += [
+                'mod' => $s['mod'], 'sursa' => $s['sursa'], 'zile' => $s['zile'], 'categorie_id' => $s['categorie_id'],
+                'numar' => $s['numar'], 'pe_rand' => $s['pe_rand'], 'produse' => array_slice($copie, 0, 12),
+                'title' => mb_substr((string) ($block['title'] ?? ''), 0, 190),
+                'title_color' => (string) ($block['title_color'] ?? '#1f2937'),
+                'card_background' => (string) ($block['card_background'] ?? '#ffffff'),
+                'price_color' => (string) ($block['price_color'] ?? '#1f2937'),
+                'button_color' => (string) ($block['button_color'] ?? '#2d7d5f'),
+                'button_text_color' => (string) ($block['button_text_color'] ?? '#ffffff'),
+                'button_label' => mb_substr((string) ($block['button_label'] ?? 'Vezi produsul'), 0, 60),
+                'show_price' => (int) ($block['show_price'] ?? 1) === 1 ? 1 : 0,
+                'show_button' => (int) ($block['show_button'] ?? 1) === 1 ? 1 : 0,
+            ];
+            return $row;
+        }
         $colTypes = ['columns_2','columns_2_6040','columns_2_4060','columns_2_7030','columns_2_3070','columns_3'];
         if ($allowColumns && in_array($type, $colTypes)) {
             $colWidthsMap = ['columns_3'=>[33,34,33],'columns_2_6040'=>[60,40],'columns_2_4060'=>[40,60],'columns_2_7030'=>[70,30],'columns_2_3070'=>[30,70]];
@@ -2631,19 +3032,42 @@ final class NewsletterService
         return $items;
     }
 
+    /**
+     * Din textul scăpat (htmlspecialchars), doar etichetele de formatare ale editorului redevin etichete: b, i, u, s, strike,
+     * del, strong, em, `<a href="…">` și (din 26 nov 2026, culoarea din bara de pe pânză) `<span style="color:#…">`. Tot restul
+     * rămâne text. Adresa unui link: orice adresă fără schemă (o cale, „#”, un {{token}}) sau cu http(s), mailto, tel; una cu
+     * altă schemă (javascript:, data:…) devine „#”. Un link cu „&” în adresă (scris `&amp;` după scăpare) e recunoscut și el
+     * (înainte rămânea text: eticheta se vedea în email).
+     */
     private static function allowRichTags(string $escaped): string
     {
-        // Un-escape only safe formatting tags that the editor inserts
-        // Also allow <a href="..."> — unescape &lt;a href=&quot;...&quot;&gt; pattern
-        $escaped = preg_replace('/&lt;(\/?(b|i|u|s|strike|del|strong|em))&gt;/i', '<$1>', $escaped);
-        $escaped = preg_replace('/&lt;a\s+href=&quot;([^&]*)&quot;&gt;/i', '<a href="$1">', $escaped);
-        $escaped = preg_replace('/&lt;\/a&gt;/i', '</a>', $escaped);
+        $escaped = (string) preg_replace('/&lt;(\/?(b|i|u|s|strike|del|strong|em))&gt;/i', '<$1>', $escaped);
+        $escaped = (string) preg_replace_callback(
+            '/&lt;a\s+href=&quot;((?:[^&<>]|&amp;)*)&quot;&gt;/i',
+            static fn (array $m): string => '<a href="' . (self::adresaLinkSigura(htmlspecialchars_decode($m[1], ENT_QUOTES)) ? $m[1] : '#') . '">',
+            $escaped
+        );
+        $escaped = (string) preg_replace('/&lt;\/a&gt;/i', '</a>', $escaped);
+        $escaped = (string) preg_replace('/&lt;span style=&quot;color:\s*(#[0-9a-fA-F]{3,8})\s*;?&quot;&gt;/', '<span style="color:$1">', $escaped);
+        $escaped = (string) preg_replace('/&lt;\/span&gt;/i', '</span>', $escaped);
         return $escaped;
+    }
+
+    /** O adresă de link din text care nu poate rula cod: fără schemă, sau http(s), mailto, tel. */
+    private static function adresaLinkSigura(string $adresa): bool
+    {
+        $curata = strtolower((string) preg_replace('/[\x00-\x20\x7f]+/', '', $adresa));
+        if (preg_match('/^([a-z][a-z0-9+.\-]*):/', $curata, $m) !== 1) {
+            return true;
+        }
+        return in_array($m[1], ['http', 'https', 'mailto', 'tel'], true);
     }
 
     private static function renderTextWithLinks(string $value): string
     {
-        $pattern = '/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)|((?:https?:\/\/|www\.)[^\s<]+)/iu';
+        // Un link pus deja de editor (`<a href="…">…</a>`, de exemplu din bara de pe pânză) trece ca atare (allowRichTags îl
+        // verifică); înainte, adresa din el era luată drept adresă de transformat în link și emailul ieșea stricat.
+        $pattern = '/(<a\s+href="[^"<>]*">.*?<\/a>)|\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)|((?:https?:\/\/|www\.)[^\s<]+)/ius';
         $matches = [];
         if (!preg_match_all($pattern, $value, $matches, PREG_OFFSET_CAPTURE)) {
             return self::allowRichTags(self::newlineToBr(self::esc($value)));
@@ -2659,9 +3083,14 @@ final class NewsletterService
                 $result .= self::esc(substr($value, $cursor, $offset - $cursor));
             }
 
-            $label = trim((string) ($matches[1][$index][0] ?? ''));
-            $markdownUrl = trim((string) ($matches[2][$index][0] ?? ''));
-            $autoUrl = trim((string) ($matches[3][$index][0] ?? ''));
+            if ((string) ($matches[1][$index][0] ?? '') !== '' && (int) ($matches[1][$index][1] ?? -1) >= 0) {
+                $result .= self::esc($full);
+                $cursor = $offset + strlen($full);
+                continue;
+            }
+            $label = trim((string) ($matches[2][$index][0] ?? ''));
+            $markdownUrl = trim((string) ($matches[3][$index][0] ?? ''));
+            $autoUrl = trim((string) ($matches[4][$index][0] ?? ''));
             $url = $markdownUrl !== '' ? $markdownUrl : $autoUrl;
             $labelText = $label !== '' ? $label : $autoUrl;
             $href = self::normalizeLinkUrl($url);

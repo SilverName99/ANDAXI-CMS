@@ -11591,6 +11591,22 @@ final class AdminController
             header('Location: /admin/settings/store?tab=seo');
             return;
         }
+        if ($action === 'save_date_firma') {
+            // Datele firmei din subsolul newsletterelor (26 nov 2026; NewsletterService::dateSubsol). Aceleași chei ca datele
+            // operatorului din acordurile GDPR; adresa politicii de confidențialitate e cea din setările conturilor.
+            $valori = [];
+            foreach (['gdpr_operator_nume', 'gdpr_operator_sediu', 'gdpr_operator_regcom', 'gdpr_operator_cui', 'account_gdpr_url'] as $cheie) {
+                $valori[$cheie] = mb_substr(trim((string) preg_replace('/\s+/u', ' ', (string) ($_POST[$cheie] ?? ''))), 0, 190);
+            }
+            Settings::save($db, $valori);
+            NewsletterService::uitaDateSubsol();
+            $lipsa = NewsletterService::dateSubsol(null, $db)['lipsa'];
+            Flash::set($lipsa !== [] ? 'error' : 'success', $lipsa !== []
+                ? 'Datele au fost salvate, dar lipsesc încă: ' . implode(', ', $lipsa) . '. Subsolul newsletterelor le lasă deoparte.'
+                : 'Datele firmei au fost salvate.');
+            header('Location: /admin/settings/store?tab=general#setari-firma');
+            return;
+        }
         if ($action === 'save_flux_merchant') {
             // WP-40 (B8): fluxul Google Merchant pornit sau oprit pe acest site.
             if (!\App\Support\AdminCsrf::valid()) {
@@ -14562,11 +14578,99 @@ final class AdminController
         // Șabloanele cu înfățișarea magazinului (logo, culori, produse), pentru
         // newslettere și pentru template-urile lor; nu pentru emailurile de comandă.
         $builder['sabloane'] = $type === 'ecommerce' ? [] : NewsletterSabloane::lista($db, $settings);
+        $builder += $this->dateBuilderEmail($db, $settings, $type);
 
         View::render('admin/emails/builder', [
             'title'   => 'Builder email — ' . ($builder['name'] ?? ''),
             'builder' => $builder,
         ], 'admin/layout');
+    }
+
+    /**
+     * Ce mai are nevoie builderul (varianta „C – clasic, curățat”, 26 nov 2026): logo-ul și culorile site-ului, categoriile
+     * catalogului (blocul Meniu), codurile de reducere active (blocul Cod reducere), subsolul automat așa cum îl vede un abonat
+     * și ce date ale firmei lipsesc din el, jetonul CSRF al încărcărilor în galerie.
+     *
+     * @param array<string, mixed> $settings
+     * @return array<string, mixed>
+     */
+    private function dateBuilderEmail(PDO $db, array $settings, string $type): array
+    {
+        $categorii = [];
+        if (\App\Support\Plugins::vizibil('catalog')) {
+            try {
+                foreach ($db->query('SELECT id, name, slug FROM product_categories ORDER BY name ASC')->fetchAll() ?: [] as $rand) {
+                    $slug = trim((string) ($rand['slug'] ?? ''));
+                    if ($slug !== '') {
+                        $categorii[] = ['id' => (int) $rand['id'], 'name' => (string) $rand['name'], 'url' => '/categorie/' . rawurlencode($slug)];
+                    }
+                }
+            } catch (Throwable) {
+                $categorii = [];
+            }
+        }
+        $cupoane = [];
+        if (\App\Support\Plugins::vizibil('magazin')) {
+            try {
+                $cupoane = array_values(array_map('strval', $db->query('SELECT code FROM coupons WHERE is_active = 1 AND COALESCE(is_unique, 0) = 0
+                    AND (ends_at IS NULL OR ends_at >= NOW()) AND code IS NOT NULL AND code <> "" ORDER BY id DESC LIMIT 50')->fetchAll(PDO::FETCH_COLUMN) ?: []));
+            } catch (Throwable) {
+                $cupoane = [];
+            }
+        }
+        NewsletterService::uitaDateSubsol();
+        return [
+            'logo_site' => NewsletterService::logoSite(),
+            'culori_site' => \App\Support\Tema::newsletter()['culori'],
+            'categorii' => $categorii,
+            'cupoane' => $cupoane,
+            'cu_catalog' => \App\Support\Plugins::vizibil('catalog'),
+            'cu_magazin' => \App\Support\Plugins::vizibil('magazin'),
+            'subsol_html' => $type === 'ecommerce' ? '' : NewsletterService::subsolPrevizualizare(),
+            'date_subsol' => NewsletterService::dateSubsol($settings, $db),
+            'csrf' => \App\Support\AdminCsrf::token(),
+        ];
+    }
+
+    /**
+     * GET /admin/emails/builder/produse (JSON): produsele pentru blocul „Produse” al builderului. `q` = căutarea din „Aleg eu”;
+     * `ids` = produsele alese (cu datele de acum); altfel produsele unui bloc „Automat” (`mod=auto`, `sursa`, `zile`,
+     * `categorie_id`, `numar`), cum s-ar alege acum (la „recomandate”, fără abonat: cele mai vândute). App\Support\ProduseEmail.
+     */
+    public function emailsBuilderProduse(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        if (!$this->guard()) {
+            echo json_encode(['ok' => false, 'items' => []]);
+            return;
+        }
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            echo json_encode(['ok' => false, 'items' => [], 'message' => 'Conexiunea DB nu este disponibilă.']);
+            return;
+        }
+        try {
+            if (isset($_GET['q'])) {
+                $items = \App\Support\ProduseEmail::cauta($db, (string) $_GET['q'], 12);
+            } elseif (isset($_GET['ids'])) {
+                $items = \App\Support\ProduseEmail::dupaId($db, array_map('intval', explode(',', (string) $_GET['ids'])));
+            } else {
+                $items = \App\Support\ProduseEmail::rezolva($db, [
+                    'mod' => 'auto',
+                    'sursa' => (string) ($_GET['sursa'] ?? ''),
+                    'zile' => (int) ($_GET['zile'] ?? 30),
+                    'categorie_id' => (int) ($_GET['categorie_id'] ?? 0),
+                    'numar' => (int) ($_GET['numar'] ?? 3),
+                ]);
+            }
+        } catch (Throwable) {
+            $items = [];
+        }
+        if (!\App\Support\Plugins::vizibil('magazin')) {
+            $items = array_map(static fn (array $p): array => ['price' => 0.0, 'old_price' => null] + $p, $items);
+        }
+        echo json_encode(['ok' => true, 'items' => array_values($items)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public function emailsBuilderSave(): void
@@ -14617,6 +14721,12 @@ final class AdminController
                 $id = (int) $db->lastInsertId();
             }
             AdminActivityLog::log($db, 'email_template_save', ['id' => $id, 'name' => $name]);
+            if ((string) ($_POST['ajax'] ?? '') === '1') {
+                // Salvarea automată a builderului (fetch): răspuns scurt, fără mesaj flash.
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             Flash::set('success', 'Template salvat.');
             header('Location: /admin/emails/builder?type=template&id=' . $id);
             return;
@@ -17777,6 +17887,10 @@ final class AdminController
      */
     public function galleryBulkUpload(): void
     {
+        if ((string) ($_POST['raspuns'] ?? '') === 'json') {
+            $this->galleryBulkUploadJson();
+            return;
+        }
         if (!$this->guard()) {
             return;
         }
@@ -17861,6 +17975,94 @@ final class AdminController
         ]);
 
         header('Location: /admin/gallery');
+    }
+
+    /** Extensiile pozelor pe care le primește încărcarea din builderul de email (o poză de email, nu video sau PDF). */
+    private const EXTENSII_POZE_EMAIL = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+    /**
+     * Încărcarea în galerie din builderul de email (26 nov 2026: „Trage poza aici”, fereastra „Alege imagine”, lipirea din
+     * clipboard): aceeași rută și aceeași verificare a fișierului ca încărcarea din Galerie (handleMediaUpload: extensia,
+     * conținutul, numele), doar poze, cu jetonul AdminCsrf (antetul X-CSRF-Token) și răspuns JSON în loc de redirecționare:
+     * {ok, imagini: [{url, title}], esuate: [nume], mesaj}. Pozele intră în galerie ca orice încărcare (active, fără dosar).
+     */
+    private function galleryBulkUploadJson(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        $raspunde = static function (int $cod, array $date): void {
+            http_response_code($cod);
+            echo json_encode($date, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        };
+        if (!Auth::check()) {
+            $raspunde(401, ['ok' => false, 'mesaj' => 'Sesiunea a expirat. Reîncarcă pagina și încearcă din nou.']);
+            return;
+        }
+        if (!Auth::canAccessPath('/admin/gallery/bulk-upload')) {
+            $raspunde(403, ['ok' => false, 'mesaj' => 'Nu ai voie să încarci în galerie.']);
+            return;
+        }
+        if (!\App\Support\AdminCsrf::valid()) {
+            $raspunde(403, ['ok' => false, 'mesaj' => 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.']);
+            return;
+        }
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            $raspunde(500, ['ok' => false, 'mesaj' => 'Conexiunea DB nu este disponibilă.']);
+            return;
+        }
+        $this->ensureOptionalSchema($db);
+        $fisiere = $this->normalizeUploadedFiles($_FILES['image_files'] ?? null);
+        if ($fisiere === []) {
+            $marime = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+            $limita = $this->octetiDinIni((string) ini_get('post_max_size'));
+            $raspunde(400, ['ok' => false, 'mesaj' => $marime > 0 && $limita > 0 && $marime > $limita
+                ? 'Poza are ' . $this->marimeLizibila($marime) . ', peste limita serverului de ' . $this->marimeLizibila($limita) . '.'
+                : 'Nu a ajuns nicio poză.']);
+            return;
+        }
+        $stmt = $db->prepare(
+            'INSERT INTO gallery_images (title, media_type, image_url, folder_id, alt_text, sort_order, is_active)
+             VALUES (:title, :media_type, :image_url, NULL, :alt_text, 0, 1)'
+        );
+        $imagini = [];
+        $esuate = [];
+        foreach ($fisiere as $index => $fisier) {
+            $numeOriginal = (string) ($fisier['name'] ?? '');
+            $baza = trim((string) pathinfo($numeOriginal, PATHINFO_FILENAME));
+            $titlu = trim((string) (preg_replace('/\s+/', ' ', str_replace(['-', '_'], ' ', $baza)) ?? ''));
+            if ($titlu === '') {
+                $titlu = 'Poză ' . ($index + 1);
+            }
+            $incarcat = $this->handleMediaUpload($fisier, 'gallery', $baza !== '' ? $baza : $titlu, self::EXTENSII_POZE_EMAIL);
+            if (!is_array($incarcat)) {
+                $eroare = (int) ($fisier['error'] ?? UPLOAD_ERR_OK);
+                $esuate[] = ($numeOriginal !== '' ? $numeOriginal : 'fișierul ' . ($index + 1))
+                    . (in_array($eroare, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+                        ? ' (prea mare: serverul primește cel mult ' . $this->marimeLizibila($this->octetiDinIni((string) ini_get('upload_max_filesize'))) . ')'
+                        : ' (doar poze JPG, PNG, WebP sau GIF)');
+                continue;
+            }
+            $stmt->execute([
+                'title' => $titlu,
+                'media_type' => (string) $incarcat['media_type'],
+                'image_url' => (string) $incarcat['url'],
+                'alt_text' => $titlu,
+            ]);
+            $imagini[] = ['url' => (string) $incarcat['url'], 'title' => $titlu];
+        }
+        \App\Support\AdminActivityLog::log($db, 'galerie_incarcare_multipla', [
+            'incarcate' => count($imagini),
+            'esuate' => count($esuate),
+            'folder_id' => null,
+            'sursa' => 'builder_email',
+        ]);
+        $raspunde($imagini !== [] ? 200 : 400, [
+            'ok' => $imagini !== [],
+            'imagini' => $imagini,
+            'esuate' => $esuate,
+            'mesaj' => $imagini !== [] ? '' : ('Poza nu a putut fi încărcată: ' . implode(', ', $esuate) . '.'),
+        ]);
     }
 
     /**

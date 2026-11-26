@@ -293,6 +293,8 @@ return static function (Router $router): void {
     // Lista de verificare dinaintea trimiterii unui newsletter (pasul 3 din builder; JSON, nu trimite nimic).
     $router->post('/admin/emails/builder/verificare', [AdminController::class, 'emailsBuilderVerificare']);
     $router->post('/admin/emails/builder/video-lookup', [AdminController::class, 'emailsVideoLookup']);
+    // Produsele blocului „Produse” al builderului (căutarea din „Aleg eu”, cele alese, cele dintr-un bloc „Automat”; JSON).
+    $router->get('/admin/emails/builder/produse', [AdminController::class, 'emailsBuilderProduse']);
     $router->get('/admin/emails/{section}', [AdminController::class, 'emailsSection']);
     $router->post('/admin/emails', [AdminController::class, 'emailsSave']);
     $router->post('/admin/emails/test', [AdminController::class, 'emailsSendTest']);

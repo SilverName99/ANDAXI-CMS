@@ -1097,9 +1097,41 @@ dispar, iar linkurile spre el se scot din pagini.
   același cadru era ascuns și reîncărcat la fiecare clic: după prima previzualizare, Mobil și din nou Desktop puteau rămâne un chenar
   alb gol până la „Salvează”); doar ultimul clic se pune (un răspuns întârziat nu-l mai acoperă); o eroare (sesiune expirată, refuz)
   se scrie în locul lui „Se generează previzualizarea…”; înălțimea cadrului e a emailului (`body`, trimisă la fiecare schimbare de
-  mărime), și în pasul Verificare, nu mai crește la fiecare clic; Desktop păstrează 960 px și panoul se derulează în lateral pe un
-  ecran îngust. Un titlu (Header) tras într-o coloană a unei secțiuni pornește cu textul închis (`#1f2937`): fără fundal propriu,
-  textul alb implicit era alb pe coloana albă (nevăzut pe pânză și în email); titlurile puse deja așa își păstrează culoarea.
+  mărime), și în pasul Verificare, nu mai crește la fiecare clic. Un titlu (Header) tras într-o coloană a unei secțiuni pornește cu
+  textul închis (`#1f2937`): fără fundal propriu, textul alb implicit era alb pe coloana albă (nevăzut pe pânză și în email); titlurile
+  puse deja așa își păstrează culoarea.
+  **Emailul newsletterului: blocurile noi, produsele, subsolul (26 nov 2026)** (pentru builderul „C – clasic, curățat”):
+  - **Logo** — logo-ul site-ului (tema pachetului `tema.json` → `newsletter.logo`, ca șabloanele; altfel `email_logo_url`, apoi
+    `store_logo_url`; fără niciunul, numele magazinului scris mare) pe fundal alb, cu mărimea (lățimea în px), alinierea, linkul (prima
+    pagină) și o altă poză, opțional. **Meniu** — categoriile catalogului cu adresele lor (`/categorie/<slug>`), alese din listă,
+    reordonate, redenumite, sau linkuri scrise de mână; fundalul și culoarea textului. **Cod reducere** — codul (cupoanele active ale
+    magazinului, fără cele unice, sugerate), textul de deasupra și de dedesubt, culorile.
+  - **Produse** (`App\Support\ProduseEmail`, folosibil și de automatizări): „Aleg eu” (căutare după nume sau cod, cel mult 12
+    produse, reordonate; la trimitere se iau numele, poza și prețul de atunci, un produs oprit sau șters nu mai apare) sau
+    „Automat”, ales la trimitere: cele mai vândute în ultimele N zile (fără comenzile anulate, eșuate, rambursate, returnate,
+    neplătite; prea puține vânzări: completat cu cele noi), produse noi, din categoria X (principală sau suplimentară), reduse acum
+    (prețul redus sau o perioadă de reducere în curs, ca oferta campaniei), „Recomandate fiecărui abonat” (din categoriile ultimei lui
+    comenzi după adresa de email, fără ce a cumpărat; fără comenzi, cele mai vândute în 90 de zile). La „Automat” intră doar produse
+    active, cu poză (nu SVG: Gmail nu le arată), neascunse din catalog. 1, 2 sau 3 pe rând (pe telefon unul sub altul, coloane
+    „spongioase” cu tabel pentru Outlook); prețul doar cu magazinul pe site. „Recomandate” se aleg pentru fiecare destinatar:
+    `sendCampaignNow` randează emailul o dată cu un semn (comentariu HTML) în locul blocului, iar `NewsletterService::produseAbonat`
+    îl înlocuiește pentru fiecare abonat (testul primește recomandările adresei de test; previzualizarea, „Vezi” din Emailuri trimise
+    și emailul salvat, cele mai vândute). Celelalte „Automat” se aleg o dată la fiecare lot al trimiterii. Ruta builderului:
+    `GET /admin/emails/builder/produse` (căutarea, cele alese, alegerea automată de acum; a newsletterului și a magazinului).
+  - **Subsolul automat** (`NewsletterService::withNewsletterFooter`, aceleași semne și același link de dezabonare semnat): denumirea
+    firmei, sediul, nr. Reg. Com., CUI-ul, „Primești acest email pentru că adresa ta e abonată la newsletterul <magazin> (<site>).”,
+    butonul „Dezabonează-mă” (obligatoriu, nu e un bloc, nu se poate scoate) și linkul „Politica de confidențialitate” doar spre o
+    adresă https sau o pagină publicată a site-ului (`account_gdpr_url`). Datele firmei: Setări site → General → **Datele firmei**
+    (aceleași chei ca operatorul acordurilor GDPR: `gdpr_operator_nume`, `gdpr_operator_sediu`, `gdpr_operator_regcom`,
+    `gdpr_operator_cui`); fără denumire apare numele magazinului, un câmp gol lipsește. Cât lipsește ceva, builderul arată sub bară
+    „Subsolul automat al newsletterului nu are încă: …” (cu linkul spre Datele firmei pentru administratorul general). Singura schimbare
+    a emailurilor deja făcute e subsolul: în rest ies octet cu octet ca înainte (testul H1).
+  - **Încărcarea pozelor din builder**: `POST /admin/gallery/bulk-upload` cu `raspuns=json` (aceeași verificare ca Galeria, doar JPG,
+    PNG, WebP, GIF, cu jetonul `AdminCsrf`; răspuns JSON).
+  - Blocurile noi (`logo`, `menu`, `products`, `coupon`) le
+    normalizează și randează `NewsletterService` (un cod mai vechi le-ar face text). Șabloanele magazinului (`NewsletterSabloane`)
+    încep cu blocul Logo, au blocul Produse („Aleg eu”, cu cele mai noi produse) și un Cod reducere, fără blocul de text de subsol
+    (subsolul e automat).
   Tabelele și coloanele noi:
   migrarea `newsletter/0040`. Statisticile unei campanii (20 nov 2026): „N comenzi” din cardul „Venituri atribuite” e o
   ancoră spre panoul „Comenzile atribuite”, exact comenzile numărate în card (aceeași condiție: `orders.nl_campaign_id`, fără

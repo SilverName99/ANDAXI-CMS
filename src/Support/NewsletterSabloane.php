@@ -9,14 +9,16 @@ use Throwable;
 
 /**
  * Șabloanele de pornire pentru un newsletter nou, cu înfățișarea magazinului:
- * logo, culorile site-ului, carduri de produs și un subsol cu datele
- * magazinului. Sunt făcute DOAR din blocurile existente ale
- * builderului (imagine, titlu, text, buton, coloane, separator, spațiu), deci
- * după alegere se modifică exact ca orice alt conținut.
+ * logo, culorile site-ului și carduri de produs. Sunt făcute DOAR din blocurile
+ * builderului (din 26 nov 2026 și blocurile „Logo” și „Produse”), deci după
+ * alegere se modifică exact ca orice alt conținut.
  *
- * Produsele din carduri sunt cele mai noi produse active, cu poză; omul le
- * poate schimba sau șterge. Linkul de dezabonare NU e în șablon: se adaugă
- * automat, personal, la trimitere (NewsletterService::withNewsletterFooter).
+ * Produsele din carduri sunt cele mai noi produse active, cu poză, alese în
+ * blocul „Produse” („Aleg eu”); omul le poate schimba sau trece pe „Automat”.
+ * Subsolul (datele firmei, de ce primește omul emailul, linkul de dezabonare)
+ * NU e în șablon: se adaugă automat, personal, la trimitere
+ * (NewsletterService::withNewsletterFooter); înainte de 26 nov șabloanele aveau
+ * și un bloc de text cu numele magazinului, acum dublura lui.
  *
  * În codul comun (portat din codul vechi `42984c1`, `7123076`): logo-ul, textul
  * lui alternativ și culorile vin din tema pachetului site-ului (`tema/tema.json`
@@ -48,41 +50,39 @@ final class NewsletterSabloane
                 'titlu' => 'Noutăți și produse',
                 'descriere' => 'Logo, un mesaj scurt, 4 produse și buton spre magazin.',
                 'blocks' => array_merge(
-                    self::antet(),
+                    [self::logo()],
                     [
                         self::titlu('Noutățile lunii de la ' . $numeMagazin),
                         self::text("Bună,\n\nÎți scriem câteva rânduri despre ce e nou la noi luna aceasta. Scrie aici mesajul tău: o veste, un sfat, o recomandare.", 'left'),
                     ],
                     $cuCatalog ? self::carduriProduse($produse, 'Produse recomandate') : [],
-                    [self::buton($cuCatalog ? 'Vezi tot magazinul' : 'Vezi site-ul', $spreMagazin)],
-                    self::subsol($numeMagazin)
+                    [self::buton($cuCatalog ? 'Vezi tot magazinul' : 'Vezi site-ul', $spreMagazin)]
                 ),
             ],
             'oferta' => [
                 'titlu' => 'Ofertă / reducere',
                 'descriere' => 'Titlu mare cu reducerea, codul de cupon, produse în ofertă.',
                 'blocks' => array_merge(
-                    self::antet(),
+                    [self::logo()],
                     [
                         self::titlu('-20% la produsele selectate', 34, 26),
                         self::text("Doar până duminică: folosește codul de mai jos în coș și primești reducerea pe loc.", 'center'),
                         [
-                            'type' => 'text', 'content' => '<b>COD: TOAMNA20</b>', 'align' => 'center',
-                            'background' => self::culoare('fundal_deschis'), 'text_color' => self::culoare('inchisa'),
-                            'font_size' => 24, 'font_size_mobile' => 20,
-                            'padding_top' => 14, 'padding_bottom' => 14, 'padding_left' => 24, 'padding_right' => 24,
+                            'type' => 'coupon', 'code' => 'TOAMNA20', 'content' => '', 'note' => '', 'align' => 'center',
+                            'background' => '#ffffff', 'text_color' => self::culoare('text'), 'font_size' => 24,
+                            'border_color' => self::culoare('principala'), 'code_background' => self::culoare('fundal_deschis'),
+                            'code_color' => self::culoare('inchisa'), 'padding_top' => 8, 'padding_bottom' => 18,
                         ],
                     ],
                     $cuCatalog ? self::carduriProduse(array_slice($produse, 0, 2), 'În ofertă') : [],
-                    [self::buton($cuCatalog ? 'Cumpără acum' : 'Vezi site-ul', $spreMagazin)],
-                    self::subsol($numeMagazin)
+                    [self::buton($cuCatalog ? 'Cumpără acum' : 'Vezi site-ul', $spreMagazin)]
                 ),
             ],
             'sfat' => [
                 'titlu' => 'Sfat / articol',
                 'descriere' => 'Un sfat util, un citat și link spre blog sau spre un produs.',
                 'blocks' => array_merge(
-                    self::antet(),
+                    [self::logo()],
                     [
                         self::titlu('Un sfat pentru săptămâna aceasta'),
                         self::text("Scrie aici sfatul tău, în 3–4 rânduri. Oamenii citesc pe telefon: fraze scurte, un singur mesaj.", 'left'),
@@ -93,21 +93,19 @@ final class NewsletterSabloane
                             'padding_top' => 14, 'padding_bottom' => 14, 'padding_left' => 20, 'padding_right' => 24,
                         ],
                         self::buton('Citește tot articolul', '/blog'),
-                    ],
-                    self::subsol($numeMagazin)
+                    ]
                 ),
             ],
             'anunt' => [
                 'titlu' => 'Anunț scurt',
                 'descriere' => 'Logo, titlu, două rânduri și un buton. Pentru vești rapide.',
                 'blocks' => array_merge(
-                    self::antet(),
+                    [self::logo()],
                     [
                         self::titlu('Titlul anunțului'),
                         self::text("Scrie aici anunțul (program de sărbători, produs nou, livrare gratuită).", 'center'),
                         self::buton('Află mai multe', '/'),
-                    ],
-                    self::subsol($numeMagazin)
+                    ]
                 ),
             ],
         ];
@@ -178,7 +176,7 @@ final class NewsletterSabloane
     {
         try {
             $stmt = $db->prepare(
-                'SELECT name, slug, price, sale_price, image_url
+                'SELECT id, name, slug, price, sale_price, image_url
                  FROM products
                  WHERE is_active = 1 AND deleted_at IS NULL AND image_url IS NOT NULL AND image_url <> ""
                  ORDER BY badge_best_seller DESC, id DESC
@@ -203,6 +201,19 @@ final class NewsletterSabloane
             'width' => 40, 'align' => 'center',
             'link_url' => '/', 'background' => '#ffffff', 'padding_top' => 20, 'padding_bottom' => 16,
         ]];
+    }
+
+    /**
+     * Blocul „Logo” al șabloanelor: logo-ul site-ului (din temă sau din setări, ales la randare; fără logo, numele
+     * magazinului) pe fundal alb, cu link spre prima pagină.
+     */
+    private static function logo(): array
+    {
+        return [
+            'type' => 'logo', 'image_url' => '', 'width' => 180, 'align' => 'center', 'link_url' => '/',
+            'background' => '#ffffff', 'text_color' => self::culoare('principala'), 'font_size' => 26,
+            'padding_top' => 20, 'padding_bottom' => 16,
+        ];
     }
 
     private static function titlu(string $text, int $marime = 28, int $marimeMobil = 22): array
@@ -236,86 +247,31 @@ final class NewsletterSabloane
     }
 
     /**
-     * Cardurile de produs: câte două pe rând (pe telefon unul sub altul), fiecare
-     * cu poză (link spre produs), nume, preț și buton.
+     * Blocul „Produse” („Aleg eu”, câte două pe rând, pe telefon unul sub altul) cu produsele date; fără produse cu poză,
+     * blocul „Automat” cu cele mai noi produse (se umple singur când apar produse).
      */
     private static function carduriProduse(array $produse, string $titluSectiune): array
     {
-        if ($produse === []) {
-            // Magazin fără produse cu poză: un rând de exemplu, de completat de mână.
-            $produse = [
-                ['name' => 'Numele produsului', 'slug' => '', 'price' => 0, 'sale_price' => null, 'image_url' => ''],
-                ['name' => 'Numele produsului', 'slug' => '', 'price' => 0, 'sale_price' => null, 'image_url' => ''],
+        $alese = [];
+        foreach ($produse as $produs) {
+            $slug = trim((string) ($produs['slug'] ?? ''));
+            $pret = (float) ($produs['price'] ?? 0);
+            $redus = $produs['sale_price'] !== null && (float) $produs['sale_price'] > 0 && (float) $produs['sale_price'] < $pret
+                ? (float) $produs['sale_price'] : null;
+            $alese[] = [
+                'id' => (int) ($produs['id'] ?? 0), 'name' => (string) ($produs['name'] ?? ''),
+                'image_url' => (string) ($produs['image_url'] ?? ''), 'url' => $slug !== '' ? '/produs/' . rawurlencode($slug) : '',
+                'price' => $redus ?? $pret, 'old_price' => $redus !== null ? $pret : null,
             ];
         }
-        $blocuri = [[
-            'type' => 'text', 'content' => '<b>' . $titluSectiune . '</b>', 'align' => 'center',
-            'background' => '#ffffff', 'text_color' => self::culoare('inchisa'), 'font_size' => 18, 'font_size_mobile' => 17,
-            'padding_top' => 18, 'padding_bottom' => 4,
+        $alese = array_values(array_filter($alese, static fn (array $p): bool => $p['id'] > 0));
+        return [[
+            'type' => 'products', 'mod' => $alese !== [] ? 'manual' : 'auto', 'sursa' => 'noi', 'numar' => max(2, count($alese)),
+            'pe_rand' => 2, 'produse' => $alese, 'title' => $titluSectiune, 'title_color' => self::culoare('inchisa'),
+            'background' => '#ffffff', 'card_background' => '#ffffff', 'text_color' => self::culoare('text'),
+            'price_color' => self::culoare('inchisa'), 'button_color' => self::culoare('principala'), 'button_text_color' => '#ffffff',
+            'button_label' => 'Vezi produsul', 'show_price' => 1, 'show_button' => 1,
+            'padding_top' => 18, 'padding_bottom' => 8, 'padding_left' => 12, 'padding_right' => 12,
         ]];
-        foreach (array_chunk($produse, 2) as $pereche) {
-            $coloane = [];
-            foreach ($pereche as $produs) {
-                $coloane[] = self::card($produs);
-            }
-            while (count($coloane) < 2) {
-                $coloane[] = [];
-            }
-            $blocuri[] = ['type' => 'columns_2', 'background' => '#ffffff', 'padding_left' => 12, 'padding_right' => 12, 'columns' => $coloane];
-        }
-        $blocuri[] = ['type' => 'divider', 'background' => '#ffffff', 'color' => self::culoare('linie'), 'width' => 90, 'thickness' => 1, 'padding_top' => 8, 'padding_bottom' => 0];
-        return $blocuri;
-    }
-
-    private static function card(array $produs): array
-    {
-        $slug = trim((string) ($produs['slug'] ?? ''));
-        $link = $slug !== '' ? '/produs/' . rawurlencode($slug) : '';
-        $pret = (float) ($produs['price'] ?? 0);
-        $redus = $produs['sale_price'] !== null && (float) $produs['sale_price'] > 0 && (float) $produs['sale_price'] < $pret
-            ? (float) $produs['sale_price']
-            : null;
-        // Prețul doar cu magazinul pe site (ca la cardurile produselor similare).
-        $textPret = !Plugins::vizibil('magazin') ? '' : ($pret <= 0
-            ? 'Preț'
-            : ($redus !== null
-                ? '<s>' . self::lei($pret) . '</s> <b>' . self::lei($redus) . '</b>'
-                : '<b>' . self::lei($pret) . '</b>'));
-        return [
-            [
-                'type' => 'image', 'image_url' => (string) ($produs['image_url'] ?? ''), 'alt' => (string) ($produs['name'] ?? ''),
-                'width' => 100, 'align' => 'center', 'link_url' => $link, 'border_radius' => 6, 'background' => '#ffffff',
-            ],
-            [
-                'type' => 'text', 'content' => (string) ($produs['name'] ?? '') . ($textPret !== '' ? "\n" . $textPret : ''), 'align' => 'center',
-                'background' => '#ffffff', 'text_color' => self::culoare('text'), 'font_size' => 15, 'font_size_mobile' => 15,
-                'padding_top' => 8, 'padding_bottom' => 6,
-            ],
-            [
-                'type' => 'button', 'label' => 'Vezi produsul', 'url' => $link, 'align' => 'center',
-                'background' => '#ffffff', 'button_color' => self::culoare('principala'), 'text_color' => '#ffffff',
-                'border_radius' => 6, 'font_size' => 14, 'btn_pad_v' => 9, 'btn_pad_h' => 16, 'padding_bottom' => 10,
-            ],
-        ];
-    }
-
-    private static function subsol(string $numeMagazin): array
-    {
-        $site = preg_replace('#^https?://#', '', NewsletterService::appBaseUrl()) ?: Brand::gazda();
-        return [
-            ['type' => 'spacer', 'height' => 12, 'background' => '#ffffff'],
-            [
-                'type' => 'text',
-                'content' => '<b>' . $numeMagazin . '</b>' . "\n" . 'Primești acest email pentru că te-ai abonat la noutățile noastre pe ' . $site . '.',
-                'align' => 'center', 'background' => self::culoare('fundal_deschis'), 'text_color' => self::culoare('text_secundar'),
-                'font_size' => 13, 'font_size_mobile' => 13,
-                'padding_top' => 18, 'padding_bottom' => 18, 'padding_left' => 24, 'padding_right' => 24,
-            ],
-        ];
-    }
-
-    private static function lei(float $suma): string
-    {
-        return number_format($suma, 2, ',', '.') . ' lei';
     }
 }

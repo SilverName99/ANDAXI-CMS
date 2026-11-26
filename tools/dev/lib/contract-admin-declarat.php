@@ -456,4 +456,13 @@ return [
         'politica-generare' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:hidden action = genereaza_politica_cookie$',
             'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'acțiunea butonului „Generează pagina Politica de cookie-uri”'],
     ],
+    // Builderul newsletterului, varianta „C – clasic, curățat” (26 nov 2026; docs/PLUGINURI.md, „Newsletter”): caseta „Datele
+    // firmei” din Setări site → General (subsolul newsletterelor). Ce trimite verifică tools/dev/test-newsletter.php (H12).
+    'builder-c' => [
+        'date-firma' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/store$', 'rol' => 'adm',
+            'rand' => '^camp (POST \\/admin\\/settings\\/store input\\:hidden action \\= save_date_firma|POST \\/admin\\/settings\\/store input\\:text account_gdpr_url|POST \\/admin\\/'
+            . 'settings\\/store input\\:text gdpr_operator_cui|POST \\/admin\\/settings\\/store input\\:text gdpr_operator_nume|POST \\/admin\\/settings\\/store input\\:text g'
+            . 'dpr_operator_regcom|POST \\/admin\\/settings\\/store input\\:text gdpr_operator_sediu) ?$',
+            'motiv' => 'caseta „Datele firmei” din Setări site → General (subsolul newsletterelor; aceleași chei ca operatorul GDPR)'],
+    ],
 ];

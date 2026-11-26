@@ -730,6 +730,10 @@ return [
         'POST /admin/emails/builder/video-lookup' => [
             [[], ['newsletter', 'magazin']],
         ],
+        // 26 nov 2026: produsele blocului „Produse” (newslettere și emailuri ecommerce), ca preview-ul.
+        'GET /admin/emails/builder/produse' => [
+            [[], ['newsletter', 'magazin']],
+        ],
         // Jurnalul anti-robot al formularelor: înregistrarea e a conturilor, checkout-ul al magazinului.
         'GET /admin/users/security' => [
             [[], ['magazin', 'conturi_clienti']],
