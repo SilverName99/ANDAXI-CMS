@@ -1244,7 +1244,7 @@ poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum)
     `plata_neconfirmata`), una anulată iese (`comanda_anulata`);
   - **Comanda e livrată / finalizată** — statusul trece în „Finalizată” (`completed`: din Comenzi, la generarea AWB-ului, din
     ERP), cu produse / categorii și „Doar la prima comandă a clientului” (nicio comandă neanulată mai veche pe aceeași adresă);
-  - **Coș abandonat** — coșul (`cart_abandonments`) unui abonat activ, nevăzut de N minute / ore, cel mult 3 zile vechime, fără o
+  - **Coș abandonat** — coșul (`cart_abandonments`) unui abonat activ, nevăzut de N minute / ore (cel mult 168), dar trecut de ele de cel mult 3 zile, fără o
     comandă a aceleiași adrese de la începutul coșului (sau din ultimele 7 zile, plasa emailului clasic); dacă omul cumpără între
     timp, fluxul se oprește înaintea următorului email (`a_cumparat`);
   - **Client inactiv de X zile** — abonații a căror ultimă comandă neanulată a trecut de X zile, doar cei care au trecut pragul în

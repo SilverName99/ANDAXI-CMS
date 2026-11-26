@@ -506,6 +506,21 @@ $verifica('cu reintrarea: coșul văzut din nou după primul email nu mai intră
 $verifica('cu reintrarea: coșurile luate deja de altă automatizare (marcate) nu intră și aici', $unu(
     "SELECT COUNT(*) FROM automatizari_rulari WHERE automatizare_id = :a AND email IN ('cos.abonat@exemplu.ro', 'cos.cumpara@exemplu.ro')", ['a' => $aCosReintrare]) === '0');
 Flux::schimbaStarea($db, $aCosReintrare, 'oprita');
+// O întârziere mai lungă de 3 zile (editorul dă până la 168 de ore): coșul intră după ea (fereastra de 3 zile e după prag).
+$aCosLung = $automatizare('cos_abandonat', ['dupa' => 96, 'unitate' => 'ore'], [['cheie' => 'p1', 'tip' => 'email', 'setari' => ['email' => 'e1']]],
+    ['e1' => ['Coșul tău (după 4 zile)', 'Text']]);
+$abonat('cos.lung@exemplu.ro');
+$db->prepare("INSERT INTO cart_abandonments (session_id, email, customer_name, cart_snapshot, last_seen_at, created_at)
+    VALUES ('sess-test-auto-8', 'cos.lung@exemplu.ro', 'Paul Exemplu', 'Ceai', :v, :c)")
+    ->execute(['v' => Ceas::sql(Ceas::acum()->modify('-97 hours')), 'c' => Ceas::sql(Ceas::acum()->modify('-98 hours'))]);
+$db->prepare("INSERT INTO cart_abandonments (session_id, email, customer_name, cart_snapshot, last_seen_at, created_at)
+    VALUES ('sess-test-auto-9', 'cos.lung.vechi@exemplu.ro', 'Petru Exemplu', 'Ceai', :v, :c)")
+    ->execute(['v' => Ceas::sql(Ceas::acum()->modify('-8 days')), 'c' => Ceas::sql(Ceas::acum()->modify('-8 days'))]);
+$abonat('cos.lung.vechi@exemplu.ro');
+$tura();
+$verifica('coș abandonat „după 96 de ore”: coșul nevăzut de 97 de ore intră (cel de 8 zile nu: peste prag + 3 zile)',
+    array_column($rulari($aCosLung), 'email') === ['cos.lung@exemplu.ro'], json_encode(array_column($rulari($aCosLung), 'email')));
+Flux::schimbaStarea($db, $aCosLung, 'oprita');
 $verifica('automatizarea de coș oprită: emailul clasic își ia înapoi coșurile abonaților (cele nemarcate)', !Declansatoare::preiaCosurileAbonatilor($db));
 
 // B5. Client inactiv de X zile.

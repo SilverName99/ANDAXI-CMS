@@ -24,7 +24,10 @@ final class Declansatoare
     /** Statusurile unei comenzi care nu contează (anulată, eșuată, rambursată, returnată). */
     public const COMENZI_NULE = ['cancelled', 'failed', 'refunded', 'returned'];
 
-    /** Coșurile mai vechi de atât nu mai intră (la pornirea unui flux, coșurile de acum o lună nu primesc nimic). */
+    /**
+     * Coșurile care au trecut de întârzierea declanșatorului de mai mult de atât nu mai intră (la pornirea unui flux, coșurile
+     * de acum o lună nu primesc nimic).
+     */
     public const ZILE_COS_MAXIM = 3;
 
     /** Fereastra „a trecut de X zile fără comandă”: doar cine a trecut pragul în ultimele 30 de zile (nu toți clienții vechi deodată). */
@@ -144,8 +147,8 @@ final class Declansatoare
     }
 
     /**
-     * Coșurile abandonate (cron): coșuri cu adresa unui abonat activ, nefinalizate, nevăzute de `dupa` minute (dar nu mai
-     * vechi de 3 zile), fără o comandă a aceleiași adrese de la începutul coșului (sau din ultimele 7 zile: aceeași plasă ca
+     * Coșurile abandonate (cron): coșuri cu adresa unui abonat activ, nefinalizate, nevăzute de `dupa` minute (dar de cel
+     * mult `dupa` minute + 3 zile), fără o comandă a aceleiași adrese de la începutul coșului (sau din ultimele 7 zile: aceeași plasă ca
      * emailul clasic, EmailAutomation::sendDueAbandonedCartEmails) și fără o amintire deja trimisă pentru coș
      * (`abandoned_email_sent_at`: de emailul clasic, de exemplu înainte ca automatizarea să pornească sau cât a fost oprită, ori
      * de o automatizare, care îl marchează la intrare). Un coș intră deci o singură dată, oricâte automatizări „Coș abandonat”
@@ -187,7 +190,8 @@ final class Declansatoare
             );
             $stmt->execute([
                 'prag' => Ceas::sql($acum->modify('-' . $minute . ' minutes')),
-                'cel_mai_vechi' => Ceas::sql($acum->modify('-' . self::ZILE_COS_MAXIM . ' days')),
+                // Fereastra de 3 zile e după prag: cu o întârziere de 4–7 zile (editorul dă până la 168 de ore) coșul tot intră.
+                'cel_mai_vechi' => Ceas::sql($acum->modify('-' . $minute . ' minutes')->modify('-' . self::ZILE_COS_MAXIM . ' days')),
                 'sapte_zile' => Ceas::sql($acum->modify('-7 days')),
                 'a' => (int) $a['id'],
             ]);
