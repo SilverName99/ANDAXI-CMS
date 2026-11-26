@@ -1398,8 +1398,14 @@ if (count($taburiEmail) > 1) {
         .nl-stats-chart-wrap { overflow-x: auto; }
         .nl-stats-empty { text-align: center; padding: 32px 16px; color: var(--ax-text-3); font-size: 14px; }
         .nl-stats-search { width: 100%; max-width: 340px; padding: 7px 12px; border: 1px solid var(--ax-linie); border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
-        .nl-stats-detalii-btn { display: inline-block; padding: 4px 12px; background: var(--ax-accent); color: #fff; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 600; }
-        .nl-stats-detalii-btn:hover { background: #15654e; }
+        /* Regula generală a linkurilor din admin (culoarea accentului) bătea „color: #fff” al butonului:
+           textul ieșea albastru pe albastru. Cu „a.” și :visited/:hover/:focus, butonul își păstrează textul alb. */
+        .nl-stats-wrap a.nl-stats-detalii-btn,
+        .nl-stats-wrap a.nl-stats-detalii-btn:visited,
+        .nl-stats-wrap a.nl-stats-detalii-btn:hover,
+        .nl-stats-wrap a.nl-stats-detalii-btn:focus { display: inline-block; padding: 6px 14px; background: var(--ax-accent); color: #fff; border-radius: 6px; font-size: 12.5px; line-height: 1.2; text-decoration: none; font-weight: 600; }
+        .nl-stats-wrap a.nl-stats-detalii-btn:hover { filter: brightness(.9); }
+        .nl-stats-wrap a.nl-stats-detalii-btn:focus-visible { outline: 2px solid var(--ax-accent); outline-offset: 2px; }
         .nl-stats-nota { margin: -12px 0 20px; color: var(--ax-text-3); font-size: 12.5px; line-height: 1.55; }
         </style>
         <div class="nl-stats-wrap">
