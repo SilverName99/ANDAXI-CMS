@@ -1214,6 +1214,13 @@ foreach (['pornit', 'oprit'] as $runda) {
     $verifica($e . 'SEC-E-02-R1: peste limită, POST pe linkul urmărit de dezabonare: un jeton greșit → 200 gol (nu 404: nicio diferență față de cel bun), '
         . 'nimic schimbat; jetonul bun → același 200 gol, dezabonat', $t1['cod'] === 200 && $t1['corp'] === '' && $stareT1 === 'active'
         && $faraData($t1) === $faraData($t2) && $stareT2 === 'unsubscribed', json_encode([$faraData($t1), $stareT1, $faraData($t2), $stareT2]));
+    // SEC-E-02-R2: peste limită, un al doilea POST urmărit cu jetonul bun (abonatul e deja dezabonat) nu mai scrie niciun clic: o ghicire
+    // bună scrie cel mult o dată, dezabonarea însăși, deci timpul nu mai arată, cerere după cerere, că jetonul e bun.
+    $cliciInainte = (int) $db->query('SELECT COUNT(*) FROM newsletter_campaign_clicks')->fetchColumn();
+    $t3 = $cerere($router('track', 'click', ['13', 'a1b2c3', '41', '1b2c3d4e5f60', false]), 'POST', ['List-Unsubscribe' => 'One-Click']);
+    $cliciDupa = (int) $db->query('SELECT COUNT(*) FROM newsletter_campaign_clicks')->fetchColumn();
+    $verifica($e . 'SEC-E-02-R2: peste limită, al doilea POST urmărit cu jetonul bun → același 200 gol, niciun clic nou',
+        $faraData($t3) === $faraData($t2) && $cliciDupa === $cliciInainte, json_encode([$faraData($t3), $cliciInainte, $cliciDupa]));
     // Și peste bugetul routerului (60 pe minut de pe rețea), tot cu limita jetonului scurt atinsă.
     $activ13();
     $golesteLimita = false;

@@ -201,10 +201,13 @@ final class Urmarire
     {
         $v = self::valid($db, $d, true);
         if ($v !== null && empty($d['preview'])) {
-            if ((int) ($v['abonat']['urmarire_refuzata'] ?? 0) === 0) {
-                self::noteazaClic($db, $v['coada'], $v['abonat'], $link);
-            }
+            // Clicul se notează doar pe cererea care chiar dezabonează. Altfel, peste limita jetoanelor scurte, fiecare ghicire
+            // bună ar scrie un rând (iar una greșită nimic): o diferență de timp repetabilă. Așa, o ghicire bună scrie cel mult o
+            // dată, dezabonarea însăși (SEC-E-02-R2).
             if ((string) $v['abonat']['status'] !== 'unsubscribed') {
+                if ((int) ($v['abonat']['urmarire_refuzata'] ?? 0) === 0) {
+                    self::noteazaClic($db, $v['coada'], $v['abonat'], $link);
+                }
                 Abonati::dezaboneaza($db, $v['abonat'], 'newsletter', 'one_click', $v['coada']);
             }
         }
