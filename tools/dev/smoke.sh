@@ -723,6 +723,24 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Bannerul de cookie-uri pe categorii (26 nov 2026): tools/dev/test-banner-cookie.php, pe licența „toate”, pe serverul pornit aici:
+# acordul pe categorii, valorile vechi, categoria nouă, cache-ul pe acord, adminul și politica generată; Chromium doar cu capturi
+# (nicio cerere spre terți înainte de acord, butoanele, tastatura, retragerea). Pune la loc setările, paginile și articolul lui.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Bannerul de cookie-uri (tools/dev/test-banner-cookie.php)"
+    optiuni_cookie=()
+    [ "$cu_capturi" = 0 ] && optiuni_cookie+=("--fara-browser")
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-banner-cookie.php" "${optiuni_cookie[@]}" > "$TMP/test-banner-cookie.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-banner-cookie.log")"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-banner-cookie.php:"
+        grep -E 'EȘEC|EROARE|Rezumat' "$TMP/test-banner-cookie.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Pluginul campanii (5 nov 2026, pentru Biovitality): tools/dev/test-campanii.php, pe licența „toate”, pe serverul pornit aici:
 # regulile (întoarcerea, roboții, adresele neoprite), adminul, prima intrare, insigna, bannerul, fereastra, pluginul oprit, Chromium
 # pe desktop și pe telefon. Pune la loc toată baza (CHECKSUM TABLE).

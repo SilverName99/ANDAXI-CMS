@@ -445,4 +445,15 @@ return [
             . '|checkbox requires_active_account = )$', 'licenta' => 'toate', 'rol' => ['adm', 'blog', 'emailuri'],
             'motiv' => 'bifa „Doar pentru conturi active” din editorul articolului (agățarea editor.articol.campuri; fără value, ca în vertij)'],
     ],
+    // Bannerul de cookie-uri pe categorii (26 nov 2026; docs/PLUGINURI.md, „Bannerul de cookie-uri”): în Setări → Cookie și popup,
+    // culoarea celor două butoane mari (cu bifa „culoarea principală a site-ului”) și formularul „Generează pagina Politica de
+    // cookie-uri” (aceeași adresă ca restul paginii). Ce trimit le verifică tools/dev/test-banner-cookie.php (B15, B16, B19).
+    'cookie-banner-v2' => [
+        'culoare-butoane' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:color cookie_banner_culoare$',
+            'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'culoarea butoanelor „Accept toate” și „Refuz” (cookie_banner_culoare)'],
+        'culoare-tema' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:checkbox cookie_banner_culoare_tema = 1$',
+            'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'bifa „Culoarea principală a site-ului” (golește cookie_banner_culoare)'],
+        'politica-generare' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:hidden action = genereaza_politica_cookie$',
+            'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'acțiunea butonului „Generează pagina Politica de cookie-uri”'],
+    ],
 ];

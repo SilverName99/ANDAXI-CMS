@@ -55,7 +55,7 @@ $paginiPublice = ['/', '/magazin', '/produs/ceai-de-menta', '/categorie/ceaiuri'
 // Un borcan de cookie-uri cu acordul vizitatorului pentru urmărire (bannerul de cookie-uri: „Accept toate”).
 $jarCuAcord = static function (string $nume) use ($jarNou): string {
     $jar = $jarNou($nume);
-    file_put_contents($jar, "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t" . \App\Support\CookieConsent::TOATE . "\n");
+    file_put_contents($jar, "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t" . \App\Support\CookieConsent::valoareToate() . "\n");
     return $jar;
 };
 

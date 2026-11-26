@@ -607,7 +607,8 @@ email/newsletter sau cookie-ul newsletterului), `campanie` (alt utm_source), `go
 id, nicio adresă), rescris de fiecare vizită venită de undeva: la comandă câștigă el (ultima sursă care nu e „direct”); fără
 el, reclama Google (`bv_gclid` cu un id de clic; `utm_source=google` fără mediu plătit e o campanie, nu o reclamă) și
 newsletterul. **Revizuirea WP-39/40 (GDPR):** `ax_sursa` și `bv_gclid` se scriu doar cu acordul vizitatorului pentru
-urmărire (`CookieConsent::permiteUrmarire`); fără el comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
+statistici (`CookieConsent::permite('statistici')`, bannerul pe categorii din 26 noiembrie 2026, [PLUGINURI.md](PLUGINURI.md),
+„Bannerul de cookie-uri”; la fel `nl_cid` al newsletterului); fără el comanda are sursa `necunoscuta`, iar cele rămase se șterg. Doar pe un site cu magazin.
 Comutatorul `sursa_comenzii` (implicit pornit; înghețat la „0” pe Bioscem și Biovitality, oprit până după trecere: decizia
 proprietarului din 5 noiembrie 2026; `comutatoare-seo.php --porneste` fără
 listă nu-l pornește, doar `--porneste=sursa_comenzii`). Din 9 noiembrie 2026 îl pornește și administratorul general din pagina raportului: butonul „Pornește notarea sursei pe comenzile noi” (`POST /admin/orders/sursa-comenzilor/comutator`, cu jetonul formularului; „Oprește notarea sursei” îl oprește la loc). Coloana `ad_source` rămâne neschimbată.

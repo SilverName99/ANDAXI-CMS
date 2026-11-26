@@ -42,24 +42,27 @@ if (!\App\Support\LinkuriCategorii::paginaCurentaExclusa()) {
     }
     $designHeader = \App\Support\LogoAntet::webp($designHeader);
 }
-// Fără consimțământ, niciun script de analiză/marketing nu ajunge în pagină; pe site-ul de verificare
+// Fără acordul pentru categoria lui (CookieConsent, ServiciiCookie), niciun script de statistici sau de marketing nu ajunge în
+// pagină: Analytics, Tag Manager și Clarity cer „Statistici”, Google Ads cere „Marketing”. Pe site-ul de verificare
 // niciodată (docs/VERIFICARE.md), orice ar scrie în setări. Nici cu un admin în sesiune și nici pe adresele adminului
 // (N3, docs/SECURITATE.md): GTM, Analytics, Ads, Clarity și chatul ar rula cu sesiunea adminului. Pentru vizitatori, la fel.
-$acceptaUrmarire = \App\Support\CookieConsent::permiteUrmarire() && \App\Support\EticheteTerte::permise();
+$tertePermise = \App\Support\EticheteTerte::permise();
+$acordStatistici = $tertePermise && \App\Support\CookieConsent::permite('statistici');
+$acordMarketing = $tertePermise && \App\Support\CookieConsent::permite('marketing');
 $chatActiv = \App\Support\ChatLive::activ($designSettings);
 $chatUrcaCosul = \App\Support\ChatLive::suprapunePestecos($designSettings);
-$clarityEnabled = $acceptaUrmarire && (string) ($designSettings['microsoft_clarity_enabled'] ?? '0') === '1';
+$clarityEnabled = $acordStatistici && (string) ($designSettings['microsoft_clarity_enabled'] ?? '0') === '1';
 $clarityProjectId = preg_replace('/[^a-zA-Z0-9]/', '', trim((string) ($designSettings['microsoft_clarity_project_id'] ?? ''))) ?? '';
 $googleSiteVerification = \App\Support\Verificare::eticheteTertePermise()
     ? (preg_replace('/[^A-Za-z0-9_\-]/', '', trim((string) ($designSettings['google_site_verification'] ?? ''))) ?? '') : '';
-$gaEnabled = $acceptaUrmarire && (string) ($designSettings['google_analytics_enabled'] ?? '0') === '1';
+$gaEnabled = $acordStatistici && (string) ($designSettings['google_analytics_enabled'] ?? '0') === '1';
 $gaId = preg_replace('/[^A-Za-z0-9\-]/', '', trim((string) ($designSettings['google_analytics_id'] ?? ''))) ?? '';
-$gtmEnabled = $acceptaUrmarire && (string) ($designSettings['google_tag_manager_enabled'] ?? '0') === '1';
+$gtmEnabled = $acordStatistici && (string) ($designSettings['google_tag_manager_enabled'] ?? '0') === '1';
 $gtmId = preg_replace('/[^A-Za-z0-9\-]/', '', trim((string) ($designSettings['google_tag_manager_id'] ?? ''))) ?? '';
 $gtmHeadCode = trim((string) ($designSettings['google_tag_manager_head_code'] ?? ''));
 $gtmBodyCode = trim((string) ($designSettings['google_tag_manager_body_code'] ?? ''));
 $gaCode = trim((string) ($designSettings['google_analytics_code'] ?? ''));
-$adsEnabled = $acceptaUrmarire && (string) ($designSettings['google_ads_enabled'] ?? '0') === '1';
+$adsEnabled = $acordMarketing && (string) ($designSettings['google_ads_enabled'] ?? '0') === '1';
 $adsConversionId = preg_replace('/[^A-Za-z0-9\-]/', '', trim((string) ($designSettings['google_ads_conversion_id'] ?? ''))) ?? '';
 $headerCartCount = \App\Support\Cart::countItems();
 $headerCustomerLoggedIn = is_array($currentCustomer);
@@ -327,6 +330,25 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
     <?php if ($googleSiteVerification !== ''): ?>
     <meta name="google-site-verification" content="<?= htmlspecialchars($googleSiteVerification, ENT_QUOTES) ?>">
     <?php endif; ?>
+    <?php
+    // Paza cookie-ului (doar într-o pagină cu servicii acceptate): pagina a fost făcută pentru valoarea de acum a cookie-ului
+    // acordului; una păstrată de browser de dinainte de o retragere se oprește și se reîncarcă, înainte de orice script.
+    // Apoi modul de consimțământ Google v2 (cu Tag Manager sau gtag): implicit totul refuzat, apoi ce a acceptat vizitatorul.
+    $alegereCookiePagina = \App\Support\CookieConsent::alegere();
+    $etichetaGoogle = ($gtmEnabled && ($gtmHeadCode !== '' || $gtmId !== '')) || ($gaEnabled && ($gaCode !== '' || $gaId !== ''))
+        || ($adsEnabled && $adsConversionId !== '');
+    ?>
+    <?php if ($alegereCookiePagina !== null && $alegereCookiePagina['acceptate'] !== []): ?>
+    <script>(function(n,v){var p=('; '+document.cookie).split('; '+n+'=');if((p.length>1?p[1].split(';')[0]:'')===v){return;}try{if(sessionStorage.getItem('ax_cc_paza')===v){return;}sessionStorage.setItem('ax_cc_paza',v);}catch(e){}try{window.stop();}catch(e){}location.reload();})(<?= \App\Support\View::sirJs(\App\Support\CookieConsent::nume()) ?>,<?= \App\Support\View::sirJs((string) ($_COOKIE[\App\Support\CookieConsent::nume()] ?? '')) ?>);</script>
+    <?php endif; ?>
+    <?php if ($etichetaGoogle): ?>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', functionality_storage: 'granted', security_storage: 'granted', wait_for_update: 500});
+        gtag('consent', 'update', {analytics_storage: '<?= $acordStatistici ? 'granted' : 'denied' ?>', ad_storage: '<?= $acordMarketing ? 'granted' : 'denied' ?>', ad_user_data: '<?= $acordMarketing ? 'granted' : 'denied' ?>', ad_personalization: '<?= $acordMarketing ? 'granted' : 'denied' ?>'});
+    </script>
+    <?php endif; ?>
     <?php if ($gtmEnabled && $gtmHeadCode !== ''): ?>
     <?= $gtmHeadCode ?>
     <?php elseif ($gtmEnabled && $gtmId !== ''): ?>
@@ -476,6 +498,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <?php endif; ?>
+    <?php require __DIR__ . '/site/components/banner-cookie.php'; /* bannerul de cookie-uri și butonul din colț, înaintea antetului: primul Tab ajunge la el */ ?>
     <?php if ($faraAntetSubsol): /* pagina campaniei fără antet (pluginul campanii) */ elseif (trim($designHeaderOutput) !== ''): ?>
         <?= $designHeaderOutput ?>
     <?php else: ?>
@@ -615,54 +638,6 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     $floatingCartJsVersion = @filemtime(\App\Support\Paths::public('assets/js/floating-cart.js')) ?: time();
     $qtyStocJsVersion = @filemtime(\App\Support\Paths::public('assets/js/qty-stoc.js')) ?: time();
     ?>
-    <?php
-    // Banner de cookies (Admin → Setări magazin → Cookies). Apare cât timp
-    // vizitatorul nu a ales nimic; alegerea se ține 6 luni într-un cookie.
-    $bannerCookiesActiv = (string) ($designSettings['cookie_banner_enabled'] ?? '1') === '1'
-        && !\App\Support\CookieConsent::aRaspuns();
-    $textCookies = trim((string) ($designSettings['cookie_banner_text'] ?? ''));
-    $linkPolitica = trim((string) ($designSettings['cookie_banner_policy_url'] ?? ''));
-    ?>
-    <?php if ($bannerCookiesActiv && $textCookies !== ''): ?>
-        <div id="cookie-banner" role="region" aria-label="Setări cookies"
-             style="position:fixed;left:0;right:0;bottom:0;z-index:99998;background:#ffffff;border-top:1px solid #e2e8f0;box-shadow:0 -8px 32px rgba(15,23,42,.16);padding:16px 20px;">
-            <div style="max-width:1160px;margin:0 auto;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;">
-                <p style="margin:0;flex:1 1 320px;min-width:260px;color:#334155;font-size:14px;line-height:1.55;">
-                    <?= htmlspecialchars($textCookies, ENT_QUOTES) ?>
-                    <?php if ($linkPolitica !== ''): ?>
-                        <a href="<?= htmlspecialchars($linkPolitica, ENT_QUOTES) ?>" style="color:<?= $culoarePrincipala ?>;text-decoration:underline;">Politica de confidențialitate</a>
-                    <?php endif; ?>
-                </p>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button type="button" data-cookie-choice="necessary"
-                            style="padding:11px 18px;border:1px solid #cbd5e1;border-radius:10px;background:#ffffff;color:#334155;font-size:14px;font-weight:600;cursor:pointer;">Doar necesare</button>
-                    <button type="button" data-cookie-choice="all"
-                            style="padding:11px 22px;border:none;border-radius:10px;background:<?= $culoarePrincipala ?>;color:#ffffff;font-size:14px;font-weight:700;cursor:pointer;">Accept toate</button>
-                </div>
-            </div>
-        </div>
-        <script>
-            (function () {
-                'use strict';
-                var banner = document.getElementById('cookie-banner');
-                if (!banner) { return; }
-                var DURATA_ZILE = <?= (int) round(\App\Support\CookieConsent::DURATA / 86400) ?>;
-                banner.addEventListener('click', function (e) {
-                    var buton = e.target.closest('[data-cookie-choice]');
-                    if (!buton) { return; }
-                    var alegere = buton.getAttribute('data-cookie-choice');
-                    var expira = new Date(Date.now() + DURATA_ZILE * 864e5).toUTCString();
-                    var securizat = location.protocol === 'https:' ? ';Secure' : '';
-                    document.cookie = <?= json_encode(\App\Support\CookieConsent::nume()) ?> + '=' + alegere +
-                        ';path=/;expires=' + expira + ';SameSite=Lax' + securizat;
-                    banner.style.display = 'none';
-                    // Reîncărcăm: abia acum serverul are voie să trimită
-                    // scripturile de analiză (dacă au fost acceptate).
-                    if (alegere === 'all') { location.reload(); }
-                });
-            })();
-        </script>
-    <?php endif; ?>
     <?php
     // Popup de anunț la intrarea pe site (Admin → Setări magazin → Popup anunț).
     // Stilurile stau inline pentru că CSS-ul site-ului poate fi servit din cache.

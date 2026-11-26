@@ -734,7 +734,7 @@ $verifica('cu bifa: bara „Înapoi” (închisă), bannerul de cookie-uri, con�
     str_contains($r['corp'], 'data-campanie-inapoi') && str_contains($r['corp'], 'data-bara-inchisa="1"') && str_contains($r['corp'], 'background:#000000')
     && str_contains($r['corp'], 'id="cookie-banner"') && str_contains($r['corp'], 'Reduceri inventate la produsele demo')
     && str_contains($r['corp'], '</main>') && str_contains($r['corp'], '</body>'));
-$cuAcord = $cerere('GET', $adresaCampanie, null, [], ['Cookie: ' . \App\Support\CookieConsent::nume() . '=all']);
+$cuAcord = $cerere('GET', $adresaCampanie, null, [], ['Cookie: ' . \App\Support\CookieConsent::nume() . '=' . \App\Support\CookieConsent::valoareToate()]);
 $verifica('cu bifa și acordul pentru cookie-uri: Google Tag Manager (și noscript-ul lui) rămâne', str_contains($cuAcord['corp'], 'googletagmanager.com/ns.html?id=GTM-PROBA1')
     && !str_contains($cuAcord['corp'], 'ANTET-PROBA'));
 $pret15 = number_format(80 * 1.5, 2);

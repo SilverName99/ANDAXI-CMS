@@ -94,7 +94,7 @@ final class ChatLive
             return false;
         }
         $cereConsimtamant = (string) ($settings['tawk_requires_consent'] ?? '1') !== self::CONSIMTAMANT_OPTIONAL;
-        return !$cereConsimtamant || CookieConsent::permiteUrmarire();
+        return !$cereConsimtamant || CookieConsent::permite('extern');
     }
 
     /**

@@ -120,6 +120,13 @@ oricărui admin care deschidea site-ul.
 Pentru un vizitator fără admin în sesiune nu se schimbă nimic: pagina e octet cu octet aceeași (dovedit de
 diferențialul HTTP și de N3 din testul de fum).
 
+Din 26 noiembrie 2026, peste această gardă stă acordul vizitatorului **pe categorii** (bannerul de cookie-uri,
+[PLUGINURI.md](PLUGINURI.md), „Bannerul de cookie-uri”): în `views/layout.php`, `$tertePermise` (garda de aici) și apoi
+`CookieConsent::permite('statistici')` pentru GA, GTM, Clarity, `permite('marketing')` pentru Google Ads; `ChatLive::activ` cere
+garda și `permite('extern')`. Bannerul nu adaugă scripturi de la terți: doar `/assets/js/consimtamant.js` (al site-ului), datele
+lui într-un `<script type="application/json">` (JSON cu `<`, `>`, `&`, `'`, `"` scăpate) și paza din `<head>`, în care numele și
+valoarea cookie-ului ajung prin `View::sirJs` (valoarea e deja validată de `CookieConsent::citeste`).
+
 ### N4 — gazda cererii în cheia cache-ului de pagini
 
 O cerere cu un antet `Host` străin (sau adresa tehnică a găzduirii) putea otrăvi cache-ul de pagini cu adrese sau

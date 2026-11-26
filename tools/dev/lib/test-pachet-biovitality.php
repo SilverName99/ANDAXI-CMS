@@ -342,11 +342,11 @@ try {
     $verifica('S1 /health pe baza Biovitality, cu pachetul ei: „pachet: ' . PachetSite::amprenta($pachetBv) . '”, schema la zi',
         $health === "ok\nschema: la_zi\npachet: " . PachetSite::amprenta($pachetBv), str_replace("\n", ' | ', $health));
 
-    // Bannerul de cookie-uri se vede doar cu un text (înghețat gol, ca la Biovitality): pentru verificare, un text inventat.
+    // Bannerul de cookie-uri (pe categorii; textul înghețat gol, ca la Biovitality, dă textul implicit): aici un text inventat.
     $db->exec("UPDATE settings SET `value` = 'Folosim cookie-uri (text de test).' WHERE `key` = 'cookie_banner_text'");
     $prima = $cerereBv('/')['corp'];
     $verifica('S4 prima pagină: bannerul scrie cookie-ul „bv_cookie_consent”, iar sertarul de meniu are logo-ul Biovitality ('
-        . '/uploads/gallery/biovitality-logo.png, „BioVitality”)', str_contains($prima, 'document.cookie = "bv_cookie_consent" + ')
+        . '/uploads/gallery/biovitality-logo.png, „BioVitality”)', str_contains($prima, '<script type="application/json" id="ax-cc-date">{"nume":"bv_cookie_consent",')
         && str_contains($prima, '<img src="/uploads/gallery/biovitality-logo.png" alt="BioVitality"'));
     $acord = $cerereBv('/acorduri-gdpr');
     $verifica('S4 /acorduri-gdpr: varianta „medical”, marca „Biovitality”, valorile private ca înlocuitori inventați', $acord['cod'] === 200

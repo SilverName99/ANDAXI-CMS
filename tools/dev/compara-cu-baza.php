@@ -4651,9 +4651,10 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 foreach ($jaruriCaz as $jarCaz) {
                     @unlink($jarCaz);
                 }
-                // Un vizitator nou care a apăsat „Accept toate” în bannerul de cookie-uri (cookie-ul lui CookieConsent).
+                // Un vizitator nou care a apăsat „Accept toate” în bannerul de cookie-uri (cookie-ul lui CookieConsent): codul
+                // Bioscem citește valoarea veche („all”), codul comun doar formatul pe categorii (CookieConsent::valoareToate).
                 file_put_contents($jaruriCaz['viz-acord'], "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t"
-                    . \App\Support\CookieConsent::TOATE . "\n");
+                    . ($server === 'baza' ? 'all' : \App\Support\CookieConsent::valoareToate()) . "\n");
                 $cerere($port, 'POST', '/admin/login', $jaruriCaz['adm'], ['email' => $adminEmail, 'password' => $parola]);
                 // O cerere e [metodă, cale, date, rol = 'adm' | 'viz', 'pauza' => secunde înainte] sau o
                 // funcție care o face din răspunsurile de până atunci (de exemplu tokenul formularului).

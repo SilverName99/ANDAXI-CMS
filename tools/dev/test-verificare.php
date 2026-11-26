@@ -1120,7 +1120,7 @@ try {
         8 => ['src/Support/StripeGateway.php', 'Verificare::verificaCheieStripe($secretKey);', ''],
         9 => ['src/Support/BtIpayGateway.php', "if (!Verificare::btLivePermis()) {\n            return self::MOD_TEST;", "if (false) {\n            return self::MOD_TEST;"],
         10 => ['src/Support/EuPlatescGateway.php', "if (!Verificare::euplatescPermis()) {\n            return false;", "if (false) {\n            return false;"],
-        11 => ['views/layout.php', '\App\Support\CookieConsent::permiteUrmarire() && \App\Support\Verificare::eticheteTertePermise()', '\App\Support\CookieConsent::permiteUrmarire()'],
+        11 => ['views/layout.php', '$tertePermise = \App\Support\EticheteTerte::permise();', '$tertePermise = true;'],
         12 => ['src/Http/Controllers/SiteController.php', '&& \App\Support\Verificare::loginGooglePermis();', ';'],
         13 => ['public/index.php', '\App\Support\Verificare::redirectUploadLipsa($reqPath);', ''],
         14 => ['views/layout.php', "echo \App\Support\Verificare::banner('site'); ", ''],
@@ -1413,7 +1413,8 @@ try {
         'customer_google_auth_enabled' => '1', 'customer_google_client_id' => 'id-inventat.apps.googleusercontent.com',
         'customer_google_client_secret' => 'secret-google-inventat', 'google_site_verification' => 'verificaregoogletest',
     ]);
-    $consimtamant = 'bioscem_cookie_consent=all';
+    // „Accept toate” în formatul bannerului pe categorii (App\Support\CookieConsent::valoareToate; testul nu încarcă clasele aplicației).
+    $consimtamant = 'bioscem_cookie_consent=2.sme.sme';
     $etichete = ['googletagmanager.com', 'clarity.ms', 'embed.tawk.to', 'name="google-site-verification"', "gtag('config'"];
     $cuEtichete = static fn (string $corp): array => array_values(array_filter($etichete, static fn (string $e): bool => str_contains($corp, $e)));
     $r = $cerere('GET', '/', ['basic' => $bunaBasic, 'cookie' => $consimtamant]);

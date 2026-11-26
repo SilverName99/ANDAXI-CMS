@@ -398,12 +398,12 @@ $verifica('N1b: corp JSON text/plain fără cod nu produce un refuz de cod activ
 foreach (['google_tag_manager_enabled' => '1', 'google_tag_manager_id' => 'GTM-SONDA00'] as $k => $v) {
     $db->prepare('INSERT INTO settings (`key`, value) VALUES (:k, :v) ON DUPLICATE KEY UPDATE value = :v2')->execute(['k' => $k, 'v' => $v, 'v2' => $v]);
 }
-$anonCuAcord = $cerere('GET', '/', null, [], ['Cookie' => 'cookie_consent=all']);
-$adminPeSite = $cerere('GET', '/', $jarGeneral, [], ['Cookie' => 'cookie_consent=all']);
+$anonCuAcord = $cerere('GET', '/', null, [], ['Cookie' => \App\Support\CookieConsent::nume() . '=' . \App\Support\CookieConsent::valoareToate()]);
+$adminPeSite = $cerere('GET', '/', $jarGeneral, [], ['Cookie' => \App\Support\CookieConsent::nume() . '=' . \App\Support\CookieConsent::valoareToate()]);
 $verifica('N3: vizitator anonim cu consimțământ primește GTM', str_contains($anonCuAcord['corp'], 'googletagmanager.com'));
 $verifica('N3: cu un admin în sesiune, pagina publică NU are GTM', !str_contains($adminPeSite['corp'], 'googletagmanager.com'));
 // HTML identic pentru doi vizitatori anonimi (fără admin): byte cu byte.
-$anon2 = $cerere('GET', '/', null, [], ['Cookie' => 'cookie_consent=all']);
+$anon2 = $cerere('GET', '/', null, [], ['Cookie' => \App\Support\CookieConsent::nume() . '=' . \App\Support\CookieConsent::valoareToate()]);
 $verifica('N3: HTML identic pentru doi vizitatori anonimi cu același consimțământ', $anonCuAcord['corp'] === $anon2['corp']);
 
 // ---- N5: anteturile fișierelor încărcate ----

@@ -5036,7 +5036,8 @@ final class SiteController
         }
         $destUrl = trim($destinatie);
 
-        if ($campaignId > 0) {
+        // Atribuirea comenzilor la campanie: un cookie de statistici, doar cu acordul pentru ele (bannerul de cookie-uri).
+        if ($campaignId > 0 && \App\Support\CookieConsent::permite('statistici')) {
             setcookie('nl_cid', (string) $campaignId, [
                 'expires'  => time() + 7 * 86400,
                 'path'     => '/',

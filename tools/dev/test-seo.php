@@ -878,7 +878,7 @@ try {
 
     $jarSesiune = $jarNou('sesiune');
     // Revizuirea WP-39/40: bv_gclid doar cu acordul pentru urmărire (bannerul de cookie-uri), deci vizitatorul l-a dat.
-    file_put_contents($jarSesiune, "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t" . \App\Support\CookieConsent::TOATE . "\n");
+    file_put_contents($jarSesiune, "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t" . \App\Support\CookieConsent::valoareToate() . "\n");
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, [], $jarSesiune, ['quantity' => '1']);
     $r = $cerere($port, 'GET', '/produse?gclid=TestSeo1', [], $jarSesiune);
     $verifica('cine are sesiune (și acordul pentru urmărire) își primește cookie-urile pe 301 (bv_gclid)', $r['cod'] === 301

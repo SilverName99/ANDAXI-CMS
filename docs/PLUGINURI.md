@@ -472,6 +472,69 @@ din datele de azi. Codul: `App\Support\EmailContinut`, `App\Http\Controllers\Ist
   sertarul), între marcajele `em:istoric-vezi` (`$marcajePort` din `tools/dev/compara-cu-baza.php`): rândurile tabelului rămân
   octet cu octet cele din bază. Rândul din `site-uri/*/ce-se-schimba.md`.
 
+## Bannerul de cookie-uri (nucleu)
+
+Pe fiecare site, din 26 noiembrie 2026: acordul pentru cookie-uri **pe categorii** (GDPR/ePrivacy). Codul:
+`App\Support\CookieConsent` (cookie-ul acordului), `App\Support\ServiciiCookie` (serviciile, categoriile, politica),
+`views/site/components/banner-cookie.php` (inclus de `views/layout.php` după deschiderea lui `<body>`, înaintea antetului),
+`public/assets/js/consimtamant.js`; adminul: Setări magazin/site → tab-ul **Cookie și popup**. Testul:
+`tools/dev/test-banner-cookie.php` (cu `banner-cookie-browser.cjs`).
+
+- **Categoriile** apar singure, din ce e pornit pe site (`ServiciiCookie::servicii`, după setări și pluginuri); o categorie
+  fără niciun serviciu activ nu se arată, iar fără nicio categorie nu e nimic de cerut (nici banner, nici butonul din colț).
+  Fiecare serviciu e într-o singură categorie și pornește doar cu acordul ei; decizia se ia pe server, deci fără acord
+  codul nici nu e trimis în pagină:
+
+  | Categoria | Serviciile (cookie-urile) | Ce cere acordul |
+  |---|---|---|
+  | Necesare (mereu, nu se pot refuza) | sesiunea (`PHPSESSID`), cookie-ul acordului, anunțul de bun venit închis (stocare locală), chatul tawk.to pus pe „Întotdeauna (strict necesar)” | — |
+  | Statistici | Google Analytics (`_ga`, `_ga_*`), Google Tag Manager (fără cookie al lui), Microsoft Clarity (`_clck`, `_clsk`, `CLID`, `MUID`), sursa comenzii (`ax_sursa`, `bv_gclid`; cu magazinul și `sursa_comenzii` pornită), campania de newsletter (`nl_cid`; cu newsletterul) | `views/layout.php` (GA, GTM, Clarity), `SursaComenzii::laIntrare`/`pentruComanda`, `public/index.php` (`bv_gclid`), `SiteController` (clicul din newsletter, `nl_cid`) |
+  | Marketing | Google Ads (`_gcl_au`, `_gcl_aw`; eticheta gtag și conversia de pe pagina de mulțumire) | `views/layout.php` |
+  | Conținut extern | playerul YouTube (`youtube-nocookie.com`) și Vimeo (`dnt=1`) din articolele publicate cu un link de video (o interogare pe cerere, doar cu blogul), chatul tawk.to care cere acord | `VideoEmbed::render`, `ChatLive::activ` |
+
+  Meta/TikTok nu sunt în nucleu: un pixel pus în Tag Manager sau în codul GA scris de mână trebuie să respecte acordul din
+  setările lui (nota din admin). Statisticile proprii (pluginul `statistici`) nu folosesc cookie-uri și nu cer acord.
+- **Cookie-ul acordului** are numele de până acum (`site.json` → `cookie_consimtamant`, `CookieConsent::nume`) și valoarea
+  `2.<oferite>.<acceptate>` (literele `s`, `m`, `e`; `-` = niciuna), de exemplu `2.sme.s`; 6 luni, `SameSite=Lax`, `Secure`
+  pe https. **Valorile vechi (`all`, `necessary`) nu mai sunt un răspuns**: la actualizare, fiecare vizitator vede bannerul nou
+  o dată, ca să aleagă pe categorii. Când apare o categorie pe care vizitatorul n-a văzut-o (nu e în „oferite”), bannerul se
+  arată din nou, cu alegerile de atunci bifate; până la noua alegere rămân în vigoare doar categoriile acceptate atunci.
+- **Butoanele**: „Accept toate”, „Refuz” și „Setări”, la fel de mari și de rotunjite (pe telefon unul sub altul, toate pe
+  toată lățimea); primele două pline, în aceeași culoare (`cookie_banner_culoare`, #rrggbb; gol = culoarea principală a temei,
+  `Tema::culoarePrincipala`), textul alb sau închis după contrast; „Setări” conturat în aceeași culoare. „Setări” deschide
+  categoriile (comutatoare: `checkbox` cu `role="switch"` și etichetă, nebifate la prima alegere) și „Salvează alegerea”.
+- **După alegere** rămâne un buton mic (44 px) în colțul de jos, „Setări cookie-uri”, care redeschide bannerul (în stânga;
+  în dreapta dacă acolo stau coșul plutitor sau bulina de chat; deasupra lor dacă ambele colțuri sunt ocupate). Orice link
+  `href="#setari-cookie"` sau cu `data-cookie-setari` (de exemplu cel din politica generată) deschide direct setările.
+- **O alegere** care schimbă categoriile acceptate față de cele cu care a fost făcută pagina o reîncarcă (acceptarea pornește
+  serviciile, retragerea le scoate); una care nu schimbă nimic doar închide bannerul. La retragere pagina șterge cookie-urile
+  pe care le poate șterge (`_ga*`, `_gid`, `_gat*`, `_clck`, `_clsk`, `_gcl_*`, `bv_gclid`, `nl_cid`, ale lui tawk.to), iar
+  serverul pe cele de atribuire, și pe `ax_sursa` (HttpOnly), la prima cerere fără acordul pentru statistici.
+- **Paza paginii**: o pagină cu servicii acceptate are în `<head>`, înaintea oricărui script, un rând care compară cookie-ul
+  de acum cu cel pentru care a fost făcută; altul (o pagină din memoria browserului, de dinaintea unei retrageri) = se
+  oprește și se reîncarcă (o singură dată pe valoare, `sessionStorage`). La fel la întoarcerea dintr-o pagină din istoric
+  (`pageshow`).
+- **Modul de consimțământ Google v2** (cu GTM sau gtag în pagină): `gtag('consent', 'default', …)` cu totul refuzat (și
+  `wait_for_update`), apoi `update` cu `analytics_storage` după Statistici și `ad_storage`, `ad_user_data`,
+  `ad_personalization` după Marketing, înaintea etichetelor; la o alegere în pagină, și un `update` înainte de reîncărcare.
+- **Cache-ul de pagini**: cheia are `CookieConsent::cheieCache()` = `nou` (fără alegere validă, inclusiv valorile vechi) sau
+  valoarea normalizată, deci o pagină cu etichete nu ajunge niciodată la cine n-a acceptat categoria lor.
+- **Accesibilitate**: bannerul e o regiune cu nume, primul în pagină (primul Tab ajunge la el), fără să fure focusul la prima
+  afișare; Escape nu face nimic fără alegere. Redeschis din colț, focusul trece pe banner, Escape (sau „×”) îl închide fără
+  schimbări și focusul revine pe buton. Fără JavaScript bannerul nu se arată (nimic nu pornește oricum fără acord).
+- **Textul**: Setări → Cookie și popup → Text; gol = textul implicit (`ServiciiCookie::TEXT_IMPLICIT`), bannerul nu se mai
+  ascunde pe tăcute. Linkurile: „Politica de cookie-uri” (pagina generată, `cookie_politica_url`) și „Politica de
+  confidențialitate” (`cookie_banner_policy_url`, ca până acum; o folosesc și cererile de ofertă).
+- **Adminul** (tab-ul Cookie și popup): lista serviciilor găsite, pe categorii; un **avertisment roșu** când bannerul e oprit,
+  dar site-ul are servicii care cer acord (fără banner ele nu pornesc pentru nimeni); butonul **„Generează pagina Politica de
+  cookie-uri”**: o pagină publicată (prima oară `/politica-de-cookie-uri`, sau cu un număr după, dacă slug-ul e luat; apoi
+  aceeași pagină, `cookie_politica_pagina_id`, i se rescriu doar textul și stilul) cu fiecare cookie (nume, serviciul și
+  furnizorul, scop, durată, categorie), datele firmei (operatorul din Acorduri GDPR, altfel numele și contactul magazinului),
+  cum se retrage acordul, statisticile fără cookie-uri, datele trimise în afara UE. La generare se ține amprenta serviciilor
+  (`cookie_politica_amprenta`); alta acum = avertismentul „Politica de cookie-uri e veche — generează-o din nou”. Textul e un
+  punct de plecare, de verificat de un jurist (spus în admin).
+- **Pluginurile**: `chat_live` și `blog` (videoul) doar adaugă servicii; fără ele, categoria lor nu apare.
+
 ## Pluginurile, unul câte unul
 
 „Se oprește” și „oprit” descriu ce se schimbă față de „pornit”. Datele nu se
@@ -958,7 +1021,7 @@ dispar, iar linkurile spre el se scot din pagini.
   `{{category_event_rows:slug}}` (rânduri compacte, câte 3 pe pagină) și `{{category_grid_paged:slug1,slug2}}` (grila
   din mai multe categorii, câte 6), cu clasele `vtcs__`/`vtcg__`/`vter__` ale conținutului vertij; videoul postării și al evenimentului următor (`VideoEmbed`, din
   vertij `0fc2b2c`: YouTube, Vimeo sau un fișier video urcat în Galerie; playerul YouTube
-  sau Vimeo se încarcă singur doar cu acordul pentru toate cookie-urile, altfel la apăsarea
+  sau Vimeo se încarcă singur doar cu acordul pentru „Conținut extern” (bannerul de cookie-uri), altfel la apăsarea
   casetei „Pornește videoclipul”; Vimeo cu `dnt=1`). Tabele: `blog_*`.
 - **Blogul avansat** (WP-22, din Biovitality `c078bd5` … `6ea2cb1`; migrarea `blog/0033`):
   etichetele (`blog_tags`, `blog_post_tags`), bibliografia (`blog_posts.references_html`), lățimea
@@ -1063,7 +1126,8 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Chat live (`chat_live`)
 
 - **Conține**: bulina tawk.to de pe site (pornită doar după acordul pentru
-  cookie-uri, cu numele și emailul clientului logat), tab-ul „Chat live” din
+  „Conținut extern” din bannerul de cookie-uri, afară de varianta „Întotdeauna”, care o face strict necesară; cu numele și
+  emailul clientului logat), tab-ul „Chat live” din
   Setări magazin. Setări: `tawk_*`. Fără tabele.
 - **Are nevoie de**: nimic.
 - **Se oprește**: bulina nu mai apare (o conversație nouă nu mai începe); tab-ul se

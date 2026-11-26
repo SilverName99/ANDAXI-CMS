@@ -57,10 +57,16 @@ admin_componenta('antet-pagina', [
         $cookieBannerEnabled = (string) ($settings['cookie_banner_enabled'] ?? '1') === '1';
         $cookieBannerText = (string) ($settings['cookie_banner_text'] ?? '');
         $cookiePolicyUrl = (string) ($settings['cookie_banner_policy_url'] ?? '');
-        $trackingActiv = (string) ($settings['google_analytics_enabled'] ?? '0') === '1'
-            || (string) ($settings['google_tag_manager_enabled'] ?? '0') === '1'
-            || (string) ($settings['google_ads_enabled'] ?? '0') === '1'
-            || (string) ($settings['microsoft_clarity_enabled'] ?? '0') === '1';
+        // Bannerul pe categorii (ServiciiCookie): ce servicii are site-ul acum, pe categorii, și politica generată.
+        $serviciiCookie = is_array($serviciiCookie ?? null) ? $serviciiCookie : [];
+        $categoriiCookie = \App\Support\ServiciiCookie::categoriiActive($settings, null, $serviciiCookie);
+        $cookieCuloareSalvata = trim((string) ($settings['cookie_banner_culoare'] ?? ''));
+        $cookieCuloareTema = \App\Support\Tema::culoarePrincipala();
+        $cookieCuloare = \App\Support\ServiciiCookie::culoareButoane($settings);
+        $cookiePoliticaUrl = trim((string) ($settings['cookie_politica_url'] ?? ''));
+        $cookiePoliticaAmprenta = trim((string) ($settings['cookie_politica_amprenta'] ?? ''));
+        $cookiePoliticaVeche = $cookiePoliticaAmprenta !== ''
+            && $cookiePoliticaAmprenta !== \App\Support\ServiciiCookie::amprenta($serviciiCookie);
         $popupEnabled = (string) ($settings['welcome_popup_enabled'] ?? '0') === '1';
         $popupTitle = (string) ($settings['welcome_popup_title'] ?? '');
         $popupBody = (string) ($settings['welcome_popup_body'] ?? '');
@@ -741,24 +747,39 @@ admin_componenta('antet-pagina', [
                 <div>
                     <h2 class="adm-sectiune__titlu" id="setari-cookies-titlu">Banner de cookies</h2>
                     <p class="adm-sectiune__descriere">
-                Bannerul apare în partea de jos, până când vizitatorul alege „Accept toate" sau
-                „Doar necesare". Alegerea se ține minte 6 luni.
+                Bannerul apare jos pe pagină, cu trei butoane la fel de mari: „Accept toate”, „Refuz” și „Setări”
+                (vizitatorul alege pe categorii). Categoriile apar singure, după ce e pornit pe site; una fără nimic activ
+                nu se arată. Alegerea se ține minte 6 luni; după ea rămâne un buton mic în colțul paginii, din care
+                vizitatorul își schimbă oricând alegerea. Când apare o categorie nouă, bannerul se arată din nou.
                     </p>
                 </div>
             </header>
             <div class="adm-sectiune__corp">
-            <?php if ($trackingActiv): ?>
-                <p style="margin:0 0 12px;padding:10px 12px;background:var(--ax-ok-fundal);border:1px solid var(--ax-ok-linie);border-radius:6px;color:var(--ax-ok);font-size:13px;max-width:680px;">
-                    Ai activat instrumente de urmărire (Analytics / Tag Manager / Ads / Clarity).
-                    Codurile lor <strong>nu se încarcă deloc</strong> până când vizitatorul apasă
-                    „Accept toate" — exact cum cere legea. Ține bannerul pornit.
-                </p>
-            <?php else: ?>
-                <p style="margin:0 0 12px;padding:10px 12px;background:var(--ax-suprafata-2);border:1px solid var(--ax-linie);border-radius:6px;color:var(--ax-text-3);font-size:13px;max-width:680px;">
-                    Momentan nu ai activat niciun instrument de urmărire. Bannerul rămâne util
-                    pentru transparență și devine obligatoriu în clipa în care pornești Analytics.
-                </p>
+            <?php if (!$cookieBannerEnabled && $categoriiCookie !== []): ?>
+                <?php admin_componenta('mesaj', ['tip' => 'eroare', 'id' => 'cookie-banner-oprit', 'titlu' => 'Bannerul e oprit, dar site-ul are servicii care cer acord',
+                    'text' => 'Fără banner nimeni nu poate accepta, deci ' . implode(', ', array_map(static fn (string $c): string => \App\Support\ServiciiCookie::CATEGORII[$c]['eticheta'], $categoriiCookie))
+                        . ' nu pornesc pentru niciun vizitator. Pornește bannerul mai jos.']); ?>
             <?php endif; ?>
+            <div class="adm-cookie-servicii" style="max-width:760px;margin:0 0 14px;padding:10px 12px;background:var(--ax-suprafata-2);border:1px solid var(--ax-linie);border-radius:6px;font-size:13px;">
+                <strong style="display:block;margin:0 0 6px;">Ce găsește site-ul acum</strong>
+                <?php if ($categoriiCookie === []): ?>
+                    <p style="margin:0 0 6px;color:var(--ax-text-3);">Doar cookie-uri necesare: nu e nimic de cerut, deci bannerul nu apare. El apare singur când pornești Analytics, Clarity, Google Ads, chatul sau un videoclip YouTube într-un articol.</p>
+                <?php endif; ?>
+                <ul style="margin:0;padding-left:18px;">
+                    <?php foreach (\App\Support\ServiciiCookie::CATEGORII as $cheieCat => $infoCat): ?>
+                        <?php $numeCat = array_values(array_unique(array_column(array_filter($serviciiCookie, static fn (array $sv): bool => $sv['categorie'] === $cheieCat), 'nume'))); ?>
+                        <?php if ($numeCat !== []): ?>
+                            <li><strong><?= htmlspecialchars($infoCat['eticheta'], ENT_QUOTES) ?></strong><?= $cheieCat === 'necesare' ? ' (mereu active)' : '' ?>: <?= htmlspecialchars(implode(', ', $numeCat), ENT_QUOTES) ?></li>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </ul>
+                <p style="margin:6px 0 0;color:var(--ax-text-3);">
+                    Codurile fiecărui serviciu <strong>nu se încarcă deloc</strong> până când vizitatorul îi acceptă categoria.
+                    Google primește și modul de consimțământ (Consent Mode v2). Etichetele puse în Tag Manager sau în codul scris
+                    de mână (de exemplu un pixel Meta sau TikTok) trebuie să respecte și ele consimțământul, din setările lor.
+                    Statisticile proprii ale site-ului nu folosesc cookie-uri și nu cer acord.
+                </p>
+            </div>
             <form method="post" action="/admin/settings/store">
                 <input type="hidden" name="action" value="save_cookie_banner">
                 <label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;">
@@ -768,17 +789,59 @@ admin_componenta('antet-pagina', [
                 <div class="field" style="max-width:680px;">
                     <label for="cookie_banner_text">Text</label>
                     <textarea id="cookie_banner_text" name="cookie_banner_text" rows="4" style="width:100%;"><?= htmlspecialchars($cookieBannerText, ENT_QUOTES) ?></textarea>
+                    <p style="margin:6px 0 0;color:var(--ax-text-3);font-size:13px;">
+                        Gol = textul implicit: „<?= htmlspecialchars(\App\Support\ServiciiCookie::TEXT_IMPLICIT, ENT_QUOTES) ?>”
+                    </p>
+                </div>
+                <div class="field" style="max-width:680px;margin-top:10px;">
+                    <label for="cookie_banner_culoare">Culoarea butoanelor „Accept toate” și „Refuz”</label>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <input id="cookie_banner_culoare" name="cookie_banner_culoare" type="color" value="<?= htmlspecialchars($cookieCuloare, ENT_QUOTES) ?>" style="width:56px;height:36px;padding:2px;">
+                        <label style="display:flex;align-items:center;gap:6px;font-weight:400;">
+                            <input type="checkbox" name="cookie_banner_culoare_tema" value="1" <?= $cookieCuloareSalvata === '' ? 'checked' : '' ?>>
+                            Culoarea principală a site-ului (<?= htmlspecialchars($cookieCuloareTema, ENT_QUOTES) ?>)
+                        </label>
+                    </div>
+                    <p style="margin:6px 0 0;color:var(--ax-text-3);font-size:13px;">
+                        Ambele butoane au aceeași culoare: refuzul trebuie să fie la fel de vizibil ca acceptarea. „Setări” e conturat, în aceeași culoare.
+                    </p>
                 </div>
                 <div class="field" style="max-width:680px;margin-top:10px;">
                     <label for="cookie_banner_policy_url">Link către politica de confidențialitate</label>
                     <input id="cookie_banner_policy_url" name="cookie_banner_policy_url" type="text" value="<?= htmlspecialchars($cookiePolicyUrl, ENT_QUOTES) ?>" placeholder="/politica-de-confidentialitate">
                     <p style="margin:6px 0 0;color:var(--ax-text-3);font-size:13px;">
-                        Lasă gol dacă nu vrei link. Pagina se creează din Pagini.
+                        Lasă gol dacă nu vrei link. Pagina se creează din Pagini. Politica de cookie-uri are linkul ei (mai jos).
                     </p>
                 </div>
                 <div style="margin-top:12px;">
                     <button class="btn" type="submit">Salvează bannerul</button>
                 </div>
+            </form>
+            </div>
+        </section>
+        <section class="adm-sectiune" id="setari-politica-cookie" aria-labelledby="setari-politica-cookie-titlu">
+            <header class="adm-sectiune__antet">
+                <div>
+                    <h2 class="adm-sectiune__titlu" id="setari-politica-cookie-titlu">Politica de cookie-uri</h2>
+                    <p class="adm-sectiune__descriere">
+                Pagina se face din serviciile de mai sus (fiecare cookie: nume, furnizor, scop, durată, categorie) și din datele
+                firmei<?= \App\Support\Plugins::vizibil('acorduri_gdpr') ? ' din pagina Acorduri GDPR (datele operatorului), altfel numele și contactul magazinului' : ' (numele și contactul magazinului)' ?>. Bannerul are apoi
+                linkul ei. E un punct de plecare: textul e bine să-l verifice un jurist.
+                    </p>
+                </div>
+            </header>
+            <div class="adm-sectiune__corp">
+            <?php if ($cookiePoliticaVeche): ?>
+                <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'id' => 'politica-cookie-veche', 'titlu' => 'Politica de cookie-uri e veche — generează-o din nou',
+                    'text' => 'Serviciile site-ului s-au schimbat de la ultima generare, deci pagina nu mai spune ce cookie-uri folosește site-ul acum.']); ?>
+            <?php endif; ?>
+            <?php if ($cookiePoliticaUrl !== ''): ?>
+                <p style="margin:0 0 10px;font-size:13px;">Pagina: <a href="<?= htmlspecialchars($cookiePoliticaUrl, ENT_QUOTES) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($cookiePoliticaUrl, ENT_QUOTES) ?></a>
+                    (o generare nouă îi rescrie textul; titlul, adresa și SEO-ul rămân cum le-ai pus în Pagini).</p>
+            <?php endif; ?>
+            <form method="post" action="/admin/settings/store">
+                <input type="hidden" name="action" value="genereaza_politica_cookie">
+                <button class="btn" type="submit"><?= $cookiePoliticaUrl === '' ? 'Generează pagina Politica de cookie-uri' : 'Generează din nou pagina Politica de cookie-uri' ?></button>
             </form>
             </div>
         </section>
@@ -1060,13 +1123,13 @@ admin_componenta('antet-pagina', [
                     <div class="field" style="max-width:520px;">
                         <label for="tawk_requires_consent">Când pornește chatul</label>
                         <select id="tawk_requires_consent" name="tawk_requires_consent">
-                            <option value="1" <?= $chatCereConsimtamant ? 'selected' : '' ?>>Doar după „Accept toate" (recomandat)</option>
+                            <option value="1" <?= $chatCereConsimtamant ? 'selected' : '' ?>>Doar cu acordul pentru „Conținut extern” (recomandat)</option>
                             <option value="0" <?= !$chatCereConsimtamant ? 'selected' : '' ?>>Întotdeauna (chatul e considerat strict necesar)</option>
                         </select>
                         <small style="color:var(--ax-text-3);">
                             tawk.to e furnizor din Statele Unite, iar conversațiile pleacă acolo.
                             Pe varianta recomandată, codul nici nu ajunge în pagină înainte ca
-                            vizitatorul să accepte — la fel ca la Analytics.
+                            vizitatorul să accepte categoria „Conținut extern” din bannerul de cookie-uri.
                         </small>
                     </div>
                     <div class="field" style="max-width:520px;">

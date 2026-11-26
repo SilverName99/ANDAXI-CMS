@@ -12,8 +12,8 @@ use Throwable;
  * (`orders.sursa`, magazin/0051), și raportul săptămânal din admin (Rapoarte → Sursa comenzilor). Google Analytics numără
  * doar vizitatorii care acceptă cookie-urile; comenzile le avem pe toate.
  *
- * Doar cu acordul vizitatorului pentru urmărire (`CookieConsent::permiteUrmarire`, revizuirea WP-39/40): fără el nu se
- * scrie niciun cookie, iar comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
+ * Doar cu acordul vizitatorului pentru statistici (`CookieConsent::permite('statistici')`; revizuirea WP-39/40, apoi bannerul
+ * pe categorii): fără el nu se scrie niciun cookie, iar comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
  *
  * La intrarea pe site (o pagină publică cerută cu GET, `laIntrare`), felul vizitei se ține într-un cookie
  * (`ax_sursa`, 30 de zile; doar felul, niciun id, nicio adresă), suprascris de o vizită nouă venită de undeva (ultima
@@ -96,9 +96,9 @@ final class SursaComenzii
      */
     public static function laIntrare(array $setari): void
     {
-        // Revizuirea WP-39/40: cookie-ul se scrie doar cu acordul vizitatorului pentru urmărire (GDPR) și doar pe un site cu
+        // Revizuirea WP-39/40: cookie-ul se scrie doar cu acordul vizitatorului pentru statistici (GDPR) și doar pe un site cu
         // magazin (fără comenzi n-are rost).
-        if (PHP_SAPI === 'cli' || !self::pornita($setari) || headers_sent() || !CookieConsent::permiteUrmarire()
+        if (PHP_SAPI === 'cli' || !self::pornita($setari) || headers_sent() || !CookieConsent::permite('statistici')
             || !Plugins::vizibil('magazin')
             || !in_array(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')), ['GET', 'HEAD'], true)) {
             return;
@@ -124,8 +124,8 @@ final class SursaComenzii
      */
     public static function pentruComanda(array $cookie, ?bool $acord = null): string
     {
-        // Fără acordul pentru urmărire nu citim cookie-urile de urmărire: comanda are sursa „necunoscută”.
-        if (!($acord ?? CookieConsent::permiteUrmarire())) {
+        // Fără acordul pentru statistici nu citim cookie-urile de atribuire: comanda are sursa „necunoscută”.
+        if (!($acord ?? CookieConsent::permite('statistici'))) {
             return 'necunoscuta';
         }
         // Ultima sursă care nu e „direct” câștigă: cookie-ul ax_sursa e rescris la fiecare vizită venită de undeva (și la una

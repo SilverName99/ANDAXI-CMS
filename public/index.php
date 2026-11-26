@@ -146,9 +146,19 @@ if (!\App\Support\GardaOrigine::verifica()) {
 
 // Capture Google Ads click id (gclid / gbraid / wbraid) so an order placed
 // later in the session can be attributed to the ad that brought the visitor.
-// Revizuirea WP-39/40 (GDPR): doar cu acordul vizitatorului pentru urmărire (cookie-urile de marketing); fără el, nimic.
+// Revizuirea WP-39/40 (GDPR): doar cu acordul vizitatorului pentru statistici (atribuirea comenzii, ca ax_sursa; bannerul pe
+// categorii, App\Support\ServiciiCookie); fără el, nimic. Fără acord (o retragere, o alegere veche), cookie-urile de atribuire
+// rămase (bv_gclid, ax_sursa, care e HttpOnly și nu-l poate șterge pagina, nl_cid) se șterg.
 (static function (): void {
-    if (!\App\Support\CookieConsent::permiteUrmarire()) {
+    if (!\App\Support\CookieConsent::permite('statistici')) {
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            foreach (['bv_gclid', \App\Support\SursaComenzii::COOKIE, 'nl_cid'] as $ramas) {
+                if (isset($_COOKIE[$ramas])) {
+                    setcookie($ramas, '', ['expires' => time() - 3600, 'path' => '/', 'samesite' => 'Lax']);
+                    unset($_COOKIE[$ramas]);
+                }
+            }
+        }
         return;
     }
     $clickId = '';

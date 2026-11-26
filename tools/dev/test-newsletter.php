@@ -481,11 +481,16 @@ $verifica('E4 un POST direct cu tokenul vechi e refuzat (403) și nu dezaboneaz�
 $c3 = $campanieNoua('Test: clicuri');
 $url = 'https://exemplu.ro/x?a=1&amp;b=2';
 $semn = static fn (string $cheie, int $camp, string $u): string => $b64(hash_hmac('sha256', 'click|' . $camp . '|' . $abonatiTest[4] . '|' . $u, $cheie, true));
-$clicNou = $cerere('GET', '/newsletter/track/click/' . $c3 . '/' . $abonatiTest[4] . '/' . $semn($cheieAcum, $c3, $url) . '?url=' . rawurlencode($url));
+// nl_cid e un cookie de statistici (bannerul de cookie-uri pe categorii): doar cu acordul pentru ele.
+$clicFaraAcord = $cerere('GET', '/newsletter/track/click/' . $c3 . '/' . $abonatiTest[4] . '/' . $semn($cheieAcum, $c3, $url) . '?url=' . rawurlencode($url));
+$clicNou = $cerere('GET', '/newsletter/track/click/' . $c3 . '/' . $abonatiTest[4] . '/' . $semn($cheieAcum, $c3, $url) . '?url=' . rawurlencode($url), null, [],
+    ['Cookie: ' . \App\Support\CookieConsent::nume() . '=' . \App\Support\CookieConsent::valoare(['statistici'])]);
 $db->exec("UPDATE settings SET `value` = '{\"campanie\":0,\"abonat\":1000000}' WHERE `key` = 'newsletter_cheie_limita'");
 $clicVechi = $cerere('GET', '/newsletter/track/click/' . $c3 . '/' . $abonatiTest[4] . '/' . $semn($cheieVeche, $c3, $url) . '?url=' . rawurlencode($url));
-$verifica('E5 clicul semnat cu cheia nouă duce la adresă („&amp;” decodat) cu cookie-ul nl_cid; semnat cu cheia veche pentru o campanie de '
-    . 'după prag: prima pagină, fără cookie', $clicNou['cod'] === 302 && ($clicNou['antete']['location'] ?? '') === 'https://exemplu.ro/x?a=1&b=2'
+$verifica('E5 clicul semnat cu cheia nouă duce la adresă („&amp;” decodat) cu cookie-ul nl_cid (cu acordul pentru statistici; fără el, '
+    . 'aceeași adresă, fără cookie); semnat cu cheia veche pentru o campanie de după prag: prima pagină, fără cookie', $clicNou['cod'] === 302
+    && $clicFaraAcord['cod'] === 302 && ($clicFaraAcord['antete']['location'] ?? '') === 'https://exemplu.ro/x?a=1&b=2'
+    && !str_contains((string) ($clicFaraAcord['antete']['set-cookie'] ?? ''), 'nl_cid') && ($clicNou['antete']['location'] ?? '') === 'https://exemplu.ro/x?a=1&b=2'
     && str_contains((string) ($clicNou['antete']['set-cookie'] ?? ''), 'nl_cid=' . $c3) && $clicVechi['cod'] === 302
     && rtrim((string) ($clicVechi['antete']['location'] ?? ''), '/') === rtrim((string) getenv('APP_URL'), '/')
     && !str_contains((string) ($clicVechi['antete']['set-cookie'] ?? ''), 'nl_cid'), json_encode([$clicNou['antete'], $clicVechi['antete']]));

@@ -86,7 +86,7 @@ O temă aduce doar ce cheile de mai jos permit; tot restul înfățișării unui
 | `main` | `"container"` | `"lat"`: `<main class="site-container">`, fără `.container` (secțiunile își pun singure containerul) |
 | `flash` | `"panou"` | `"bootstrap"`: mesajele ca `.alert` (Bootstrap) într-un `.container` propriu |
 | `buton_sus` | `false` | `true`: butonul „Înapoi sus” (ancora spre `#inceput-pagina`, imediat după `<body>`, apare după un ecran derulat); înfățișarea (`.sus`) o dă CSS-ul temei |
-| `culoare_principala` | `"#2f8d5b"` | culoarea butoanelor paginilor de rezervă (404, linkul de plată, verificarea plății BT) și a bannerului de cookie-uri și a popup-ului |
+| `culoare_principala` | `"#2f8d5b"` | culoarea butoanelor paginilor de rezervă (404, linkul de plată, verificarea plății BT), a popup-ului și, implicit, a butoanelor „Accept toate” și „Refuz” din bannerul de cookie-uri (Setări → Cookie și popup poate da alta, `cookie_banner_culoare`) |
 | `logo_meniu_mobil` | (lipsă) | `{"candidati": [...], "implicit": "...", "alt": "..."}`: logo-ul sertarului `{{mobile_menu}}`, primul candidat care există ca fișier (`/uploads/…`, `/tema/…`, `/assets/…`), altfel `implicit`; fără cheie, ca azi |
 | `iconite_categorii` | (lipsă) | `[["cuvânt", "<path …/>"], …]`: iconițele din `{{product_categories}}`, încercate în ordine (cuvântul în numele categoriei, cu litere mici, fără diacritice) înaintea celei implicite; fără cheie, lista de azi a nucleului |
 | `css_inline` | `{}` | `{"pagina_succes": "pagina-succes.css"}`: blocul `<style>` al paginii de mulțumire (`views/site/checkout-success.php`) înlocuit cu fișierul din `tema/` |

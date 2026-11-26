@@ -11241,6 +11241,7 @@ final class AdminController
             'storeSettingsTab' => trim((string) ($_GET['tab'] ?? 'pages')),
             'cacheStats' => ResponseCache::pageCacheStats(),
             'vatSumar' => $db instanceof PDO ? $this->tvaProduseSumar($db) : [],
+            'serviciiCookie' => \App\Support\ServiciiCookie::servicii($settings, $db instanceof PDO ? $db : null),
         ], 'admin/layout');
     }
 
@@ -11754,15 +11755,42 @@ final class AdminController
             if ($linkPolitica !== '' && !preg_match('#^(https?://|/)#i', $linkPolitica)) {
                 $linkPolitica = '/' . ltrim($linkPolitica, '/');
             }
+            // Culoarea celor două butoane mari: #rrggbb, sau gol = culoarea principală a temei (bifa, ori o valoare greșită).
+            $culoare = strtolower(trim((string) ($_POST['cookie_banner_culoare'] ?? '')));
+            if (isset($_POST['cookie_banner_culoare_tema']) || preg_match('/^#[0-9a-f]{6}$/D', $culoare) !== 1) {
+                $culoare = '';
+            }
             Settings::save($db, [
                 'cookie_banner_enabled' => isset($_POST['cookie_banner_enabled']) ? '1' : '0',
                 'cookie_banner_text' => trim((string) ($_POST['cookie_banner_text'] ?? '')),
                 'cookie_banner_policy_url' => $linkPolitica,
+                'cookie_banner_culoare' => $culoare,
             ]);
             // Paginile din cache conțin varianta veche a bannerului.
             ResponseCache::purgePageCache();
             Flash::set('success', 'Bannerul de cookies a fost salvat.');
             header('Location: /admin/settings/store?tab=cookies');
+            return;
+        }
+        if ($action === 'genereaza_politica_cookie') {
+            // Pagina „Politica de cookie-uri” din serviciile active (App\Support\ServiciiCookie): făcută prima oară, rescrisă după.
+            if (!$db instanceof PDO) {
+                Flash::set('error', 'Baza de date nu e disponibilă.');
+                header('Location: /admin/settings/store?tab=cookies#setari-politica-cookie');
+                return;
+            }
+            try {
+                $pagina = \App\Support\ServiciiCookie::genereazaPagina($db, Settings::all($db));
+            } catch (Throwable $e) {
+                error_log('ANDAXI-CMS: politica de cookie-uri nu s-a generat: ' . $e->getMessage());
+                Flash::set('error', 'Pagina nu s-a putut genera. Încearcă din nou.');
+                header('Location: /admin/settings/store?tab=cookies#setari-politica-cookie');
+                return;
+            }
+            ResponseCache::purgePageCache();
+            Flash::set('success', ($pagina['creata'] ? 'Pagina Politica de cookie-uri a fost creată: ' : 'Pagina Politica de cookie-uri a fost rescrisă: ')
+                . $pagina['url'] . '. Verifică textul (e un punct de plecare; e bine să-l citească un jurist).');
+            header('Location: /admin/settings/store?tab=cookies#setari-politica-cookie');
             return;
         }
         if ($action === 'save_welcome_popup') {

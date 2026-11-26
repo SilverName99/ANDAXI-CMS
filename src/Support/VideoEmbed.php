@@ -13,8 +13,8 @@ namespace App\Support;
  * o casetă neagră pe pagină.
  *
  * Playerul YouTube sau Vimeo e conținut al altcuiva, care poate urmări vizitatorul
- * (Vimeo pune cookie-uri fără `dnt=1`). Ca analiza și chatul (CookieConsent), el se
- * încarcă singur doar după ce vizitatorul a acceptat toate cookie-urile; altfel, în
+ * (Vimeo pune cookie-uri fără `dnt=1`). Ca chatul (CookieConsent, categoria „Conținut extern”), el se
+ * încarcă singur doar după ce vizitatorul a acceptat conținutul extern; altfel, în
  * locul lui stă o casetă de aceeași mărime cu „Pornește videoclipul”: playerul se
  * încarcă abia la apăsare (fără JavaScript, linkul deschide videoul pe YouTube sau
  * Vimeo). Playerul Vimeo are mereu `dnt=1` (fără cookie-uri de urmărire).
@@ -48,8 +48,8 @@ final class VideoEmbed
     ];
 
     /**
-     * @param bool|null $cuAcord playerul YouTube/Vimeo se încarcă singur? null = vizitatorul a acceptat toate
-     *                           cookie-urile (CookieConsent::permiteUrmarire); altfel caseta „Pornește videoclipul”
+     * @param bool|null $cuAcord playerul YouTube/Vimeo se încarcă singur? null = vizitatorul a acceptat categoria
+     *                           „Conținut extern” (CookieConsent::permite('extern')); altfel caseta „Pornește videoclipul”
      */
     public static function render(string $url, ?bool $cuAcord = null): string
     {
@@ -65,7 +65,7 @@ final class VideoEmbed
                 . ($start > 0 ? '?start=' . $start : '');
             $link = 'https://www.youtube.com/watch?v=' . rawurlencode($youtubeId) . ($start > 0 ? '&t=' . $start . 's' : '');
 
-            return ($cuAcord ?? CookieConsent::permiteUrmarire())
+            return ($cuAcord ?? CookieConsent::permite('extern'))
                 ? self::iframe($src, 'Videoclip YouTube')
                 : self::faraAcord($src, $link, 'YouTube', 'Videoclip YouTube');
         }
@@ -74,7 +74,7 @@ final class VideoEmbed
         if ($vimeoId !== '') {
             $src = 'https://player.vimeo.com/video/' . rawurlencode($vimeoId) . '?dnt=1';
 
-            return ($cuAcord ?? CookieConsent::permiteUrmarire())
+            return ($cuAcord ?? CookieConsent::permite('extern'))
                 ? self::iframe($src, 'Videoclip Vimeo')
                 : self::faraAcord($src, 'https://vimeo.com/' . rawurlencode($vimeoId), 'Vimeo', 'Videoclip Vimeo');
         }

@@ -460,9 +460,11 @@ try {
         && str_contains($acasa, '<circle cx="12" cy="12" r="6"/><path d="M12 6v12"/>') && str_contains($acasa, 'M19.1 5.1c-6'));
     $verifica('logo_meniu_mobil: primul candidat care există (logo-ul temei, cu ?v=), cu textul alternativ al temei',
         preg_match('#<img src="/tema/img/logo-demo\.svg\?v=\d+" alt="Firma Demo \(tema\)" loading="lazy">#', $acasa) === 1);
-    $verifica('culoare_principala în bannerul de cookie-uri (linkul și „Accept toate”) și în popup („Am înțeles”)',
-        str_contains($acasa, 'style="color:#0f766e;text-decoration:underline;">Politica de confidențialitate</a>')
-        && str_contains($acasa, 'background:#0f766e;color:#ffffff;font-size:14px;font-weight:700;cursor:pointer;">Accept toate</button>')
+    // Bannerul de cookie-uri pe categorii (26 nov 2026): „Accept toate” și „Refuz” pline, în culoarea temei (fără altă culoare în
+    // Setări → Cookie și popup), „Setări” conturat în ea.
+    $verifica('culoare_principala în bannerul de cookie-uri („Accept toate”, „Refuz”, conturul „Setări”) și în popup („Am înțeles”)',
+        str_contains($acasa, '.ax-cc__buton--plin{background:#0f766e;color:#ffffff;}')
+        && str_contains($acasa, 'border:2px solid #0f766e;') && str_contains($acasa, 'data-ax-cc="toate">Accept toate</button>')
         && str_contains($acasa, 'background:#0f766e;color:#ffffff;font-size:15px;font-weight:700;cursor:pointer;">Am înțeles</button>'));
 
     $tCerere('POST', '/cos/adauga/' . $tIdProdus, $tJar, ['quantity' => '1']);
