@@ -1277,7 +1277,8 @@ poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum)
   linkul semnat al abonatului (obligatoriu, ca la campanii) și antetele `List-Unsubscribe` / `List-Unsubscribe-Post`.
 - **O singură dată pe persoană**: implicit, un abonat intră o singură dată într-o automatizare (cheia unică = amprenta adresei).
   Debifat („permite reintrarea”): după fiecare eveniment nou (altă comandă, alt coș, altă confirmare) intră din nou, dar același
-  eveniment tot o singură dată.
+  eveniment tot o singură dată (și când bifa se schimbă după ce automatizarea a rulat: un coș care a primit deja o amintire sau
+  un client inactiv intrat după ultima lui comandă nu intră a doua oară).
 - **Urmărirea**: pixelul de deschidere și linkurile de clic (`GET /automatizari/d/{trimitere}/{token}`,
   `GET /automatizari/c/{trimitere}/{token}?u=…`), semnate cu cheia secretă a newsletterului (mesajul are prefixul lor, deci nu
   poate semna un link de campanie sau de dezabonare); clicul duce doar la adresa semnată pentru acea trimitere (altfel pagina 404,
