@@ -2130,6 +2130,19 @@ final class NewsletterService
      */
     public static function handleClickTrack(PDO $db, int $campaignId, int $subscriberId, string $token, string $destUrl): ?string
     {
+        return self::clicUrmarit($db, $campaignId, $subscriberId, $token, $destUrl)['destinatie'] ?? null;
+    }
+
+    /**
+     * Ca handleClickTrack, plus semnul `urmarit`: false doar pe un site mutat de pe MailPoet, pentru cine a refuzat urmărirea (sau cu
+     * nivelul MailPoet „basic”): clicul nu s-a notat, iar controllerul nu pune nici cookie-ul de atribuire `nl_cid` (E-LEG-01; MailPoet
+     * nu pune niciun cookie fără acordul urmăririi). Pe orice alt site, `urmarit` e mereu true (nicio interogare în plus). null dacă
+     * semnătura nu se potrivește.
+     *
+     * @return array{destinatie: string, urmarit: bool}|null
+     */
+    public static function clicUrmarit(PDO $db, int $campaignId, int $subscriberId, string $token, string $destUrl): ?array
+    {
         $semnatura = self::semnaturaBuna("click|{$campaignId}|{$subscriberId}|{$destUrl}", $token);
         if ($semnatura === null) {
             return null;
@@ -2149,7 +2162,7 @@ final class NewsletterService
         $destUrl = html_entity_decode($destUrl, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         // Pe un site mutat de pe MailPoet, cine a refuzat urmărirea ajunge la adresă fără ca clicul să se noteze (E-LEG-01).
         if (WpCompat::mailpoet() && self::faraUrmarireMailPoet($db, [$subscriberId]) !== []) {
-            return $destUrl;
+            return ['destinatie' => $destUrl, 'urmarit' => false];
         }
 
         try {
@@ -2187,7 +2200,7 @@ final class NewsletterService
         } catch (Throwable) {
         }
 
-        return $destUrl;
+        return ['destinatie' => $destUrl, 'urmarit' => true];
     }
 
     private static function buildUnsubscribeToken(int $subscriberId, string $email): string

@@ -5045,13 +5045,14 @@ final class SiteController
         // Doar un link semnat de noi duce mai departe (și numără clicul); semnătura se verifică întâi pe adresa brută,
         // exact cum a fost semnată, apoi pe cea fără spații la capete.
         $db = $this->db();
-        $destinatie = null;
+        $clic = null;
         if ($destUrl !== '' && $db instanceof \PDO && $campaignId > 0 && $subscriberId > 0 && $token !== '') {
-            $destinatie = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $urlBrut);
-            if ($destinatie === null && $urlBrut !== $destUrl) {
-                $destinatie = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $destUrl);
+            $clic = NewsletterService::clicUrmarit($db, $campaignId, $subscriberId, $token, $urlBrut);
+            if ($clic === null && $urlBrut !== $destUrl) {
+                $clic = NewsletterService::clicUrmarit($db, $campaignId, $subscriberId, $token, $destUrl);
             }
         }
+        $destinatie = $clic['destinatie'] ?? null;
         if ($destinatie === null) {
             // Un link care nu e dintr-un newsletter trimis: fără newsletter pe site, adresa nu există.
             if (!\App\Support\Plugins::vizibil('newsletter')) {
@@ -5063,7 +5064,9 @@ final class SiteController
         }
         $destUrl = trim($destinatie);
 
-        if ($campaignId > 0) {
+        // Cookie-ul atribuirii doar pentru un clic urmărit: pe un site mutat de pe MailPoet, cine a refuzat urmărirea nu-l primește
+        // (NewsletterService::clicUrmarit, E-LEG-01); pe celelalte site-uri, ca înainte.
+        if ($campaignId > 0 && ($clic['urmarit'] ?? true)) {
             setcookie('nl_cid', (string) $campaignId, [
                 'expires'  => time() + 7 * 86400,
                 'path'     => '/',

@@ -1136,7 +1136,9 @@ dispar, iar linkurile spre el se scot din pagini.
     butonul paginii de confirmare a dezabonării, în previzualizare → pagina dezabonării, 200, fără să caute pe cineva. Confirmarea:
     un HEAD nu confirmă nimic (VC-MP-24), iar o confirmare scoate adresa de pe lista „nu trimite”, ca linkul de confirmare al CMS-ului.
     Oprirea urmăririi (`urmarire_refuzata`): campaniile site-ului pleacă spre acel abonat fără pixel și fără linkuri urmărite, iar
-    deschiderile și clicurile lui nu se notează; cu nivelul MailPoet „basic”, pentru toți. `[site:title]` intră scăpat în HTML.
+    deschiderile și clicurile lui nu se notează; un clic al lui pe un link urmărit al site-ului (dintr-o campanie trimisă înainte să
+    refuze) duce la adresă fără cookie-ul atribuirii comenzilor `nl_cid` (`NewsletterService::clicUrmarit`, ca MailPoet, care nu pune
+    niciun cookie fără acordul urmăririi); cu nivelul MailPoet „basic”, pentru toți. `[site:title]` intră scăpat în HTML.
   - **Sondajul de după dezabonare** (`Abonati::textSimplu`): textul liber (cu „Altele”, dacă setarea îl permite) devine text simplu
     după regula lui MailPoet pentru acest câmp, scrisă aici în cuvinte: întâi dispare fiecare bloc `<script…>…</script>` și
     `<style…>…</style>` cu tot conținutul lui (numele etichetei fără deosebire între litere mari și mici, oricare atribute, până la

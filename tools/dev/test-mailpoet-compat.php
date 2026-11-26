@@ -734,6 +734,24 @@ $gif19 = NewsletterService::handleOpenTrack($db, $cUrm, $id(19), (string) ($mo19
 $tinta19 = NewsletterService::handleClickTrack($db, $cUrm, $id(19), (string) ($mc19[1] ?? ''), rawurldecode((string) ($mc19[2] ?? '')));
 $verifica('E-LEG-01: deschiderea și clicul semnate ale abonatului cu urmărirea refuzată: GIF-ul și adresa, nimic notat', strlen($gif19) > 0
     && $tinta19 === 'https://pensiune-proba.test/oferta/' && $deschideri($cUrm) === $d0 && $clicuriC($cUrm) === $k0, (string) json_encode([$tinta19, $d0, $deschideri($cUrm), $k0, $clicuriC($cUrm)]));
+// E-LEG-01-R1: clicul semnat spune și dacă a fost urmărit (NewsletterService::clicUrmarit), ca serverul să nu pună cookie-ul atribuirii
+// (nl_cid) cuiva care a refuzat urmărirea: pe un site cu MailPoet, false pentru el și true pentru ceilalți; pe un site fără MailPoet
+// (urmarire_refuzata e doar a MailPoet), true pentru oricine, ca înainte.
+$clic19 = NewsletterService::clicUrmarit($db, $cUrm, $id(19), (string) ($mc19[1] ?? ''), rawurldecode((string) ($mc19[2] ?? '')));
+preg_match('#/newsletter/track/click/\d+/\d+/([A-Za-z0-9_-]+)\?url=([^"]+)#', html_entity_decode(NewsletterService::injectClickTracking('<a href="https://pensiune-proba.test/oferta/">o</a>',
+    $cUrm, $id(11), 'http://x'), ENT_QUOTES | ENT_HTML5), $mc11);
+$clic11 = NewsletterService::clicUrmarit($db, $cUrm, $id(11), (string) ($mc11[1] ?? ''), rawurldecode((string) ($mc11[2] ?? '')));
+DateSite::reseteaza($lucru . '/pachet-fara');
+WpCompat::reseteaza();
+$clic19Fara = NewsletterService::clicUrmarit($db, $cUrm, $id(19), (string) ($mc19[1] ?? ''), rawurldecode((string) ($mc19[2] ?? '')));
+DateSite::reseteaza($lucru . '/pachet');
+WpCompat::reseteaza();
+Tema::reseteaza();
+$clicGresit = NewsletterService::clicUrmarit($db, $cUrm, $id(19), 'gresit', 'https://pensiune-proba.test/oferta/');
+$verifica('E-LEG-01-R1: clicul semnat: cu MailPoet, nemarcat „urmărit” pentru cine a refuzat urmărirea, marcat pentru ceilalți; fără MailPoet, marcat pentru '
+    . 'oricine (ca înainte); o semnătură greșită → null', $clic19 === ['destinatie' => 'https://pensiune-proba.test/oferta/', 'urmarit' => false]
+    && $clic11 === ['destinatie' => 'https://pensiune-proba.test/oferta/', 'urmarit' => true] && ($clic19Fara['urmarit'] ?? null) === true && $clicGresit === null
+    && WpCompat::mailpoet(), (string) json_encode([$clic19, $clic11, $clic19Fara, $clicGresit]));
 foreach ([$cUrm, $cBasic] as $cSters) {
     foreach (['newsletter_campaign_opens', 'newsletter_campaign_clicks', 'newsletter_campaign_sends'] as $tabel) {
         $db->prepare('DELETE FROM ' . $tabel . ' WHERE campaign_id = ?')->execute([$cSters]);
@@ -1070,6 +1088,41 @@ foreach (['pornit', 'oprit'] as $runda) {
     $verifica($e . 'deschiderea unui abonat inactiv (jetonul CMS): redevine abonat, implicarea notată, last_subscribed_at neschimbat (ca UPDATE-ul lui MailPoet)',
         $r['cod'] === 200 && $a14['status'] === 'inactive' && $ab(14)['status'] === 'active' && $ab(14)['last_subscribed_at'] === $a14['last_subscribed_at']
         && $ab(14)['last_engagement_at'] !== $a14['last_engagement_at'], json_encode([$a14['status'], $ab(14)['status'], $a14['last_subscribed_at'], $ab(14)['last_subscribed_at']]));
+    // E-LEG-01-R1: clicul pe un link urmărit al CMS-ului (o campanie trimisă de site înainte ca abonatul să refuze urmărirea): cine a
+    // refuzat-o ajunge la adresă fără cookie-ul atribuirii comenzilor (nl_cid), ca la MailPoet, care nu pune niciun cookie fără acordul
+    // urmăririi; ceilalți îl primesc ca înainte (spec. mailpoet, rândul 30: lista cookie-urilor, cu pista F).
+    $db->exec("INSERT INTO newsletter_campaigns (name, subject, html_content, status) VALUES ('Proba nl_cid', 'Proba nl_cid', '<p>x</p>', 'sent')");
+    $cNl = (int) $db->lastInsertId();
+    $clicCms = static function (int $abonat) use ($cNl, $baza0): array {
+        $html = NewsletterService::injectClickTracking('<a href="https://pensiune-proba.test/oferta/">o</a>', $cNl, $abonat, $baza0);
+        preg_match('/href="([^"]+)"/', $html, $m);
+        $c = curl_init(html_entity_decode($m[1] ?? '', ENT_QUOTES | ENT_HTML5));
+        $cookie = [];
+        $locatie = '';
+        curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 60,
+            CURLOPT_HEADERFUNCTION => static function ($c, string $linie) use (&$cookie, &$locatie): int {
+                if (stripos($linie, 'set-cookie:') === 0) {
+                    $cookie[] = trim(substr($linie, 11));
+                } elseif (stripos($linie, 'location:') === 0) {
+                    $locatie = trim(substr($linie, 9));
+                }
+                return strlen($linie);
+            }]);
+        curl_exec($c);
+        $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+        curl_close($c);
+        return ['cod' => $cod, 'locatie' => $locatie, 'nl_cid' => array_values(array_filter($cookie, static fn (string $x): bool => str_starts_with($x, 'nl_cid=')))];
+    };
+    $k19 = $clicCms($id(19));
+    $k11 = $clicCms($id(11));
+    foreach (['newsletter_campaign_opens', 'newsletter_campaign_clicks', 'newsletter_campaign_sends'] as $tabel) {
+        $db->prepare('DELETE FROM ' . $tabel . ' WHERE campaign_id = ?')->execute([$cNl]);
+    }
+    $db->prepare('DELETE FROM newsletter_campaigns WHERE id = ?')->execute([$cNl]);
+    $verifica($e . 'E-LEG-01-R1: clicul pe un link urmărit al CMS-ului: cine a refuzat urmărirea → 302 la adresă, fără cookie-ul nl_cid; un abonat care '
+        . 'n-a refuzat-o → 302 și nl_cid, ca înainte', $k19['cod'] === 302 && $k19['locatie'] === 'https://pensiune-proba.test/oferta/' && $k19['nl_cid'] === []
+        && $k11['cod'] === 302 && $k11['locatie'] === 'https://pensiune-proba.test/oferta/' && count($k11['nl_cid']) === 1
+        && str_starts_with($k11['nl_cid'][0], 'nl_cid=' . $cNl . ';'), json_encode([$k19, $k11]));
     // Vezi în browser.
     $r = $cerere($router('view_in_browser', 'view', [31, 'aa11bb22cc33', 0, 0, 41, 0]));
     $verifica($e . 'vezi în browser, anonim: 200, linkurile adresele lor, pixelul scos, prenumele implicit, CSP-ul arhivei', $r['cod'] === 200
