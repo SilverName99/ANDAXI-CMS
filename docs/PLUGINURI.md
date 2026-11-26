@@ -1301,7 +1301,10 @@ poarta `tools/dev/test-automatizari.php` (G-automatizari, și în testul de fum)
   `EmailAutomation::sendDueAbandonedCartEmails`): **cât o automatizare „Coș abandonat” e activă (cu pluginul pornit), coșurile
   abonaților activi sunt ale ei**, iar emailul clasic le sare; cei care nu sunt abonați primesc emailul clasic ca până acum (dacă
   e pornit). Un coș luat de automatizare e marcat pe loc (`abandoned_email_sent_at`, `abandoned_email_error` = `automatizare`),
-  deci emailul clasic nu-l mai ia niciodată, nici după ce automatizarea se oprește. Cu automatizarea oprită (sau pluginul oprit
+  deci emailul clasic nu-l mai ia niciodată, nici după ce automatizarea se oprește. Și invers: un coș care are deja o amintire
+  (`abandoned_email_sent_at`: emailul clasic, trimis de exemplu înainte ca automatizarea să pornească sau cât a fost oprită, ori
+  altă automatizare „Coș abandonat”) nu mai intră; un coș intră o singură dată, și cu reintrarea (omul care revine pe linkul din
+  email și pleacă iar nu primește fluxul de la capăt). Cu automatizarea oprită (sau pluginul oprit
   ori „se oprește”) emailul clasic își ia înapoi coșurile abonaților care n-au fost luate. Regula se vede în listă, în panoul
   declanșatorului și pe pagina Automatizări (emailurile comenzilor).
 - **Oprirea, ștergerea, copia**: o automatizare oprită nu-și mișcă rulările (stau unde au ajuns) și nu primește pe nimeni; la

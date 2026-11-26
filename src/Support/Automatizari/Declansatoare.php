@@ -146,7 +146,10 @@ final class Declansatoare
     /**
      * Coșurile abandonate (cron): coșuri cu adresa unui abonat activ, nefinalizate, nevăzute de `dupa` minute (dar nu mai
      * vechi de 3 zile), fără o comandă a aceleiași adrese de la începutul coșului (sau din ultimele 7 zile: aceeași plasă ca
-     * emailul clasic, EmailAutomation::sendDueAbandonedCartEmails).
+     * emailul clasic, EmailAutomation::sendDueAbandonedCartEmails) și fără o amintire deja trimisă pentru coș
+     * (`abandoned_email_sent_at`: de emailul clasic, de exemplu înainte ca automatizarea să pornească sau cât a fost oprită, ori
+     * de o automatizare, care îl marchează la intrare). Un coș intră deci o singură dată, oricâte automatizări „Coș abandonat”
+     * ar fi și oricât l-ar revedea omul (cu reintrarea, cheia are și ora la care a fost văzut).
      */
     public static function scaneazaCosuri(PDO $db, int $limita = 200): int
     {
@@ -166,6 +169,7 @@ final class Declansatoare
                  FROM cart_abandonments ca
                  JOIN newsletter_subscribers s ON s.email = ca.email AND s.status = 'active'
                  WHERE ca.converted_at IS NULL
+                   AND ca.abandoned_email_sent_at IS NULL
                    AND ca.email IS NOT NULL AND ca.email <> ''
                    AND ca.last_seen_at <= :prag
                    AND ca.last_seen_at >= :cel_mai_vechi

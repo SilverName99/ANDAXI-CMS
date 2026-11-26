@@ -464,7 +464,8 @@ $emailuriClasic = $emailuriNoi(static function () use ($db, $setariCos, &$clasic
 $destinatariClasic = $db->query("SELECT session_id FROM cart_abandonments WHERE session_id LIKE 'sess-test-auto-%' AND abandoned_email_error IS NULL AND abandoned_email_sent_at IS NOT NULL ORDER BY session_id")->fetchAll(PDO::FETCH_COLUMN);
 $verifica('fără emailuri duble: emailul clasic pleacă la neabonat, nu și la coșurile abonaților (nici la cel încă neintrat, de 10 zile)',
     $destinatariClasic === ['sess-test-auto-2'], json_encode($destinatariClasic) . ' ' . json_encode($clasic));
-// Coș cumpărat între timp: emailul următor nu mai pleacă.
+// Coș cumpărat între timp: emailul următor nu mai pleacă. (Prima automatizare de coș se oprește: un coș intră într-una singură.)
+Flux::schimbaStarea($db, $aCos, 'oprita');
 $aCos2 = $automatizare('cos_abandonat', ['dupa' => 30, 'unitate' => 'minute'], [['cheie' => 'p1', 'tip' => 'asteapta', 'setari' => ['cat' => 1, 'unitate' => 'ore']],
     ['cheie' => 'p2', 'tip' => 'email', 'setari' => ['email' => 'e1']]], ['e1' => ['Încă te așteaptă', 'Text']]);
 $abonat('cos.cumpara@exemplu.ro');
@@ -477,8 +478,34 @@ $tura();
 $rCumpara = $db->query("SELECT * FROM automatizari_rulari WHERE automatizare_id = {$aCos2} AND email = 'cos.cumpara@exemplu.ro'")->fetch(PDO::FETCH_ASSOC);
 $verifica('coș cumpărat după intrare: fluxul iese („a_cumparat”) înainte de email', is_array($rCumpara) && $rCumpara['motiv_iesire'] === 'a_cumparat'
     && $unu('SELECT COUNT(*) FROM automatizari_trimiteri WHERE rulare_id = :r', ['r' => (int) $rCumpara['id']]) === '0', json_encode($rCumpara));
+// Un coș căruia emailul clasic i-a trimis deja amintirea (de exemplu înainte ca automatizarea să pornească, sau cât a fost
+// oprită) nu mai intră: altfel omul primea două emailuri pentru același coș.
+$abonat('cos.clasic@exemplu.ro');
+$db->exec("INSERT INTO cart_abandonments (session_id, email, customer_name, cart_snapshot, last_seen_at, created_at, abandoned_email_sent_at)
+    VALUES ('sess-test-auto-6', 'cos.clasic@exemplu.ro', 'Sorin Exemplu', 'Ceai', NOW() - INTERVAL 2 HOUR, NOW() - INTERVAL 3 HOUR, NOW() - INTERVAL 1 HOUR)");
+$tura();
+$verifica('coșul care a primit deja emailul clasic nu intră în automatizare (niciun al doilea email pentru același coș)',
+    $unu("SELECT COUNT(*) FROM automatizari_rulari WHERE email = 'cos.clasic@exemplu.ro'") === '0');
 Flux::schimbaStarea($db, $aCos, 'oprita');
 Flux::schimbaStarea($db, $aCos2, 'oprita');
+// Cu reintrarea: același coș, văzut din nou (omul revine pe linkul din email, apoi pleacă iar), nu pornește a doua oară fluxul.
+$aCosReintrare = $automatizare('cos_abandonat', ['dupa' => 30, 'unitate' => 'minute'], [['cheie' => 'p1', 'tip' => 'email', 'setari' => ['email' => 'e1']]],
+    ['e1' => ['Coșul tău (reintrare)', 'Text']], true);
+$abonat('cos.revine@exemplu.ro');
+$db->prepare("INSERT INTO cart_abandonments (session_id, email, customer_name, cart_snapshot, last_seen_at, created_at)
+    VALUES ('sess-test-auto-7', 'cos.revine@exemplu.ro', 'Mihai Exemplu', 'Ceai', :v, :c)")
+    ->execute(['v' => Ceas::sql(Ceas::acum()->modify('-2 hours')), 'c' => Ceas::sql(Ceas::acum()->modify('-3 hours'))]);
+$tura();
+$db->prepare("UPDATE cart_abandonments SET last_seen_at = :v WHERE session_id = 'sess-test-auto-7'")->execute(['v' => Ceas::sql(Ceas::acum()->modify('+5 minutes'))]);
+Ceas::avanseaza('+2 hours');
+$tura();
+$rulariRevine = array_values(array_filter($rulari($aCosReintrare), static fn (array $r): bool => $r['email'] === 'cos.revine@exemplu.ro'));
+$verifica('cu reintrarea: coșul văzut din nou după primul email nu mai intră a doua oară (o rulare, un email)', count($rulariRevine) === 1
+    && $unu("SELECT COUNT(*) FROM automatizari_trimiteri WHERE rulare_id = :r AND stare = 'sent'", ['r' => (int) ($rulariRevine[0]['id'] ?? 0)]) === '1',
+    json_encode(array_column($rulariRevine, 'cheie_unica')));
+$verifica('cu reintrarea: coșurile luate deja de altă automatizare (marcate) nu intră și aici', $unu(
+    "SELECT COUNT(*) FROM automatizari_rulari WHERE automatizare_id = :a AND email IN ('cos.abonat@exemplu.ro', 'cos.cumpara@exemplu.ro')", ['a' => $aCosReintrare]) === '0');
+Flux::schimbaStarea($db, $aCosReintrare, 'oprita');
 $verifica('automatizarea de coș oprită: emailul clasic își ia înapoi coșurile abonaților (cele nemarcate)', !Declansatoare::preiaCosurileAbonatilor($db));
 
 // B5. Client inactiv de X zile.
