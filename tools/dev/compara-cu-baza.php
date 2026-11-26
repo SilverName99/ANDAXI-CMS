@@ -4179,7 +4179,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 if ((int) ($raspunsuri[4]['cod'] ?? 0) !== 409) {
                     $probleme[] = 'salvarea unui newsletter trimis: codul ' . (int) ($raspunsuri[4]['cod'] ?? 0) . ', aștept 409';
                 }
-                foreach ([[0, 'data-pas-panou'], [0, 'nlp-sablon'], [1, '"ok":true'], [2, 'Au rămas texte de exemplu din șablon'], [2, '"blocheaza":true'],
+                foreach ([[0, 'data-pas-panou'], [0, 'data-sablon="magazin:noutati"'], [1, '"ok":true'], [2, 'Au rămas texte de exemplu din șablon'], [2, '"blocheaza":true'],
                     [3, 'data-pas-panou']] as [$n, $text]) {
                     if (!$contine($raspunsuri[$n] ?? [], $text)) {
                         $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';

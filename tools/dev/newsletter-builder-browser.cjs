@@ -3,11 +3,13 @@
 // loc ca pânza (680 / 375 px, emailul randat de server, de fiecare dată într-un cadru izolat nou), pânza identică cu emailul
 // (blocurile lipite, aceeași înălțime ca emailul randat), eticheta blocului ales și într-o coloană, scrisul pe pânză (bara
 // B / I / U / link / culoare) cu textul curățat, încărcarea pozelor prin tragere și lipire, Anulează / Refă, salvarea automată,
-// tastatura, 1366 px. Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_CAPTURI (dosarul capturilor,
+// tastatura, 1366 px; „Alege un șablon” (G14–G19: galeria cu miniaturi, previzualizarea, întrebarea, Anulează, aceleași blocuri
+// ca la 163cba7, 390 px). Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_CAPTURI (dosarul capturilor,
 // opțional). Scrie pe stdout un JSON cu rezultatele.
 'use strict';
 
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { chromium } = require('playwright');
 
 const baza = process.env.CMS_DEV_URL || 'http://127.0.0.1:8701';
@@ -410,6 +412,225 @@ const indexTip = async (pagina, tip, ultimul) => {
     nota('G13 la 1366 px: paleta 260 px, panoul 340 px, emailul (680 px) întreg pe pânză și în Desktop, fără derulare în lateral (pânza și '
       + 'pagina); meniul adminului strâns', ingust.paleta === 260 && ingust.panou === 340 && ingust.email === 680 && ingust.inScroll && ingust.derulare === 0
       && ingust.pagina === 0 && ingust.meniu && ingustDesktop.derulare === 0 && ingustDesktop.latime === 682, JSON.stringify({ ingust, ingustDesktop }));
+
+    // G14–G19: „Alege un șablon” (26 nov 2026): galeria cu miniaturi adevărate, previzualizarea, alegerea, întrebarea, Anulează.
+    // Blocurile șabloanelor simple trebuie să fie exact cele de dinainte: luate din builderul de la 163cba7 (git), nu copiate aici.
+    let starteriVechi = null;
+    try {
+      const vechi = execFileSync('git', ['-C', path.join(__dirname, '..', '..'), 'show', '163cba7:views/admin/emails/builder-script.php'], { encoding: 'utf8' });
+      const a = vechi.indexOf('const starters = {');
+      const b = vechi.indexOf('\n  };', a);
+      starteriVechi = (0, eval)('(' + vechi.slice(a + 'const starters = '.length, b + 4) + ')');
+    } catch (e) {
+      starteriVechi = null;
+    }
+    const sabDeschis = () => pagina.evaluate(() => document.getElementById('eb-starter-modal').style.display === 'flex');
+    const deschideSabloane = async () => {
+      await pagina.click('.eb-sablon-btn');
+      await pagina.waitForSelector('#eb-sab-galerie:not([hidden])', { timeout: 5000 });
+    };
+    // Fiecare card ajunge pe ecran (miniaturile se încarcă doar atunci), apoi așteptăm toate miniaturile.
+    await deschideSabloane();
+    const cheiSabloane = await pagina.$$eval('.eb-sab-alege', (x) => x.map((b) => b.dataset.sablon));
+    for (const cheie of cheiSabloane) {
+      await pagina.$eval(`.eb-sab-alege[data-sablon="${cheie}"]`, (b) => b.closest('.eb-sab-card').scrollIntoView({ block: 'center' }));
+      await pagina.waitForTimeout(60);
+    }
+    await pagina.waitForFunction(() => [...document.querySelectorAll('.eb-sab-mini[data-mini]')].every((m) => m.dataset.gata === '1'), null, { timeout: 20000 }).catch(() => {});
+    const galerie = await pagina.evaluate(() => {
+      const sab = window.EB_DATE.sabloane || {};
+      const carduri = [...document.querySelectorAll('.eb-sab-card')].map((card) => {
+        const b = card.querySelector('.eb-sab-alege');
+        const mini = card.querySelector('.eb-sab-mini');
+        const cadru = mini.querySelector('iframe');
+        const rm = mini.getBoundingClientRect();
+        const rc = cadru ? cadru.getBoundingClientRect() : null;
+        return { cheie: b.dataset.sablon, nume: b.querySelector('.eb-sab-nume').textContent, desc: b.querySelector('.eb-sab-desc').textContent, buton: b.tagName,
+          gol: !!mini.querySelector('svg.eb-sab-gol'), sandbox: cadru ? cadru.getAttribute('sandbox') : null, tab: cadru ? cadru.getAttribute('tabindex') : null,
+          clicuri: cadru ? getComputedStyle(cadru).pointerEvents : '', email: cadru ? /class="nl-card"/.test(cadru.srcdoc) : false, srcdoc: cadru ? cadru.srcdoc : '',
+          scalat: rc ? Math.abs(rc.width - rm.width) <= 2 : false };
+      });
+      const dialog = document.querySelector('#eb-starter-modal .eb-sab').getBoundingClientRect();
+      const lista = document.getElementById('eb-sab-lista');
+      const textFereastra = document.querySelector('#eb-starter-modal .eb-sab').innerText;
+      return { carduri, sab: Object.keys(sab), dialog: { w: Math.round(dialog.width), h: Math.round(dialog.height), sus: dialog.top, jos: dialog.bottom }, vh: innerHeight, vw: innerWidth,
+        derulareLaterala: lista.scrollWidth - lista.clientWidth, emoji: /\p{Extended_Pictographic}/u.test(textFereastra),
+        coloane: getComputedStyle(document.querySelector('.eb-sab-grila')).gridTemplateColumns.split(' ').length,
+        taburi: [...document.querySelectorAll('[data-sab-grup]')].map((t) => t.textContent.replace(/\s+/g, ' ').trim()) };
+    });
+    // Textul de început al fiecărui șablon trebuie să fie în miniatura lui (emailul randat de server, nu o mostră).
+    const primulText = (lista) => { const h = (lista || []).find((x) => x.type === 'header'); return h ? h.content.replace(/ [^\s]*$/, '') : ''; };
+    const asteptatSab = await pagina.evaluate(() => window.EB_DATE.sabloane);
+    const faraMini = galerie.carduri.filter((c) => c.cheie !== 'blank' && !(c.email && c.sandbox === '' && c.tab === '-1' && c.clicuri === 'none' && c.scalat
+      && c.srcdoc.includes(primulText(c.cheie.startsWith('magazin:') ? asteptatSab[c.cheie.slice(8)] : (starteriVechi || {})[c.cheie]))));
+    const blank = galerie.carduri.find((c) => c.cheie === 'blank');
+    nota('G14 „Alege un șablon”, pasul 1: o fereastră mare cu toate șabloanele (cele 4 ale magazinului și cele 6 simple), fiecare cu miniatura lui adevărată '
+      + '(emailul randat de server, micșorat, într-un cadru izolat fără scripturi, fără clicuri, scos din Tab), numele și o descriere; „Blank” cu conturul unui '
+      + 'email gol; grupurile Toate / Magazin / Simple; fără emoji; la 1366 px încape în ecran, ≥ 4 coloane, fără derulare în lateral',
+      galerie.carduri.length === 10 && galerie.sab.every((k) => galerie.carduri.some((c) => c.cheie === 'magazin:' + k))
+      && ['blank', 'welcome', 'promo', 'newsletter', 'order', 'simple'].every((k) => galerie.carduri.some((c) => c.cheie === k))
+      && faraMini.length === 0 && blank && blank.gol && galerie.carduri.every((c) => c.buton === 'BUTTON' && c.nume && c.desc)
+      && JSON.stringify(galerie.taburi) === JSON.stringify(['Toate 10', 'Magazin 4', 'Simple 6']) && !galerie.emoji
+      && galerie.dialog.sus >= 0 && galerie.dialog.jos <= galerie.vh && galerie.coloane >= 4 && galerie.derulareLaterala === 0,
+      JSON.stringify({ faraMini: faraMini.map((c) => ({ cheie: c.cheie, email: c.email, sandbox: c.sandbox, tab: c.tab, clicuri: c.clicuri, scalat: c.scalat })),
+        dialog: galerie.dialog, coloane: galerie.coloane, taburi: galerie.taburi, emoji: galerie.emoji, derulare: galerie.derulareLaterala, n: galerie.carduri.length }));
+
+    // G15: tastatura în galerie: săgețile între carduri (și pe rânduri), grupurile cu săgețile, căutarea, focusul ținut în fereastră, Esc.
+    const activ = () => pagina.evaluate(() => { const a = document.activeElement; return a ? (a.dataset.sablon || a.dataset.sabGrup || a.id || a.className) : ''; });
+    await pagina.$eval('.eb-sab-alege[data-sablon="magazin:noutati"]', (b) => b.focus());
+    await pagina.keyboard.press('ArrowRight');
+    const dreapta = await activ();
+    await pagina.keyboard.press('ArrowDown');
+    const jos = await activ();
+    await pagina.keyboard.press('ArrowUp');
+    const sus = await activ();
+    await pagina.keyboard.press('End');
+    const capat = await activ();
+    const inTab = await pagina.$$eval('.eb-sab-alege', (x) => x.filter((b) => b.getAttribute('tabindex') === '0').length);
+    await pagina.focus('[data-sab-grup="toate"]');
+    await pagina.keyboard.press('ArrowRight');
+    const magazin = await pagina.$$eval('.eb-sab-card', (x) => x.filter((c) => !c.hidden && !c.closest('[hidden]')).map((c) => c.querySelector('.eb-sab-alege').dataset.sablon));
+    await pagina.keyboard.press('ArrowRight');
+    const simple = await pagina.$$eval('.eb-sab-card', (x) => x.filter((c) => !c.hidden && !c.closest('[hidden]')).map((c) => c.querySelector('.eb-sab-alege').dataset.sablon));
+    await pagina.keyboard.press('Home');
+    await pagina.fill('#eb-sab-cauta', 'comanda');
+    const cautat = await pagina.$$eval('.eb-sab-card', (x) => x.filter((c) => !c.hidden && !c.closest('[hidden]')).map((c) => c.querySelector('.eb-sab-alege').dataset.sablon));
+    await pagina.fill('#eb-sab-cauta', '');
+    let iesit = 0;
+    for (let k = 0; k < 14; k++) {
+      await pagina.keyboard.press(k % 5 === 4 ? 'Shift+Tab' : 'Tab');
+      if (!(await pagina.evaluate(() => !!document.activeElement.closest('#eb-starter-modal .eb-sab')))) iesit++;
+    }
+    await pagina.keyboard.press('Escape');
+    const dupaEsc = { deschis: await sabDeschis(), focus: await pagina.evaluate(() => document.activeElement.classList.contains('eb-sablon-btn')) };
+    nota('G15 tastatura în galerie: → și ↓ / ↑ trec la cardul următor și pe rândul de dedesubt, End la ultimul, un singur card în Tab; săgețile schimbă '
+      + 'grupul (Magazin: 4, Simple: 6); căutarea fără diacritice („comanda”); Tab și Shift+Tab rămân în fereastră; Esc o închide și focusul revine pe buton',
+      dreapta === 'magazin:oferta' && jos !== dreapta && jos.indexOf('magazin:') !== 0 && sus.indexOf('magazin:') === 0 && capat === 'simple' && inTab === 1
+      && magazin.length === 4 && magazin.every((k) => k.startsWith('magazin:')) && simple.length === 6 && simple.every((k) => !k.startsWith('magazin:'))
+      && JSON.stringify(cautat) === '["order"]' && iesit === 0 && !dupaEsc.deschis && dupaEsc.focus,
+      JSON.stringify({ dreapta, jos, sus, capat, inTab, magazin, simple, cautat, iesit, dupaEsc }));
+
+    // G16: pasul 2, previzualizarea mare: aceeași cale ca Desktop / Mobil (cadru izolat nou la fiecare schimbare, 680 / 375 px), înapoi la galerie.
+    const sabStare = async () => {
+      await pagina.waitForFunction(() => { const c = document.getElementById('eb-sab-iframe'); return c && c.style.display !== 'none' && c.style.height !== '600px'; }, null, { timeout: 15000 }).catch(() => {});
+      await pagina.waitForTimeout(150);
+      const s = await pagina.evaluate(() => {
+        const c = document.getElementById('eb-sab-iframe');
+        if (!c.dataset.testNr) c.dataset.testNr = String((window.__nrSab = (window.__nrSab || 0) + 1));
+        return { nr: c.dataset.testNr, latime: Math.round(c.getBoundingClientRect().width), sandbox: c.getAttribute('sandbox'), inaltime: c.style.height,
+          titlu: document.getElementById('eb-sab-titlu').textContent, apasat: [...document.querySelectorAll('[data-sab-mod]')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.sabMod),
+          eticheta: document.querySelector('#eb-starter-modal .eb-sab').getAttribute('aria-labelledby'), focus: document.activeElement.id };
+      });
+      const el = await pagina.$('#eb-sab-iframe');
+      const fr = el ? await el.contentFrame() : null;
+      s.text = fr ? await fr.evaluate(() => document.body.innerText).catch(() => '') : '';
+      s.h = fr ? await fr.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height)).catch(() => 0) : 0;
+      return s;
+    };
+    await deschideSabloane();
+    await pagina.click('.eb-sab-alege[data-sablon="magazin:oferta"]');
+    const pDesktop = await sabStare();
+    await pagina.click('[data-sab-mod="mobile"]');
+    const pMobil = await sabStare();
+    await pagina.click('[data-sab-mod="desktop"]');
+    const pDesktop2 = await sabStare();
+    if (capturi) await pagina.screenshot({ path: path.join(capturi, 'sabloane-previzualizare.png') }).catch(() => {});
+    await pagina.click('#eb-sab-inapoi');
+    await pagina.waitForTimeout(150);
+    const inapoi = await pagina.evaluate(() => ({ galerie: !document.getElementById('eb-sab-galerie').hidden, previz: !document.getElementById('eb-sab-previzualizare').hidden,
+      focus: document.activeElement.dataset.sablon || '' }));
+    nota('G16 pasul 2: clic pe un card arată șablonul mare, randat de server (codul TOAMNA20 al șablonului „Ofertă”), într-un cadru izolat (allow-scripts), '
+      + 'de 680 px; Mobil îl arată la 375 px, Desktop din nou la 680, de fiecare dată într-un cadru nou, cu înălțimea emailului; fereastra poartă numele '
+      + 'șablonului; „← Înapoi la șabloane” revine la galerie, cu focusul pe cardul lui',
+      [pDesktop, pMobil, pDesktop2].every((s) => s.sandbox === 'allow-scripts' && s.text.includes('TOAMNA20') && s.titlu === 'Ofertă / reducere' && s.inaltime === s.h + 'px'
+        && s.eticheta === 'eb-sab-titlu') && pDesktop.latime === 680 && pMobil.latime === 375 && pDesktop2.latime === 680
+      && JSON.stringify([pDesktop.apasat, pMobil.apasat, pDesktop2.apasat]) === '[["desktop"],["mobile"],["desktop"]]'
+      && new Set([pDesktop.nr, pMobil.nr, pDesktop2.nr]).size === 3 && pDesktop.focus === 'eb-sab-foloseste'
+      && inapoi.galerie && !inapoi.previz && inapoi.focus === 'magazin:oferta',
+      JSON.stringify({ pDesktop: Object.assign({}, pDesktop, { text: pDesktop.text.slice(0, 60) }), pMobil: Object.assign({}, pMobil, { text: '' }), pDesktop2: Object.assign({}, pDesktop2, { text: '' }), inapoi }));
+    await pagina.keyboard.press('Escape');
+
+    // G17: peste un email cu conținut, întrebarea din fereastră; Renunță nu schimbă nimic; Da pune exact blocurile de dinainte; Anulează le scoate.
+    const alege = async (cheie, raspuns) => {
+      await deschideSabloane();
+      await pagina.click(`.eb-sab-alege[data-sablon="${cheie}"]`);
+      await pagina.waitForSelector('#eb-sab-previzualizare:not([hidden])');
+      await pagina.click('#eb-sab-foloseste');
+      await pagina.waitForTimeout(80);
+      const intrebare = await pagina.evaluate(() => { const q = document.getElementById('eb-sab-intrebare'); return q.hidden ? '' : q.querySelector('strong').textContent; });
+      if (intrebare && raspuns) await pagina.click(raspuns === 'da' ? '#eb-sab-inlocuieste' : '#eb-sab-renunta');
+      await pagina.waitForTimeout(80);
+      return intrebare;
+    };
+    const continutInainte = JSON.stringify(await blocuri(pagina));
+    const intrebare1 = await alege('welcome', 'nu');
+    const dupaRenunta = { blocuri: JSON.stringify(await blocuri(pagina)) === continutInainte, deschis: await sabDeschis(),
+      focus: await pagina.evaluate(() => document.activeElement.id) };
+    await pagina.click('#eb-sab-foloseste');
+    await pagina.click('#eb-sab-inlocuieste');
+    await pagina.waitForTimeout(100);
+    const pus = JSON.stringify(await blocuri(pagina));
+    const toast = await pagina.evaluate(() => ({ vizibil: !document.getElementById('eb-toast').hidden, text: document.getElementById('eb-toast-text').textContent }));
+    const deschisDupa = await sabDeschis();
+    await pagina.click('#btn-undo');
+    const sabDupaUndo = JSON.stringify(await blocuri(pagina));
+    await pagina.click('#btn-redo');
+    const sabDupaRedo = JSON.stringify(await blocuri(pagina));
+    await pagina.click('#eb-toast-anuleaza').catch(() => {});
+    const dupaToast = JSON.stringify(await blocuri(pagina));
+    nota('G17 un șablon peste un email cu conținut: întrebarea „Șablonul înlocuiește conținutul de acum. Continui?” în fereastră; Renunță lasă emailul neatins '
+      + '(fereastra rămâne, focusul pe „Folosește”); „Da, înlocuiește” pune exact blocurile de la 163cba7, închide fereastra și spune „Am pus șablonul…” cu Anulează; '
+      + 'Anulează (bara de sus) pune conținutul înapoi, Refă din nou șablonul, „Anulează” din mesaj iar conținutul',
+      starteriVechi && intrebare1 === 'Șablonul înlocuiește conținutul de acum. Continui?' && dupaRenunta.blocuri && dupaRenunta.deschis && dupaRenunta.focus === 'eb-sab-foloseste'
+      && pus === JSON.stringify(starteriVechi.welcome) && !deschisDupa && toast.vizibil && toast.text === 'Am pus șablonul „Bun venit”.'
+      && sabDupaUndo === continutInainte && sabDupaRedo === pus && dupaToast === continutInainte,
+      JSON.stringify({ starteri: !!starteriVechi, intrebare1, dupaRenunta, pusBun: starteriVechi && pus === JSON.stringify(starteriVechi.welcome), toast, deschisDupa,
+        undo: sabDupaUndo === continutInainte, redo: sabDupaRedo === pus, dinMesaj: dupaToast === continutInainte }));
+
+    // G18: fiecare șablon, ales din fereastră, pune exact ce punea înainte (simplele: blocurile de la 163cba7; ale magazinului: cele de la server).
+    const diferite = [];
+    for (const cheie of cheiSabloane) {
+      await alege(cheie, 'da');
+      const b = JSON.stringify(await blocuri(pagina));
+      const asteptat = cheie.startsWith('magazin:') ? asteptatSab[cheie.slice(8)] : (starteriVechi || {})[cheie];
+      if (!asteptat || b !== JSON.stringify(asteptat)) diferite.push(cheie);
+    }
+    // Emailul unui „Newsletter nou” neatins (doar textul de exemplu) nu are ce pierde: fără întrebare.
+    await pagina.evaluate(() => {
+      window.EB_DATE.sabloane.__exemplu = [{ type: 'header', content: 'Titlul Newsletter-ului' }, { type: 'text', content: 'Scrie conținutul newsletter-ului aici.' },
+        { type: 'button', label: 'Află mai multe', url: '#' }];
+      window.ebApplyStarter('magazin:__exemplu');
+    });
+    const intrebareExemplu = await alege('simple', 'da');
+    const dupaExemplu = JSON.stringify(await blocuri(pagina)) === JSON.stringify(starteriVechi && starteriVechi.simple);
+    nota('G18 fiecare dintre cele 10 șabloane, ales din fereastră, pune exact blocurile de dinainte (simplele: cele de la 163cba7; ale magazinului: '
+      + 'NewsletterSabloane); peste textul de exemplu al unui „Newsletter nou” neatins nu se mai întreabă', diferite.length === 0 && cheiSabloane.length === 10
+      && intrebareExemplu === '' && dupaExemplu, JSON.stringify({ diferite, intrebareExemplu, dupaExemplu }));
+
+    // G19: pe un ecran îngust (390 px): fereastra e tot ecranul, două coloane, fără derulare în lateral; previzualizarea pornește pe Mobil și încape.
+    await pagina.setViewportSize({ width: 390, height: 844 });
+    await pagina.waitForTimeout(200);
+    await pagina.evaluate(() => window.ebShowStarterModal());
+    await pagina.waitForTimeout(200);
+    const ingustGal = await pagina.evaluate(() => {
+      const d = document.querySelector('#eb-starter-modal .eb-sab').getBoundingClientRect();
+      const l = document.getElementById('eb-sab-lista');
+      return { w: Math.round(d.width), h: Math.round(d.height), derulare: l.scrollWidth - l.clientWidth,
+        coloane: getComputedStyle(document.querySelector('.eb-sab-grila')).gridTemplateColumns.split(' ').length };
+    });
+    await pagina.click('.eb-sab-alege[data-sablon="welcome"]');
+    const ingustPrev = await sabStare();
+    const incape = await pagina.evaluate(() => {
+      const c = document.getElementById('eb-sab-iframe').getBoundingClientRect();
+      const f = document.getElementById('eb-sab-foloseste').getBoundingClientRect();
+      return { dreapta: Math.round(c.right), folosesteVizibil: f.bottom <= innerHeight && f.right <= innerWidth };
+    });
+    nota('G19 la 390 px: fereastra ocupă tot ecranul, galeria pe două coloane fără derulare în lateral; previzualizarea pornește pe Mobil și încape, '
+      + '„Folosește acest șablon” se vede', ingustGal.w === 390 && ingustGal.h === 844 && ingustGal.derulare === 0 && ingustGal.coloane === 2
+      && JSON.stringify(ingustPrev.apasat) === '["mobile"]' && ingustPrev.text.includes('Bun venit') && incape.dreapta <= 390 && incape.folosesteVizibil,
+      JSON.stringify({ ingustGal, apasat: ingustPrev.apasat, latime: ingustPrev.latime, incape }));
+    await pagina.keyboard.press('Escape');
+    await pagina.setViewportSize({ width: 1366, height: 800 });
 
     nota('nicio eroare JavaScript în pagina adminului', erori.length === 0, erori.join(' | '));
   } catch (e) {

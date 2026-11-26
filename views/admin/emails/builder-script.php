@@ -1493,9 +1493,10 @@ const EB_SCRIPT_INALTIME = '<script>(function(){var o=' + JSON.stringify(window.
   + 'window.addEventListener("load",t);window.addEventListener("resize",t);t();})();<\/script>';
 window.addEventListener('message', (e) => {
   if (e.origin !== 'null' || !e.data || e.data.ax !== 'eb-inaltime') return;
-  const cadru = document.getElementById('eb-preview-iframe');
   const h = Number(e.data.h);
-  if (cadru && e.source === cadru.contentWindow && Number.isFinite(h) && h > 0 && h < 200000) cadru.style.height = h + 'px';
+  // Previzualizarea builderului și pe cea a șablonului ales (pasul 2 din „Alege un șablon”).
+  const cadru = ['eb-preview-iframe', 'eb-sab-iframe'].map(id => document.getElementById(id)).find(c => c && e.source === c.contentWindow);
+  if (cadru && Number.isFinite(h) && h > 0 && h < 200000) cadru.style.height = h + 'px';
 });
 
 /* Fiecare previzualizare primește un cadru NOU, pus în pagină vizibil, și abia apoi emailul (srcdoc). Înainte, același
@@ -1514,12 +1515,15 @@ function ebCadruPrevizualizare(vechi, stil) {
 
 /* Răspunsul previzualizării: JSON-ul cu emailul sau un mesaj de spus omului (sesiune expirată, refuz, eroare). */
 function ebCerePrevizualizare() {
-  const subject = document.getElementById('eb-subject-input')?.value || '';
+  return ebPrevizualizareBlocuri(blocks, document.getElementById('eb-subject-input')?.value || '');
+}
+/* Aceeași cale pentru orice blocuri: emailul de pe ecran și șabloanele din „Alege un șablon” (miniaturile și pasul 2). */
+function ebPrevizualizareBlocuri(lista, subject) {
   return fetch('/admin/emails/builder/preview', {
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded', 'Accept':'application/json'},
     credentials:'same-origin',
-    body: 'blocks_json='+encodeURIComponent(JSON.stringify(blocks))+'&subject='+encodeURIComponent(subject),
+    body: 'blocks_json='+encodeURIComponent(JSON.stringify(lista))+'&subject='+encodeURIComponent(subject),
   })
   .then(r => r.json().catch(() => null).then(d => {
     if (r.ok && d && d.ok && typeof d.html === 'string') return d.html;
@@ -1560,81 +1564,383 @@ function loadPreview(width) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   ȘABLOANELE DE START
+   ȘABLOANELE: „Alege un șablon”
+   Pasul 1, galeria: fiecare card are miniatura șablonului = emailul randat de server (aceeași cale ca Desktop / Mobil),
+   micșorat, într-un cadru izolat fără scripturi (sandbox=""), încărcat doar când cardul ajunge pe ecran; grupurile
+   Toate / Magazin / Simple și căutarea. Pasul 2: previzualizarea mare a șablonului ales, Desktop / Mobil ca în builder,
+   „← Înapoi la șabloane” și „Folosește acest șablon”. Peste un email cu conținut, întrebarea „Continui?” e în fereastră;
+   alegerea intră în istoric (Anulează / Ctrl+Z o scoate). Blocurile puse sunt exact cele de până acum.
 ═══════════════════════════════════════════════════════════ */
-window.ebShowStarterModal = function() {
-  document.getElementById('eb-starter-modal').style.display='flex';
-  setTimeout(() => document.querySelector('#eb-starter-modal .eb-modal-close')?.focus(), 0);
+const EB_STARTERI = {
+  blank: [
+    {type:'header', content:'Titlul email-ului', align:'center', font_size:30, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
+  ],
+  welcome: [
+    {type:'header', content:'Bun venit! 👋', align:'center', font_size:30, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
+    {type:'spacer', height:16, background:'#ffffff'},
+    {type:'text', content:'Îți mulțumim că te-ai abonat la newsletter-ul nostru. Suntem bucuroși să te avem alături!', align:'center', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
+    {type:'spacer', height:8, background:'#ffffff'},
+    {type:'button', label:'Descoperă produsele noastre', url:'', align:'center', background:'#ffffff', button_color:'#2d7d5f', text_color:'#ffffff', border_radius:6},
+    {type:'spacer', height:16, background:'#ffffff'},
+  ],
+  promo: [
+    {type:'header', content:'Ofertă specială 🎁', align:'center', font_size:34, font_size_mobile:24, background:'#2d7d5f', text_color:'#ffffff'},
+    {type:'image', image_url:'', alt:'Banner promoție', align:'center', background:'#ffffff', width:100},
+    {type:'spacer', height:12, background:'#ffffff'},
+    {type:'text', content:'Nu rata această ofertă exclusivă! Comandă acum și beneficiezi de reducere.', align:'center', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
+    {type:'spacer', height:8, background:'#ffffff'},
+    {type:'button', label:'Cumpără acum', url:'', align:'center', background:'#ffffff', button_color:'#dc2626', text_color:'#ffffff', border_radius:6},
+    {type:'spacer', height:16, background:'#ffffff'},
+  ],
+  newsletter: [
+    {type:'header', content:'Newsletter lunar', align:'center', font_size:28, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
+    {type:'spacer', height:16, background:'#ffffff'},
+    {type:'text', content:'Salutare!\n\nIată cele mai importante noutăți ale lunii...', align:'left', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
+    {type:'divider', background:'#ffffff', color:'#e5e7eb', width:80, thickness:1},
+    {type:'text', content:'Titlu articol\n\nDescriere scurtă a articolului sau produsului. Click pentru a afla mai multe.', align:'left', font_size:15, font_size_mobile:13, background:'#f9fafb', text_color:'#374151'},
+    {type:'button', label:'Citește mai mult', url:'', align:'left', background:'#f9fafb', button_color:'#2d7d5f', text_color:'#ffffff', border_radius:5},
+    {type:'divider', background:'#ffffff', color:'#e5e7eb', width:80, thickness:1},
+    {type:'spacer', height:16, background:'#ffffff'},
+  ],
+  order: [
+    {type:'header', content:'Confirmare comandă', align:'center', font_size:28, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
+    {type:'spacer', height:16, background:'#ffffff'},
+    {type:'text', content:'Dragă {{customer_name}},\n\nComanda ta #{{order_number}} a fost primită cu succes. Mulțumim!', align:'left', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
+    {type:'divider', background:'#ffffff', color:'#e5e7eb', width:100, thickness:1},
+    {type:'text', content:'{{order_items_html}}', align:'left', font_size:14, font_size_mobile:13, background:'#f9fafb', text_color:'#374151'},
+    {type:'divider', background:'#ffffff', color:'#e5e7eb', width:100, thickness:1},
+    {type:'text', content:'Total: {{order_total}}', align:'right', font_size:16, font_size_mobile:15, background:'#ffffff', text_color:'#111827'},
+    {type:'spacer', height:12, background:'#ffffff'},
+    {type:'button', label:'Vezi comanda', url:'{{order_action_url}}', align:'center', background:'#ffffff', button_color:'#2d7d5f', text_color:'#ffffff', border_radius:6},
+    {type:'spacer', height:16, background:'#ffffff'},
+  ],
+  simple: [
+    {type:'header', content:'Titlu email', align:'center', font_size:30, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
+    {type:'spacer', height:16, background:'#ffffff'},
+    {type:'text', content:'Scrie conținutul tău principal aici.', align:'left', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
+    {type:'divider', background:'#ffffff', color:'#e5e7eb', width:80, thickness:1},
+    {type:'text', content:'Informații suplimentare sau footer text.', align:'center', font_size:13, font_size_mobile:12, background:'#f9fafb', text_color:'#6b7280'},
+    {type:'spacer', height:16, background:'#f9fafb'},
+  ],
 };
-window.ebCloseStarterModal = function() {
-  document.getElementById('eb-starter-modal').style.display='none';
-};
-window.ebApplyStarter = function(preset) {
-  const starters = {
-    blank: [
-      {type:'header', content:'Titlul email-ului', align:'center', font_size:30, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
-    ],
-    welcome: [
-      {type:'header', content:'Bun venit! 👋', align:'center', font_size:30, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
-      {type:'spacer', height:16, background:'#ffffff'},
-      {type:'text', content:'Îți mulțumim că te-ai abonat la newsletter-ul nostru. Suntem bucuroși să te avem alături!', align:'center', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
-      {type:'spacer', height:8, background:'#ffffff'},
-      {type:'button', label:'Descoperă produsele noastre', url:'', align:'center', background:'#ffffff', button_color:'#2d7d5f', text_color:'#ffffff', border_radius:6},
-      {type:'spacer', height:16, background:'#ffffff'},
-    ],
-    promo: [
-      {type:'header', content:'Ofertă specială 🎁', align:'center', font_size:34, font_size_mobile:24, background:'#2d7d5f', text_color:'#ffffff'},
-      {type:'image', image_url:'', alt:'Banner promoție', align:'center', background:'#ffffff', width:100},
-      {type:'spacer', height:12, background:'#ffffff'},
-      {type:'text', content:'Nu rata această ofertă exclusivă! Comandă acum și beneficiezi de reducere.', align:'center', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
-      {type:'spacer', height:8, background:'#ffffff'},
-      {type:'button', label:'Cumpără acum', url:'', align:'center', background:'#ffffff', button_color:'#dc2626', text_color:'#ffffff', border_radius:6},
-      {type:'spacer', height:16, background:'#ffffff'},
-    ],
-    newsletter: [
-      {type:'header', content:'Newsletter lunar', align:'center', font_size:28, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
-      {type:'spacer', height:16, background:'#ffffff'},
-      {type:'text', content:'Salutare!\n\nIată cele mai importante noutăți ale lunii...', align:'left', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
-      {type:'divider', background:'#ffffff', color:'#e5e7eb', width:80, thickness:1},
-      {type:'text', content:'Titlu articol\n\nDescriere scurtă a articolului sau produsului. Click pentru a afla mai multe.', align:'left', font_size:15, font_size_mobile:13, background:'#f9fafb', text_color:'#374151'},
-      {type:'button', label:'Citește mai mult', url:'', align:'left', background:'#f9fafb', button_color:'#2d7d5f', text_color:'#ffffff', border_radius:5},
-      {type:'divider', background:'#ffffff', color:'#e5e7eb', width:80, thickness:1},
-      {type:'spacer', height:16, background:'#ffffff'},
-    ],
-    order: [
-      {type:'header', content:'Confirmare comandă', align:'center', font_size:28, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
-      {type:'spacer', height:16, background:'#ffffff'},
-      {type:'text', content:'Dragă {{customer_name}},\n\nComanda ta #{{order_number}} a fost primită cu succes. Mulțumim!', align:'left', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
-      {type:'divider', background:'#ffffff', color:'#e5e7eb', width:100, thickness:1},
-      {type:'text', content:'{{order_items_html}}', align:'left', font_size:14, font_size_mobile:13, background:'#f9fafb', text_color:'#374151'},
-      {type:'divider', background:'#ffffff', color:'#e5e7eb', width:100, thickness:1},
-      {type:'text', content:'Total: {{order_total}}', align:'right', font_size:16, font_size_mobile:15, background:'#ffffff', text_color:'#111827'},
-      {type:'spacer', height:12, background:'#ffffff'},
-      {type:'button', label:'Vezi comanda', url:'{{order_action_url}}', align:'center', background:'#ffffff', button_color:'#2d7d5f', text_color:'#ffffff', border_radius:6},
-      {type:'spacer', height:16, background:'#ffffff'},
-    ],
-    simple: [
-      {type:'header', content:'Titlu email', align:'center', font_size:30, font_size_mobile:22, background:'#2d7d5f', text_color:'#ffffff'},
-      {type:'spacer', height:16, background:'#ffffff'},
-      {type:'text', content:'Scrie conținutul tău principal aici.', align:'left', font_size:16, font_size_mobile:14, background:'#ffffff', text_color:'#333333'},
-      {type:'divider', background:'#ffffff', color:'#e5e7eb', width:80, thickness:1},
-      {type:'text', content:'Informații suplimentare sau footer text.', align:'center', font_size:13, font_size_mobile:12, background:'#f9fafb', text_color:'#6b7280'},
-      {type:'spacer', height:16, background:'#f9fafb'},
-    ],
-  };
-  // Șabloanele magazinului vin de la server (NewsletterSabloane), cu produse reale.
-  const sabloaneMagazin = D.sabloane || {};
-  const tpl = preset.startsWith('magazin:') ? sabloaneMagazin[preset.slice(8)] : starters[preset];
-  if(!tpl) return;
-  // Un șablon înlocuiește tot conținutul: întrebăm dacă e deja ceva scris (se poate și reveni cu Anulează).
-  if(blocks.length > 0 && dirty && !confirm('Șablonul înlocuiește conținutul de acum. Continui? (Poți reveni cu „Anulează”.)')) return;
+// Șabloanele magazinului vin de la server (NewsletterSabloane), cu produse reale.
+function blocuriSablon(cheie) {
+  cheie = String(cheie || '');
+  const tpl = cheie.startsWith('magazin:') ? (D.sabloane || {})[cheie.slice(8)] : EB_STARTERI[cheie];
+  return Array.isArray(tpl) ? tpl : null;
+}
+/** Pune șablonul în locul conținutului, prin istoric (Anulează îl scoate). Fără întrebare: o pune fereastra. */
+function aplicaSablon(cheie) {
+  const tpl = blocuriSablon(cheie);
+  if (!tpl) return false;
   inchideEditarea(false);
   pushHistory();
   blocks = JSON.parse(JSON.stringify(tpl));
   sel = null;
-  ebCloseStarterModal();
   render(); sync(); markDirty();
+  return true;
+}
+/** E ceva de pierdut? Nu: un email gol, sau doar textul de exemplu al unui „Newsletter nou” neatins. */
+function areContinut() {
+  if (!blocks.length) return false;
+  const exemplu = blocks.length === 3 && blocks[0].type === 'header' && blocks[0].content === 'Titlul Newsletter-ului'
+    && blocks[1].type === 'text' && blocks[1].content === 'Scrie conținutul newsletter-ului aici.'
+    && blocks[2].type === 'button' && blocks[2].label === 'Află mai multe';
+  return !exemplu;
+}
+
+const sabFereastra = document.getElementById('eb-starter-modal');
+const sabDialog = sabFereastra ? sabFereastra.querySelector('.eb-sab') : null;
+const sabHtml = new Map();        // cheie → Promise<html> (miniatura și previzualizarea folosesc același răspuns)
+let sabAles = null;               // cheia din pasul 2
+let sabMod = 'desktop';
+let sabCerere = 0;
+let sabDeschizator = null;        // elementul care avea focusul înainte (primește focusul înapoi)
+let sabObservator = null;
+
+function sabNume(cheie) {
+  const b = sabFereastra?.querySelector(`.eb-sab-alege[data-sablon="${CSS.escape(cheie)}"]`);
+  return {nume: b ? b.querySelector('.eb-sab-nume').textContent : '', desc: b ? b.querySelector('.eb-sab-desc').textContent : ''};
+}
+function htmlSablon(cheie) {
+  if (!sabHtml.has(cheie)) {
+    const p = ebPrevizualizareBlocuri(blocuriSablon(cheie) || [], sabNume(cheie).nume)
+      .catch(err => { sabHtml.delete(cheie); throw err; });
+    sabHtml.set(cheie, p);
+  }
+  return sabHtml.get(cheie);
+}
+
+/* Miniaturile: câte trei cereri odată, doar pentru cardurile ajunse (aproape) pe ecran. */
+const sabCoada = [];
+let sabInCurs = 0;
+function sabUrmatoarea() {
+  while (sabInCurs < 3 && sabCoada.length) {
+    const mini = sabCoada.shift();
+    sabInCurs++;
+    htmlSablon(mini.dataset.mini).then(html => {
+      const cadru = document.createElement('iframe');
+      cadru.setAttribute('sandbox', '');
+      cadru.setAttribute('tabindex', '-1');
+      cadru.setAttribute('aria-hidden', 'true');
+      cadru.setAttribute('scrolling', 'no');
+      cadru.title = 'Miniatura șablonului';
+      cadru.srcdoc = html;
+      mini.replaceChildren(cadru);
+      mini.dataset.gata = '1';
+    }).catch(() => {
+      delete mini.dataset.cerut;
+      const st = mini.querySelector('.eb-sab-mini-stare');
+      if (st) st.textContent = 'Miniatura nu s-a încărcat';
+    }).finally(() => { sabInCurs--; sabUrmatoarea(); });
+  }
+}
+function sabCereMini(mini) {
+  if (mini.dataset.cerut) return;
+  mini.dataset.cerut = '1';
+  sabCoada.push(mini);
+  sabUrmatoarea();
+}
+// Scara miniaturii: lățimea cardului / 680 (emailul se randează la lățimea lui de calculator).
+const sabScala = 'ResizeObserver' in window ? new ResizeObserver(intrari => {
+  intrari.forEach(i => i.target.style.setProperty('--eb-sab-scala', String(i.contentRect.width / 680)));
+}) : null;
+function sabPornesteMiniaturile() {
+  const minis = [...(sabFereastra?.querySelectorAll('.eb-sab-mini[data-mini]') || [])];
+  minis.forEach(m => { if (sabScala) sabScala.observe(m); else m.style.setProperty('--eb-sab-scala', String(m.clientWidth / 680)); });
+  if (!('IntersectionObserver' in window)) { minis.forEach(sabCereMini); return; }
+  if (!sabObservator) {
+    sabObservator = new IntersectionObserver(intrari => intrari.forEach(i => {
+      if (i.isIntersecting) { sabCereMini(i.target); sabObservator.unobserve(i.target); }
+    }), {root: document.getElementById('eb-sab-lista'), rootMargin: '240px 0px'});
+  }
+  minis.filter(m => !m.dataset.cerut).forEach(m => sabObservator.observe(m));
+}
+
+/* Grupurile și căutarea */
+let sabGrup = 'toate';
+const faraDiacritice = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function sabFiltreaza() {
+  const q = faraDiacritice(document.getElementById('eb-sab-cauta')?.value.trim());
+  let vizibile = 0;
+  sabFereastra.querySelectorAll('.eb-sab-sectiune').forEach(sec => {
+    let inSectiune = 0;
+    sec.querySelectorAll('.eb-sab-card').forEach(card => {
+      const ok = (sabGrup === 'toate' || card.dataset.grup === sabGrup) && (!q || faraDiacritice(card.dataset.cauta).includes(q));
+      card.hidden = !ok;
+      if (ok) inSectiune++;
+    });
+    sec.hidden = inSectiune === 0;
+    vizibile += inSectiune;
+  });
+  document.getElementById('eb-sab-niciunul').hidden = vizibile > 0;
+  sabRoving(sabCarduri().includes(document.activeElement) ? document.activeElement : null);
+}
+const sabCarduri = () => [...sabFereastra.querySelectorAll('.eb-sab-card:not([hidden]) .eb-sab-alege')]
+  .filter(b => !b.closest('.eb-sab-sectiune')?.hidden);
+// Un singur card în ordinea Tab (tabindex 0); săgețile se mută între carduri.
+function sabRoving(activ) {
+  const lista = sabCarduri();
+  const tinta = lista.includes(activ) ? activ : lista[0];
+  sabFereastra.querySelectorAll('.eb-sab-alege').forEach(b => b.setAttribute('tabindex', b === tinta ? '0' : '-1'));
+}
+function sabSageata(e) {
+  const lista = sabCarduri();
+  const k = lista.indexOf(document.activeElement);
+  if (k < 0) return;
+  let tinta = null;
+  if (e.key === 'ArrowRight') tinta = lista[k + 1];
+  else if (e.key === 'ArrowLeft') tinta = lista[k - 1];
+  else if (e.key === 'Home') tinta = lista[0];
+  else if (e.key === 'End') tinta = lista[lista.length - 1];
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    // Rândul de dedesubt / deasupra (și peste secțiuni): cardul cel mai apropiat pe orizontală.
+    const r = lista[k].closest('.eb-sab-card').getBoundingClientRect();
+    const jos = e.key === 'ArrowDown';
+    const randuri = lista.map(b => ({b, r: b.closest('.eb-sab-card').getBoundingClientRect()}))
+      .filter(x => jos ? x.r.top > r.top + 4 : x.r.top < r.top - 4);
+    if (randuri.length) {
+      const top = jos ? Math.min(...randuri.map(x => x.r.top)) : Math.max(...randuri.map(x => x.r.top));
+      const rand = randuri.filter(x => Math.abs(x.r.top - top) < 4);
+      rand.sort((a, b) => Math.abs(a.r.left - r.left) - Math.abs(b.r.left - r.left));
+      tinta = rand[0].b;
+    }
+  } else return;
+  e.preventDefault();
+  if (tinta) { sabRoving(tinta); tinta.focus(); tinta.closest('.eb-sab-card').scrollIntoView({block: 'nearest'}); }
+}
+
+/* Pașii */
+function sabElementeFocus() {
+  return [...sabDialog.querySelectorAll('button, input, [tabindex]')].filter(el =>
+    !el.disabled && el.getAttribute('tabindex') !== '-1' && el.getClientRects().length > 0 && !el.closest('[hidden]'));
+}
+function sabArataGaleria(focusPe) {
+  sabCerere++;
+  sabAles = null;
+  sabDialog.dataset.pas = 'galerie';
+  sabDialog.setAttribute('aria-labelledby', 'eb-starter-titlu');
+  document.getElementById('eb-sab-previzualizare').hidden = true;
+  document.getElementById('eb-sab-galerie').hidden = false;
+  sabPornesteMiniaturile();
+  const b = focusPe ? sabFereastra.querySelector(`.eb-sab-alege[data-sablon="${CSS.escape(focusPe)}"]`) : null;
+  sabRoving(b);
+  requestAnimationFrame(() => (b && sabCarduri().includes(b) ? b : sabCarduri()[0] || sabElementeFocus()[0])?.focus());
+}
+function sabArataPreviz(cheie) {
+  if (!blocuriSablon(cheie)) return;
+  sabAles = cheie;
+  const {nume, desc} = sabNume(cheie);
+  document.getElementById('eb-sab-titlu').textContent = nume;
+  document.getElementById('eb-sab-descriere').textContent = desc;
+  sabDialog.dataset.pas = 'previzualizare';
+  sabDialog.setAttribute('aria-labelledby', 'eb-sab-titlu');
+  document.getElementById('eb-sab-galerie').hidden = true;
+  document.getElementById('eb-sab-previzualizare').hidden = false;
+  sabIntrebare(false);
+  // Pe un ecran îngust (telefon), direct Mobil: emailul de 680 px nu încape.
+  sabSchimbaMod(sabDialog.getBoundingClientRect().width < 760 ? 'mobile' : 'desktop');
+  requestAnimationFrame(() => document.getElementById('eb-sab-foloseste')?.focus());
+}
+function sabSchimbaMod(mod) {
+  sabMod = mod;
+  sabFereastra.querySelectorAll('[data-sab-mod]').forEach(b => {
+    const ales = b.dataset.sabMod === mod;
+    b.classList.toggle('active', ales);
+    b.setAttribute('aria-pressed', ales ? 'true' : 'false');
+  });
+  const latime = mod === 'mobile' ? 375 : 680;
+  const nr = ++sabCerere;
+  const cadruExt = document.getElementById('eb-sab-cadru');
+  const incarcare = document.getElementById('eb-sab-incarcare');
+  const vechi = document.getElementById('eb-sab-iframe');
+  cadruExt.style.width = (latime + 2) + 'px';
+  cadruExt.classList.toggle('mobile-preview', latime <= 400);
+  incarcare.textContent = 'Se generează previzualizarea…';
+  incarcare.style.display = '';
+  vechi.style.display = 'none';
+  const cheie = sabAles;
+  htmlSablon(cheie).then(html => {
+    if (nr !== sabCerere || sabAles !== cheie) return;
+    incarcare.style.display = 'none';
+    // Un cadru nou la fiecare schimbare (ca Desktop / Mobil din builder), cu înălțimea trimisă de email.
+    ebCadruPrevizualizare(document.getElementById('eb-sab-iframe'), `width:${latime}px;height:600px;`).srcdoc = html + EB_SCRIPT_INALTIME;
+  }).catch(err => {
+    if (nr !== sabCerere) return;
+    incarcare.textContent = err && err.message ? err.message : 'Nu am putut genera previzualizarea.';
+  });
+}
+function sabIntrebare(arata) {
+  document.getElementById('eb-sab-intrebare').hidden = !arata;
+  document.getElementById('eb-sab-actiuni').hidden = arata;
+  if (arata) requestAnimationFrame(() => document.getElementById('eb-sab-renunta')?.focus());
+}
+function sabFoloseste(faraIntrebare) {
+  const cheie = sabAles;
+  if (!cheie) return;
+  if (!faraIntrebare && areContinut()) { sabIntrebare(true); return; }
+  const {nume} = sabNume(cheie);
+  if (!aplicaSablon(cheie)) return;
+  ebCloseStarterModal();
+  arataToast('Am pus șablonul „' + nume + '”.', true);
+}
+
+let toastCeas = null;
+function arataToast(text, cuAnuleaza) {
+  const t = document.getElementById('eb-toast');
+  if (!t) return;
+  document.getElementById('eb-toast-text').textContent = text;
+  document.getElementById('eb-toast-anuleaza').hidden = !cuAnuleaza;
+  t.hidden = false;
+  clearTimeout(toastCeas);
+  toastCeas = setTimeout(() => { t.hidden = true; }, 8000);
+}
+document.getElementById('eb-toast-anuleaza')?.addEventListener('click', () => {
+  document.getElementById('eb-toast').hidden = true;
+  undo();
+  focusBloc();
+});
+
+window.ebShowStarterModal = function() {
+  if (!sabFereastra) return;
+  if (sabFereastra.style.display === 'flex') return;
+  sabDeschizator = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+  inchideEditarea(true);
+  sabFereastra.style.display = 'flex';
+  document.getElementById('eb-toast').hidden = true;
+  sabArataGaleria(null);
 };
+window.ebCloseStarterModal = function() {
+  if (!sabFereastra || sabFereastra.style.display === 'none') return;
+  sabFereastra.style.display = 'none';
+  sabCerere++;
+  sabAles = null;
+  const inapoi = sabDeschizator && document.body.contains(sabDeschizator) && sabDeschizator.getClientRects().length ? sabDeschizator : null;
+  sabDeschizator = null;
+  if (inapoi) inapoi.focus(); else focusBloc();
+};
+/** Pune un șablon direct (fără fereastră și fără întrebare; ca orice schimbare, prin istoric). */
+window.ebApplyStarter = function(preset) {
+  if (aplicaSablon(preset)) ebCloseStarterModal();
+};
+
+if (sabFereastra) {
+  let apasatInauntru = false;
+  sabFereastra.addEventListener('mousedown', e => { apasatInauntru = e.target !== sabFereastra; });
+  sabFereastra.addEventListener('click', e => {
+    if (e.target === sabFereastra && !apasatInauntru) { ebCloseStarterModal(); return; }
+    if (e.target.closest('[data-sab-inchide]')) { ebCloseStarterModal(); return; }
+    const card = e.target.closest('.eb-sab-alege');
+    if (card) { sabArataPreviz(card.dataset.sablon); return; }
+    const grup = e.target.closest('[data-sab-grup]');
+    if (grup) { sabAlegeGrup(grup); return; }
+    const mod = e.target.closest('[data-sab-mod]');
+    if (mod) { sabSchimbaMod(mod.dataset.sabMod); return; }
+    if (e.target.closest('#eb-sab-inapoi')) { sabArataGaleria(sabAles); return; }
+    if (e.target.closest('#eb-sab-foloseste')) { sabFoloseste(false); return; }
+    if (e.target.closest('#eb-sab-renunta')) { sabIntrebare(false); requestAnimationFrame(() => document.getElementById('eb-sab-foloseste')?.focus()); return; }
+    if (e.target.closest('#eb-sab-inlocuieste')) { sabFoloseste(true); }
+  });
+  sabFereastra.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (!document.getElementById('eb-sab-intrebare').hidden) { sabIntrebare(false); document.getElementById('eb-sab-foloseste')?.focus(); return; }
+      ebCloseStarterModal();
+      return;
+    }
+    if (e.key === 'Tab') {
+      // Focusul rămâne în fereastră.
+      const el = sabElementeFocus();
+      if (!el.length) return;
+      const k = el.indexOf(document.activeElement);
+      if (e.shiftKey && k <= 0) { e.preventDefault(); el[el.length - 1].focus(); }
+      else if (!e.shiftKey && (k === el.length - 1 || k < 0)) { e.preventDefault(); el[0].focus(); }
+      return;
+    }
+    if (e.target.closest('.eb-sab-alege')) { sabSageata(e); return; }
+    const tab = e.target.closest('[data-sab-grup]');
+    if (tab && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End')) {
+      e.preventDefault();
+      const taburi = [...sabFereastra.querySelectorAll('[data-sab-grup]')];
+      const k = taburi.indexOf(tab);
+      const nou = e.key === 'Home' ? taburi[0] : e.key === 'End' ? taburi[taburi.length - 1]
+        : taburi[(k + (e.key === 'ArrowRight' ? 1 : -1) + taburi.length) % taburi.length];
+      sabAlegeGrup(nou);
+      nou.focus();
+    }
+  });
+  document.getElementById('eb-sab-cauta')?.addEventListener('input', sabFiltreaza);
+}
+function sabAlegeGrup(tab) {
+  sabGrup = tab.dataset.sabGrup;
+  sabFereastra.querySelectorAll('[data-sab-grup]').forEach(t => {
+    const ales = t === tab;
+    t.setAttribute('aria-selected', ales ? 'true' : 'false');
+    t.setAttribute('tabindex', ales ? '0' : '-1');
+  });
+  sabFiltreaza();
+  sabPornesteMiniaturile();
+}
 
 /* ═══════════════════════════════════════════════════════════
    VIDEO
@@ -1755,7 +2061,6 @@ document.getElementById('eb-gallery-grid')?.addEventListener('dblclick', e => { 
   const zona = document.getElementById('eb-img-drop');
   if (zona) legaZonaPoza(zona, url => { ebPickGalleryImg(url); ebConfirmImgUrl(); });
 }
-document.getElementById('eb-starter-modal')?.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); ebCloseStarterModal(); } });
 window.ebPickGalleryImg = function(url) {
   const inp = document.getElementById('eb-img-url-input');
   if(inp) inp.value = url;

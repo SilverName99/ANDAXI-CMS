@@ -271,18 +271,86 @@ $ebMaiMult = [
 .eb-token-btn{padding:4px 7px;font-size:11px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;cursor:pointer;color:#1e40af;font-family:monospace;}
 
 /* Ferestrele */
+.eb-modal-overlay,.eb-toast{--eb-albastru:var(--ax-accent,#1d4ed8);}
 .eb-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;}
 .eb-modal{background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.18);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;max-width:calc(100vw - 32px);}
 .eb-modal-header{padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .eb-modal-header h3{margin:0;font-size:16px;}
 .eb-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280;line-height:1;width:44px;height:44px;}
 .eb-modal-body{padding:16px 18px;overflow-y:auto;flex:1;}
-.eb-starter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.eb-starter-card{border:2px solid #e5e7eb;border-radius:10px;padding:12px;cursor:pointer;text-align:center;background:#fff;}
-.eb-starter-card:hover{border-color:var(--eb-albastru,#1d4ed8);background:#f8faff;}
-.eb-starter-card .eb-starter-icon{font-size:28px;margin-bottom:6px;}
-.eb-starter-card h4{margin:0 0 3px;font-size:12.5px;}
-.eb-starter-card p{margin:0;font-size:11px;color:#6b7280;}
+/* Alege un șablon: o fereastră mare (pe telefon, tot ecranul), pasul 1 galeria, pasul 2 previzualizarea */
+.eb-sab{width:min(1180px,calc(100vw - 32px));height:min(860px,calc(100vh - 32px));max-height:none;border-radius:16px;color:#1f2937;}
+.eb-sab-pas{display:flex;flex-direction:column;min-height:0;flex:1;}
+.eb-sab-pas[hidden]{display:none;}
+.eb-sab-antet{display:flex;align-items:center;gap:14px;padding:16px 16px 12px 24px;border-bottom:1px solid #e5e7eb;flex-shrink:0;}
+.eb-sab-antet-text{flex:1;min-width:0;}
+.eb-sab-antet h3{margin:0;font-size:18px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.eb-sab-antet p{margin:2px 0 0;font-size:13px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.eb-sab-inapoi{height:40px;padding:0 12px;border:1px solid #e5e7eb;background:#fff;border-radius:10px;font-size:13px;color:#374151;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.eb-sab-inapoi:hover{background:#f9fafb;}
+.eb-sab-unelte{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid #f3f4f6;flex-shrink:0;flex-wrap:wrap;}
+.eb-sab-taburi{display:flex;background:#f3f4f6;border-radius:10px;padding:4px;gap:4px;}
+.eb-sab-taburi button{height:34px;padding:0 14px;border:none;border-radius:8px;background:transparent;color:#4b5563;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+.eb-sab-taburi button span{font-size:11px;color:#6b7280;background:#e5e7eb;border-radius:999px;padding:1px 7px;}
+.eb-sab-taburi button[aria-selected="true"]{background:#fff;color:#111827;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12);}
+.eb-sab-taburi button[aria-selected="true"] span{background:#eef4ff;color:var(--eb-albastru);}
+.eb-sab-cauta{margin-left:auto;height:40px;width:240px;max-width:100%;border:1px solid #d1d5db;border-radius:8px;padding:0 12px;font-size:13px;box-sizing:border-box;}
+.eb-sab-corp{flex:1;overflow:auto;overscroll-behavior:contain;padding:8px 24px 28px;background:#f9fafb;}
+.eb-sab-sectiune[hidden]{display:none;}
+.eb-sab-sectiune-titlu{margin:16px 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;}
+.eb-sab-grila{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:16px;}
+.eb-sab-card{position:relative;display:flex;flex-direction:column;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;transition:border-color .15s,box-shadow .15s,transform .15s;}
+.eb-sab-card[hidden]{display:none;}
+.eb-sab-card:hover{border-color:#c7d2fe;box-shadow:0 6px 20px rgba(15,23,42,.10);transform:translateY(-2px);}
+.eb-sab-mini{position:relative;aspect-ratio:680/620;overflow:hidden;background:#f4f6f8;border-bottom:1px solid #f3f4f6;pointer-events:none;}
+.eb-sab-mini iframe{position:absolute;top:0;left:0;width:680px;height:620px;border:0;transform-origin:0 0;transform:scale(var(--eb-sab-scala,.3));pointer-events:none;background:#f4f6f8;}
+.eb-sab-mini::after{content:"";position:absolute;left:0;right:0;bottom:0;height:36px;background:linear-gradient(rgba(244,246,248,0),#f4f6f8);}
+.eb-sab-mini-stare{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9ca3af;}
+.eb-sab-mini--gol{display:flex;align-items:center;justify-content:center;color:#94a3b8;background:#f8fafc;}
+.eb-sab-mini--gol::after{display:none;}
+.eb-sab-gol{width:46%;height:auto;}
+.eb-sab-alege{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:3px;padding:12px 14px 14px;cursor:pointer;text-align:left;}
+.eb-sab-alege::after{content:"";position:absolute;inset:0;border-radius:12px;}
+.eb-sab-alege:focus-visible::after{outline:2px solid var(--eb-albastru);outline-offset:-2px;}
+.eb-sab-card:has(.eb-sab-alege:focus-visible){border-color:var(--eb-albastru);}
+.eb-sab-nume{font-size:14px;font-weight:600;color:#111827;}
+.eb-sab-desc{font-size:12.5px;line-height:1.4;color:#6b7280;}
+.eb-sab-niciunul{margin:32px 0;text-align:center;color:#6b7280;font-size:14px;}
+.eb-sab-moduri{flex-shrink:0;}
+.eb-sab-scena{flex:1;overflow:auto;overscroll-behavior:contain;padding:24px;background:#f3f4f6;display:flex;align-items:flex-start;}
+.eb-sab-cadru{margin:0 auto;max-width:100%;}
+.eb-sab-cadru iframe{display:block;border:none;max-width:100%;}
+.eb-sab-subsol{flex-shrink:0;border-top:1px solid #e5e7eb;padding:12px 24px;background:#fff;}
+.eb-sab-actiuni,.eb-sab-intrebare{display:flex;align-items:center;gap:10px;}
+.eb-sab-actiuni[hidden],.eb-sab-intrebare[hidden]{display:none;}
+.eb-sab-nota{flex:1;margin:0;font-size:12.5px;color:#6b7280;}
+.eb-sab-intrebare{padding:8px 10px 8px 14px;margin:-4px -10px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;}
+.eb-sab-intrebare p{flex:1;margin:0;font-size:13px;color:#78350f;line-height:1.45;}
+.eb-sab-intrebare p span{display:block;font-size:12px;color:#92400e;}
+/* Mesajul de după alegere, cu „Anulează” */
+.eb-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9100;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:10px 10px 10px 16px;background:#111827;color:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:13.5px;}
+.eb-toast[hidden]{display:none;}
+.eb-toast button{height:36px;padding:0 12px;border:1px solid #4b5563;background:transparent;color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+.eb-toast button:hover{background:#374151;}
+.eb-sab button:focus-visible,.eb-sab input:focus-visible,.eb-toast button:focus-visible{outline:2px solid var(--eb-albastru,#1d4ed8);outline-offset:2px;}
+@media (max-width:760px){
+  .eb-sab-fundal{align-items:stretch;}
+  .eb-sab{width:100vw;height:100%;max-width:none;border-radius:0;}
+  .eb-sab-antet{flex-wrap:wrap;padding:12px 12px 10px 16px;gap:10px;}
+  #eb-sab-previzualizare .eb-sab-antet-text{order:3;flex-basis:100%;}
+  #eb-sab-previzualizare .eb-sab-moduri{margin-left:auto;}
+  .eb-sab-unelte{padding:10px 16px;}
+  .eb-sab-cauta{margin-left:0;width:100%;}
+  .eb-sab-corp{padding:4px 16px 20px;}
+  .eb-sab-grila{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+  .eb-sab-scena{padding:12px;}
+  .eb-sab-subsol{padding:10px 16px;}
+  .eb-sab-nota{display:none;}
+  .eb-sab-actiuni{justify-content:flex-end;}
+  .eb-sab-intrebare{flex-wrap:wrap;}
+  .eb-sab-intrebare p{flex-basis:100%;}
+}
+@media (prefers-reduced-motion:reduce){.eb-sab-card{transition:none;}.eb-sab-card:hover{transform:none;}}
 .eb-gallery-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 .eb-gallery-img{border:2px solid #e5e7eb;border-radius:6px;overflow:hidden;cursor:pointer;aspect-ratio:1;padding:0;background:#fff;}
 .eb-gallery-img:hover,.eb-gallery-img.is-ales{border-color:var(--eb-albastru,#1d4ed8);}
@@ -516,64 +584,114 @@ $ebMaiMult = [
 
 </div><!-- /eb-wrap -->
 
-<!-- ── Șabloanele de start ── -->
-<div class="eb-modal-overlay" id="eb-starter-modal" style="display:none;" onclick="if(event.target===this)ebCloseStarterModal()">
-  <div class="eb-modal" style="width:560px;" role="dialog" aria-modal="true" aria-labelledby="eb-starter-titlu">
-    <div class="eb-modal-header">
-      <h3 id="eb-starter-titlu"><?= $bSabloane !== [] ? 'Alege un șablon' : 'Alege un template de start' ?></h3>
-      <button type="button" class="eb-modal-close" onclick="ebCloseStarterModal()" aria-label="Închide">✕</button>
-    </div>
-    <div class="eb-modal-body">
-      <?php if ($bSabloane !== []): ?>
-      <p class="nlp-sectiune-titlu">Cu logo-ul și culorile magazinului</p>
-      <div class="nlp-sabloane">
-        <?php foreach ($bSabloane as $cheieSablon => $sablon): ?>
-        <button type="button" class="nlp-sablon" onclick="ebApplyStarter('magazin:<?= htmlspecialchars((string) $cheieSablon, ENT_QUOTES) ?>')">
-          <span class="nlp-sablon__mostra" aria-hidden="true"><i></i><i></i><i></i></span>
-          <strong><?= htmlspecialchars((string) ($sablon['titlu'] ?? ''), ENT_QUOTES) ?></strong>
-          <span><?= htmlspecialchars((string) ($sablon['descriere'] ?? ''), ENT_QUOTES) ?></span>
-        </button>
-        <?php endforeach; ?>
+<!-- ── Alege un șablon: pasul 1, galeria (miniaturile sunt emailul randat de server, micșorat); pasul 2, previzualizarea ── -->
+<?php
+// Șabloanele simple (blocurile lor sunt în builder-script.php, EB_STARTERI, aceleași ca înainte de 26 nov 2026).
+$ebStarteri = array_values(array_filter([
+    ['blank', 'Blank', 'Pornești de la zero, doar cu un titlu.'],
+    ['welcome', 'Bun venit', 'Un titlu, mesajul de bun venit și un buton.'],
+    ['promo', 'Promoție', 'Titlul ofertei, o imagine, textul și un buton.'],
+    ['newsletter', 'Newsletter', 'Salutul, un articol cu buton, separatoare.'],
+    \App\Support\Plugins::vizibil('magazin') ? ['order', 'Email comandă', 'Confirmarea comenzii, cu produsele și totalul.'] : null,
+    ['simple', 'Simplu', 'Titlu, text, un separator și o notă la final.'],
+]));
+$ebCardSablon = static function (string $cheie, string $nume, string $descriere, string $grup): string {
+    $id = 'eb-sab-d-' . preg_replace('/[^a-z0-9_-]/i', '-', $cheie);
+    $gol = $cheie === 'blank';
+    return '<li class="eb-sab-card" data-grup="' . $grup . '" data-cauta="' . htmlspecialchars(mb_strtolower($nume . ' ' . $descriere), ENT_QUOTES) . '">'
+        . '<div class="eb-sab-mini' . ($gol ? ' eb-sab-mini--gol' : '') . '" aria-hidden="true"' . ($gol ? '' : ' data-mini="' . htmlspecialchars($cheie, ENT_QUOTES) . '"') . '>'
+        . ($gol
+            ? '<svg class="eb-sab-gol" viewBox="0 0 120 150" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+              . '<rect x="10" y="8" width="100" height="134" rx="8" stroke-dasharray="5 5"></rect><path d="M26 30h68"></path><path d="M26 42h44"></path>'
+              . '<circle cx="60" cy="88" r="15"></circle><path d="M60 81v14"></path><path d="M53 88h14"></path></svg>'
+            : '<span class="eb-sab-mini-stare">Se pregătește…</span>')
+        . '</div>'
+        . '<button type="button" class="eb-sab-alege" data-sablon="' . htmlspecialchars($cheie, ENT_QUOTES) . '" tabindex="-1" aria-label="' . htmlspecialchars($nume, ENT_QUOTES) . '" aria-describedby="' . $id . '">'
+        . '<span class="eb-sab-nume">' . htmlspecialchars($nume, ENT_QUOTES) . '</span>'
+        . '<span class="eb-sab-desc" id="' . $id . '">' . htmlspecialchars($descriere, ENT_QUOTES) . '</span>'
+        . '</button></li>';
+};
+$ebNrMagazin = count($bSabloane);
+?>
+<div class="eb-modal-overlay eb-sab-fundal" id="eb-starter-modal" style="display:none;">
+  <div class="eb-modal eb-sab" role="dialog" aria-modal="true" aria-labelledby="eb-starter-titlu" data-pas="galerie">
+    <!-- Pasul 1: galeria -->
+    <section class="eb-sab-pas" id="eb-sab-galerie" aria-labelledby="eb-starter-titlu">
+      <header class="eb-sab-antet">
+        <div class="eb-sab-antet-text">
+          <h3 id="eb-starter-titlu">Alege un șablon</h3>
+          <p>Vezi cum arată fiecare, apoi îl schimbi bloc cu bloc.</p>
+        </div>
+        <button type="button" class="eb-modal-close" data-sab-inchide aria-label="Închide">✕</button>
+      </header>
+      <div class="eb-sab-unelte">
+        <?php if ($ebNrMagazin > 0): ?>
+        <div class="eb-sab-taburi" role="tablist" aria-label="Grupurile de șabloane">
+          <button type="button" role="tab" data-sab-grup="toate" aria-selected="true" aria-controls="eb-sab-lista">Toate <span><?= $ebNrMagazin + count($ebStarteri) ?></span></button>
+          <button type="button" role="tab" data-sab-grup="magazin" aria-selected="false" aria-controls="eb-sab-lista" tabindex="-1">Magazin <span><?= $ebNrMagazin ?></span></button>
+          <button type="button" role="tab" data-sab-grup="simple" aria-selected="false" aria-controls="eb-sab-lista" tabindex="-1">Simple <span><?= count($ebStarteri) ?></span></button>
+        </div>
+        <?php endif; ?>
+        <input type="search" class="eb-sab-cauta" id="eb-sab-cauta" placeholder="Caută un șablon…" aria-label="Caută un șablon" autocomplete="off">
       </div>
-      <p class="nlp-sectiune-titlu">Simple</p>
-      <?php endif; ?>
-      <div class="eb-starter-grid">
-        <button type="button" class="eb-starter-card" onclick="ebApplyStarter('blank')">
-          <div class="eb-starter-icon" aria-hidden="true">📄</div>
-          <h4>Blank</h4>
-          <p>Pornești de la zero</p>
-        </button>
-        <button type="button" class="eb-starter-card" onclick="ebApplyStarter('welcome')">
-          <div class="eb-starter-icon" aria-hidden="true">👋</div>
-          <h4>Bun venit</h4>
-          <p>Header + text + buton</p>
-        </button>
-        <button type="button" class="eb-starter-card" onclick="ebApplyStarter('promo')">
-          <div class="eb-starter-icon" aria-hidden="true">🎁</div>
-          <h4>Promoție</h4>
-          <p>Header + imagine + text + buton</p>
-        </button>
-        <button type="button" class="eb-starter-card" onclick="ebApplyStarter('newsletter')">
-          <div class="eb-starter-icon" aria-hidden="true">📰</div>
-          <h4>Newsletter</h4>
-          <p>Structură completă de newsletter</p>
-        </button>
-<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
-        <button type="button" class="eb-starter-card" onclick="ebApplyStarter('order')">
-          <div class="eb-starter-icon" aria-hidden="true">📦</div>
-          <h4>Email comandă</h4>
-          <p>Template pentru notificări comandă</p>
-        </button>
-<?php endif; ?>
-        <button type="button" class="eb-starter-card" onclick="ebApplyStarter('simple')">
-          <div class="eb-starter-icon" aria-hidden="true">✉</div>
-          <h4>Simplu</h4>
-          <p>Header + text + separator + text</p>
-        </button>
+      <div class="eb-sab-corp" id="eb-sab-lista" role="region" aria-label="Șabloanele">
+        <?php if ($ebNrMagazin > 0): ?>
+        <div class="eb-sab-sectiune" data-sectiune="magazin">
+          <h4 class="eb-sab-sectiune-titlu">Cu logo-ul și culorile magazinului</h4>
+          <ul class="eb-sab-grila">
+            <?php foreach ($bSabloane as $cheieSablon => $sablon): ?>
+            <?= $ebCardSablon('magazin:' . $cheieSablon, (string) ($sablon['titlu'] ?? ''), (string) ($sablon['descriere'] ?? ''), 'magazin') ?>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+        <?php endif; ?>
+        <div class="eb-sab-sectiune" data-sectiune="simple">
+          <h4 class="eb-sab-sectiune-titlu">Simple</h4>
+          <ul class="eb-sab-grila">
+            <?php foreach ($ebStarteri as [$cheieStart, $numeStart, $descStart]): ?>
+            <?= $ebCardSablon($cheieStart, $numeStart, $descStart, 'simple') ?>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+        <p class="eb-sab-niciunul" id="eb-sab-niciunul" hidden>Niciun șablon nu se potrivește căutării.</p>
       </div>
-    </div>
+    </section>
+    <!-- Pasul 2: previzualizarea șablonului ales -->
+    <section class="eb-sab-pas" id="eb-sab-previzualizare" aria-labelledby="eb-sab-titlu" hidden>
+      <header class="eb-sab-antet">
+        <button type="button" class="eb-sab-inapoi" id="eb-sab-inapoi">← Înapoi la șabloane</button>
+        <div class="eb-sab-antet-text">
+          <h3 id="eb-sab-titlu"></h3>
+          <p id="eb-sab-descriere"></p>
+        </div>
+        <div class="eb-preview-tabs eb-sab-moduri" role="group" aria-label="Previzualizarea șablonului">
+          <button type="button" data-sab-mod="desktop" class="active" aria-pressed="true">Desktop</button>
+          <button type="button" data-sab-mod="mobile" aria-pressed="false">Mobil</button>
+        </div>
+        <button type="button" class="eb-modal-close" data-sab-inchide aria-label="Închide">✕</button>
+      </header>
+      <div class="eb-sab-scena" id="eb-sab-scena">
+        <div class="eb-preview-frame eb-sab-cadru" id="eb-sab-cadru">
+          <div class="eb-preview-loading" id="eb-sab-incarcare" role="status">Se generează previzualizarea…</div>
+          <iframe id="eb-sab-iframe" title="Previzualizarea șablonului" sandbox="allow-scripts" style="display:none;"></iframe>
+        </div>
+      </div>
+      <footer class="eb-sab-subsol">
+        <div class="eb-sab-actiuni" id="eb-sab-actiuni">
+          <p class="eb-sab-nota">După alegere, textele, pozele și culorile se schimbă direct în email.</p>
+          <button type="button" class="eb-btn-continua" id="eb-sab-foloseste">Folosește acest șablon</button>
+        </div>
+        <div class="eb-sab-intrebare" id="eb-sab-intrebare" role="alertdialog" aria-labelledby="eb-sab-intrebare-text" aria-describedby="eb-sab-intrebare-nota" hidden>
+          <p><strong id="eb-sab-intrebare-text">Șablonul înlocuiește conținutul de acum. Continui?</strong>
+            <span id="eb-sab-intrebare-nota">Poți reveni oricând cu „Anulează” (Ctrl+Z).</span></p>
+          <button type="button" class="eb-btn-salveaza" id="eb-sab-renunta">Renunță</button>
+          <button type="button" class="eb-btn-continua" id="eb-sab-inlocuieste">Da, înlocuiește</button>
+        </div>
+      </footer>
+    </section>
   </div>
 </div>
+<div class="eb-toast" id="eb-toast" role="status" aria-live="polite" hidden><span id="eb-toast-text"></span><button type="button" id="eb-toast-anuleaza">Anulează</button></div>
 
 <!-- ── Alege imagine ── -->
 <div class="eb-modal-overlay" id="eb-img-modal" style="display:none;">

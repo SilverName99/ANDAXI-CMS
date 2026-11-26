@@ -56,18 +56,6 @@
 .nlp-btn-mare { width: 100%; padding: 12px 16px !important; font-size: 15px; font-weight: 600; }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 
-/* Șabloanele cu înfățișarea magazinului, în fereastra „Alege un șablon” */
-.nlp-sabloane { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
-.nlp-sablon { text-align: left; border: 2px solid var(--adm-linie, #e5e7eb); border-radius: var(--adm-raza, 10px); background: #fff; padding: 14px; cursor: pointer; }
-.nlp-sablon:hover, .nlp-sablon:focus-visible { border-color: var(--adm-accent, #0f766e); background: var(--adm-accent-fundal, #f0fdfa); outline: none; }
-.nlp-sablon strong { display: block; font-size: 14px; margin-bottom: 3px; color: var(--adm-text, #0f172a); }
-.nlp-sablon span { font-size: 12.5px; color: var(--adm-text-secundar, #64748b); }
-.nlp-sablon__mostra { display: flex; gap: 4px; margin-bottom: 10px; }
-.nlp-sablon__mostra i { display: block; height: 8px; border-radius: 3px; background: #075d61; flex: 1; }
-.nlp-sablon__mostra i:nth-child(2) { background: #eaf6f5; }
-.nlp-sablon__mostra i:nth-child(3) { background: #0b3f52; }
-.nlp-sectiune-titlu { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--adm-text-secundar, #64748b); margin: 0 0 8px; }
-
 @media (max-width: 960px) {
     .nlp-doua-coloane, .nlp-optiuni { grid-template-columns: 1fr; }
     .nlp-ecran iframe { width: 100%; }

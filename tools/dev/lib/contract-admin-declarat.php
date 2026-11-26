@@ -513,4 +513,26 @@ return [
             . 'dpr_operator_regcom|POST \\/admin\\/settings\\/store input\\:text gdpr_operator_sediu) ?$',
             'motiv' => 'caseta „Datele firmei” din Setări site → General (subsolul newsletterelor; aceleași chei ca operatorul GDPR)'],
     ],
+    // „Alege un șablon” refăcut (26 nov 2026; docs/PLUGINURI.md, „Newsletter”): galeria cu miniaturile șabloanelor (emailul randat de
+    // server, micșorat), grupurile Toate / Magazin / Simple, căutarea și pasul 2 cu previzualizarea Desktop / Mobil. Pagina trimite
+    // aceleași cereri (miniaturile și previzualizarea: POST /admin/emails/builder/preview, ca Desktop / Mobil din builder); se adaugă doar
+    // atributele data-* ale ferestrei (șabloanele și textele lor de căutare). Ce pun șabloanele verifică test-newsletter.php (G14–G19).
+    'builder-sabloane' => [
+        'sabloane-date-noi' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/builder', 'rol' => ['adm', 'emailuri'],
+            'rand' => '^data (data\\-cauta \\= anunț scurt logo, titlu, două rânduri și un buton\\. pentru vești rapide\\.|data\\-cauta \\='
+            . ' blank pornești de la zero, doar cu un titlu\\.|data\\-cauta \\= bun venit un titlu, mesajul de bun venit și un b'
+            . 'uton\\.|data\\-cauta \\= email comandă confirmarea comenzii, cu produsele și totalul\\.|data\\-cauta \\= newsletter '
+            . 'salutul, un articol cu buton, separatoare\\.|data\\-cauta \\= noutăți și produse logo, un mesaj scurt, 4 produse '
+            . 'și buton spre magazin\\.|data\\-cauta \\= ofertă \\/ reducere titlu mare cu reducerea, codul de cupon, produse în '
+            . 'ofertă\\.|data\\-cauta \\= promoție titlul ofertei, o imagine, textul și un buton\\.|data\\-cauta \\= sfat \\/ artico'
+            . 'l un sfat util, un citat și link spre blog sau spre un produs\\.|data\\-cauta \\= simplu titlu, text, un separato'
+            . 'r și o notă la final\\.|data\\-grup \\= simple|data\\-mini \\= magazin\\:anunt|data\\-mini \\= magazin\\:noutati|data\\-'
+            . 'mini \\= magazin\\:oferta|data\\-mini \\= magazin\\:sfat|data\\-mini \\= newsletter|data\\-mini \\= order|data\\-mini \\='
+            . ' promo|data\\-mini \\= simple|data\\-mini \\= welcome|data\\-pas \\= galerie|data\\-sab\\-grup \\= magazin|data\\-sab\\-g'
+            . 'rup \\= simple|data\\-sab\\-grup \\= toate|data\\-sab\\-inchide \\=|data\\-sab\\-mod \\= desktop|data\\-sab\\-mod \\= mobil'
+            . 'e|data\\-sablon \\= blank|data\\-sablon \\= magazin\\:anunt|data\\-sablon \\= magazin\\:noutati|data\\-sablon \\= magazi'
+            . 'n\\:oferta|data\\-sablon \\= magazin\\:sfat|data\\-sablon \\= newsletter|data\\-sablon \\= order|data\\-sablon \\= promo'
+            . '|data\\-sablon \\= simple|data\\-sablon \\= welcome|data\\-sectiune \\= magazin|data\\-sectiune \\= simple) ?$',
+            'motiv' => 'atributele data-* ale ferestrei „Alege un șablon” (cardurile cu miniaturi, grupurile, previzualizarea Desktop / Mobil)'],
+    ],
 ];

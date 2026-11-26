@@ -1155,6 +1155,19 @@ dispar, iar linkurile spre el se scot din pagini.
     normalizează și randează `NewsletterService` (un cod mai vechi le-ar face text). Șabloanele magazinului (`NewsletterSabloane`)
     încep cu blocul Logo, au blocul Produse („Aleg eu”, cu cele mai noi produse) și un Cod reducere, fără blocul de text de subsol
     (subsolul e automat).
+  - **„Alege un șablon”** (26 nov 2026, refăcut): o fereastră mare (sub 760 px tot ecranul), în doi pași. **Galeria**: fiecare
+    șablon are o miniatură adevărată, emailul lui randat de server (`POST /admin/emails/builder/preview`, aceeași cale ca Desktop /
+    Mobil), micșorat, într-un cadru izolat fără scripturi (`sandbox=""`, fără clicuri, scos din Tab), cerut doar când cardul ajunge
+    pe ecran (câte trei cereri odată; răspunsul e ținut minte cât e deschisă pagina și folosit și la pasul 2); numele și o descriere
+    scurtă; „Blank” are conturul unui email gol; grupurile Toate / Magazin / Simple și căutarea (fără diacritice). **Previzualizarea**:
+    clic (sau Enter) pe un card arată șablonul mare, Desktop / Mobil la 680 / 375 px, ca previzualizarea builderului (cadru izolat nou
+    la fiecare schimbare, cu înălțimea emailului; pe un ecran îngust pornește pe Mobil), cu „← Înapoi la șabloane” și „Folosește acest
+    șablon”. Peste un email cu conținut (orice în afară de textul de exemplu al unui „Newsletter nou” neatins) întrebarea e în fereastră:
+    „Șablonul înlocuiește conținutul de acum. Continui?” (Renunță / Da, înlocuiește). Alegerea intră în istoric: după ea, mesajul „Am
+    pus șablonul …” are „Anulează”, iar Anulează / Ctrl+Z pune conținutul înapoi. Tastatura: un singur card în Tab, săgețile (și pe
+    rânduri), Home / End, săgețile între grupuri, Tab ținut în fereastră, Esc închide (focusul revine unde era). Șabloanele și blocurile
+    pe care le pun sunt aceleași (cele simple: exact ca la `163cba7`, verificat de testul G18 din git; ale magazinului:
+    `NewsletterSabloane`); `ebApplyStarter(cheie)` pune un șablon direct, fără fereastră și fără întrebare.
   Tabelele și coloanele noi:
   migrarea `newsletter/0040`. Statisticile unei campanii (20 nov 2026): „N comenzi” din cardul „Venituri atribuite” e o
   ancoră spre panoul „Comenzile atribuite”, exact comenzile numărate în card (aceeași condiție: `orders.nl_campaign_id`, fără
